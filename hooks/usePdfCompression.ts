@@ -18,7 +18,7 @@ export type CompressionState =
   | { status: 'idle' }
   | { status: 'validating' }
   | { status: 'processing'; progress: string; fileName: string }
-  | { status: 'done'; analysis: CompressionAnalysis; fileName: string }
+  | { status: 'done'; analysis: CompressionAnalysis; fileName: string; originalFile: File }
   | { status: 'error'; error: PdfError };
 
 interface UsePdfCompressionReturn {
@@ -79,6 +79,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
           setState({
             status: 'done',
             fileName,
+            originalFile: file,
             analysis: {
               originalSize: s.originalSize,
               pageCount: s.pageCount,
