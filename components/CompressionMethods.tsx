@@ -68,7 +68,7 @@ export const CompressionMethods = ({
               onClick={() => toggleMethod(method.key)}
               disabled={disabled}
               className={`
-                w-full flex items-center gap-3 p-3 rounded-lg text-left
+                group w-full flex items-center gap-3 p-3 rounded-lg text-left
                 transition-all duration-150 ease-out
                 ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
                 ${isEnabled
@@ -111,7 +111,14 @@ export const CompressionMethods = ({
                     </span>
                   )}
                 </div>
-                <div className={`text-xs truncate ${isEnabled ? 'text-blue-700' : 'text-gray-500'}`}>
+                <div
+                  className={`
+                    text-xs truncate max-h-0 overflow-hidden opacity-0 transition-all duration-150
+                    group-hover:max-h-6 group-hover:opacity-100
+                    group-focus-visible:max-h-6 group-focus-visible:opacity-100
+                    ${isEnabled ? 'text-blue-700' : 'text-gray-500'}
+                  `}
+                >
                   {method.description}
                 </div>
               </div>
