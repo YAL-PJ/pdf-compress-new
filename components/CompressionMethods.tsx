@@ -113,9 +113,9 @@ export const CompressionMethods = ({
                 </div>
                 <div
                   className={`
-                    text-xs truncate max-h-0 overflow-hidden opacity-0 transition-all duration-150
-                    group-hover:max-h-6 group-hover:opacity-100
-                    group-focus-visible:max-h-6 group-focus-visible:opacity-100
+                    text-xs max-h-0 overflow-hidden opacity-0 transition-all duration-150
+                    group-hover:max-h-24 group-hover:opacity-100 group-hover:overflow-visible
+                    group-focus-visible:max-h-24 group-focus-visible:opacity-100 group-focus-visible:overflow-visible
                     ${isEnabled ? 'text-blue-700' : 'text-gray-500'}
                   `}
                 >
