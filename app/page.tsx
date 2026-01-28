@@ -29,6 +29,7 @@ export default function Home() {
     if (state.status !== 'done') return null;
 
     const { analysis } = state;
+    const hasSelectedMethods = Object.values(options).some(Boolean);
     
     // Sum savings from enabled methods
     let totalSaved = 0;
@@ -38,13 +39,15 @@ export default function Home() {
       }
     }
 
-    const estimatedSize = analysis.baselineSize - totalSaved;
+    const estimatedSize = hasSelectedMethods
+      ? analysis.baselineSize - totalSaved
+      : analysis.originalSize;
 
     return {
       originalSize: analysis.originalSize,
       compressedSize: estimatedSize,
       pageCount: analysis.pageCount,
-      blob: analysis.fullBlob, // Always use the fully compressed blob for download
+      blob: hasSelectedMethods ? analysis.fullBlob : state.originalFile,
     };
   }, [state, options]);
 
