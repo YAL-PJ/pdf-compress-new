@@ -63,6 +63,25 @@ export const ResultsDisplay = ({
         Results
       </h2>
 
+      <div className="flex items-center justify-between gap-3 mb-6 rounded-lg border border-gray-100 px-4 py-3">
+        <p className="text-sm font-medium text-gray-700 truncate">
+          {originalFileName}
+        </p>
+        <button
+          type="button"
+          onClick={onReset}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500
+                     hover:text-gray-700 hover:bg-gray-100 focus:outline-none focus:ring-2
+                     focus:ring-gray-400 focus:ring-offset-2 transition-colors"
+          aria-label="Remove file"
+          title="Remove file"
+        >
+          <span aria-hidden="true" className="text-lg leading-none">
+            ×
+          </span>
+        </button>
+      </div>
+
       {/* Size comparison table */}
       <dl className="space-y-3 mb-6">
         <div className="flex justify-between py-2 border-b border-gray-100">
@@ -107,14 +126,6 @@ export const ResultsDisplay = ({
                      focus:ring-blue-500 focus:ring-offset-2 transition-colors"
         >
           Download
-        </button>
-        <button
-          onClick={onReset}
-          className="flex-1 bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-medium
-                     hover:bg-gray-200 focus:outline-none focus:ring-2 
-                     focus:ring-gray-500 focus:ring-offset-2 transition-colors"
-        >
-          Compress Another
         </button>
       </div>
     </div>
