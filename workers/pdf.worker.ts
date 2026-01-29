@@ -1,19 +1,19 @@
 /**
  * PDF Compression Web Worker
- * Runs heavy PDF processing off the main thread
  */
 
 import { analyzePdf } from '../lib/pdf-processor';
-import type { WorkerMessage, WorkerResponse } from '../lib/types';
+import type { WorkerMessage, WorkerResponse, ImageCompressionSettings } from '../lib/types';
+import { DEFAULT_IMAGE_SETTINGS } from '../lib/types';
 
 const postResponse = (response: WorkerResponse) => {
   self.postMessage(response);
 };
 
-const postProgress = (message: string) => {
+const postProgress = (message: string, percent?: number) => {
   postResponse({
     type: 'progress',
-    payload: { stage: 'analyzing', message },
+    payload: { stage: 'analyzing', message, percent },
   });
 };
 
@@ -22,8 +22,14 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 
   if (type !== 'start') return;
 
+  const imageSettings: ImageCompressionSettings = payload.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
+
   try {
-    const analysis = await analyzePdf(payload.arrayBuffer, postProgress);
+    const analysis = await analyzePdf(
+      payload.arrayBuffer,
+      postProgress,
+      imageSettings
+    );
 
     const buffer = new Uint8Array(analysis.fullCompressedBytes).buffer as ArrayBuffer;
 
@@ -35,6 +41,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         baselineSize: analysis.baselineSize,
         fullCompressedBuffer: buffer,
         methodResults: analysis.methodResults,
+        imageStats: analysis.imageStats,
       },
     });
   } catch (error) {
