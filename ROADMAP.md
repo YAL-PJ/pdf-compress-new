@@ -62,13 +62,13 @@ Build the most powerful PDF compressor on the market, starting with free browser
 
 > All methods in this phase run 100% in the browser. No server needed. **FREE tier.**
 
-### 2.1 Image Recompression (High Impact) 🔲
-- [ ] Extract embedded JPEG images from PDF
-- [ ] Canvas-based recompression at lower quality
-- [ ] Replace images back into PDF
-- [ ] Quality slider (0-100)
-- [ ] Preserve non-JPEG images (PNG with transparency, etc.)
-- [ ] Add to methods toggle UI with savings badge
+### 2.1 Image Recompression (High Impact) ✅
+- [x] Extract embedded JPEG images from PDF
+- [x] Canvas-based recompression at lower quality
+- [x] Replace images back into PDF
+- [x] Quality slider (0-100)
+- [x] Preserve non-JPEG images (PNG with transparency, etc.)
+- [x] Add to methods toggle UI with savings badge
 
 ### 2.2 Image Downsampling 🔲
 - [ ] Detect image DPI
@@ -477,9 +477,9 @@ Build the most powerful PDF compressor on the market, starting with free browser
 
 ## Current Status
 
-**Completed:** Phase 0, Phase 1  
-**Current:** Phase 2 (Free Local Methods)  
-**Next milestone:** Image Recompression (2.1)
+**Completed:** Phase 0, Phase 1, Phase 2.1 (Image Recompression)
+**Current:** Phase 2 (Free Local Methods)
+**Next milestone:** Image Downsampling (2.2)
 
 ---
 
@@ -498,7 +498,7 @@ Build the most powerful PDF compressor on the market, starting with free browser
 | **Structure** | Remove Page Labels | 0-1% | 🔲 Planned |
 | **Structure** | Remove Web Capture Info | 0-1% | 🔲 Planned |
 | **Structure** | Rebuild PDF (remove incremental saves) | 2-10% | 🔲 Planned |
-| **Images** | JPEG Recompression | 30-70% | 🔲 Next |
+| **Images** | JPEG Recompression | 30-70% | ✅ Done |
 | **Images** | Downsampling (DPI reduction) | 50-75% | 🔲 Planned |
 | **Images** | Grayscale Conversion | 20-40% | 🔲 Planned |
 | **Images** | Monochrome/1-bit Conversion | 60-90% | 🔲 Planned |
