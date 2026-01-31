@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import { formatBytes, calculateSavings, getOutputFilename } from '@/lib/utils';
+import { motion } from 'framer-motion';
+import { Download, RefreshCw, FileCheck, ArrowRight, X } from 'lucide-react';
+import { twMerge } from 'tailwind-merge';
 
 interface ResultsDisplayProps {
   originalSize: number;
@@ -10,7 +13,7 @@ interface ResultsDisplayProps {
   blob: Blob;
   originalFileName: string;
   onReset: () => void;
-  imageStats?: {  // NEW
+  imageStats?: {
     totalImages: number;
     jpegCount: number;
     pngCount: number;
@@ -18,12 +21,12 @@ interface ResultsDisplayProps {
   };
 }
 
-export const ResultsDisplay = ({ 
+export const ResultsDisplay = ({
   originalSize,
   compressedSize,
   pageCount,
   blob,
-  originalFileName, 
+  originalFileName,
   onReset,
   imageStats,
 }: ResultsDisplayProps) => {
@@ -52,71 +55,106 @@ export const ResultsDisplay = ({
     link.click();
   }, [blob, originalFileName]);
 
+  const compressionRatio = Math.min(Math.max((compressedSize / originalSize) * 100, 5), 100);
+
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm" role="region" aria-label="Compression results">
-      <h2 className="text-lg font-semibold text-gray-800 mb-4">Results</h2>
-
-      <div className="flex items-center justify-between gap-3 mb-6 rounded-lg border border-gray-100 px-4 py-3">
-        <p className="text-sm font-medium text-gray-700 truncate">{originalFileName}</p>
-        <button
-          type="button"
-          onClick={onReset}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-500
-                     hover:text-gray-700 hover:bg-gray-100 transition-colors"
-          aria-label="Remove file"
-        >
-          <span className="text-lg leading-none">×</span>
-        </button>
-      </div>
-
-      <dl className="space-y-3 mb-6">
-        <div className="flex justify-between py-2 border-b border-gray-100">
-          <dt className="text-gray-600">Original size</dt>
-          <dd className="font-medium">{formatBytes(originalSize)}</dd>
-        </div>
-        <div className="flex justify-between py-2 border-b border-gray-100">
-          <dt className="text-gray-600">Compressed size</dt>
-          <dd className="font-medium">{formatBytes(compressedSize)}</dd>
-        </div>
-        <div className="flex justify-between py-2 border-b border-gray-100">
-          <dt className="text-gray-600">Pages</dt>
-          <dd className="font-medium">{pageCount}</dd>
-        </div>
-        {/* NEW - Image stats */}
-        {imageStats && imageStats.totalImages > 0 && (
-          <div className="flex justify-between py-2 border-b border-gray-100">
-            <dt className="text-gray-600">Images found</dt>
-            <dd className="font-medium">
-              {imageStats.totalImages}
-              {imageStats.jpegCount > 0 && (
-                <span className="text-gray-500 text-sm ml-1">({imageStats.jpegCount} JPEG)</span>
-              )}
-            </dd>
+    <motion.div
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      className="bg-white rounded-lg overflow-hidden shadow-sm border border-slate-200"
+      role="region"
+      aria-label="Compression results"
+    >
+      {/* Header */}
+      <div className="bg-slate-50 border-b border-slate-200 p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3 overflow-hidden">
+          <div className="w-8 h-8 rounded-md bg-emerald-100 flex items-center justify-center text-emerald-700 flex-shrink-0 border border-emerald-200">
+            <FileCheck className="w-4 h-4" />
           </div>
-        )}
-      </dl>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-slate-800 truncate">
+              {originalFileName}
+            </h2>
+            <p className="text-xs text-slate-500 font-medium">
+              {pageCount} pages • Ready
+            </p>
+          </div>
+        </div>
 
-      <div className={`text-center py-4 rounded-lg mb-6 ${isSmaller ? 'bg-green-50' : 'bg-amber-50'}`} role="status">
-        {isSmaller ? (
-          <p className="text-green-700 font-semibold text-lg">
-            📉 Saved {formatBytes(savedBytes)} ({savedPercent.toFixed(1)}%)
-          </p>
-        ) : (
-          <p className="text-amber-700 font-medium">
-            📊 No size reduction (file may already be optimized)
-          </p>
-        )}
-      </div>
-
-      <div className="flex gap-3">
         <button
-          onClick={handleDownload}
-          className="flex-1 bg-blue-600 text-white py-3 px-6 rounded-lg font-medium
-                     hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          onClick={onReset}
+          className="p-1.5 hover:bg-slate-200 rounded text-slate-400 hover:text-slate-600 transition-colors"
+          title="Close"
         >
-          Download
+          <X className="w-4 h-4" />
         </button>
       </div>
-    </div>
+
+      <div className="p-6 space-y-6">
+        {/* Visual Comparison */}
+        <div className="space-y-4">
+          <div className="flex items-end justify-between text-sm">
+            <span className="font-semibold text-slate-600">Size Comparison</span>
+            <span className={twMerge(
+              "font-bold px-2 py-0.5 rounded text-xs",
+              isSmaller ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+            )}>
+              {isSmaller ? `SAVED ${savedPercent.toFixed(1)}%` : 'NO SAVINGS'}
+            </span>
+          </div>
+
+          {/* Bars - Sharper */}
+          <div className="relative h-10 bg-slate-100 rounded border border-slate-200 overflow-hidden flex items-center">
+            {/* Original Size Bar (Background) */}
+            <div className="absolute inset-y-0 left-0 bg-slate-200 w-full" />
+
+            {/* Compressed Size Bar - Solid High Contrast Color */}
+            <motion.div
+              initial={{ width: '100%' }}
+              animate={{ width: `${compressionRatio}%` }}
+              transition={{ duration: 0.8, ease: "circOut", delay: 0.2 }}
+              className={twMerge(
+                "absolute inset-y-0 left-0 border-r border-white/20",
+                isSmaller ? "bg-emerald-600" : "bg-amber-500"
+              )}
+            />
+
+            {/* Labels overlaid on bars - High Contrast Text Shadow */}
+            <div className="absolute inset-0 flex justify-between items-center px-4 pointer-events-none">
+              <span className="z-10 text-xs font-bold text-slate-600 mix-blend-multiply">
+                ORIGINAL: {formatBytes(originalSize)}
+              </span>
+              <motion.span
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.6 }}
+                className="z-10 text-xs font-bold text-white drop-shadow-md"
+              >
+                {formatBytes(compressedSize)}
+              </motion.span>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Buttons - Solid Blocks */}
+        <div className="flex flex-col sm:flex-row gap-3 pt-2">
+          <button
+            onClick={onReset}
+            className="flex-1 px-4 py-3 rounded-md border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 hover:text-slate-900 transition-colors flex items-center justify-center gap-2 text-sm"
+          >
+            <RefreshCw className="w-4 h-4" />
+            New File
+          </button>
+          <button
+            onClick={handleDownload}
+            className="flex-[2] px-4 py-3 rounded-md bg-slate-900 text-white font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 text-sm shadow-sm"
+          >
+            <Download className="w-4 h-4" />
+            DOWNLOAD PDF
+            <ArrowRight className="w-4 h-4 opacity-70" />
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 };

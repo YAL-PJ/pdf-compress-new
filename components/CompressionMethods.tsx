@@ -3,44 +3,17 @@
 import type { CompressionOptions, MethodResult, ImageCompressionSettings } from '@/lib/types';
 import { formatBytes } from '@/lib/utils';
 import { IMAGE_COMPRESSION } from '@/lib/constants';
-
-interface MethodConfig {
-  key: keyof CompressionOptions;
-  label: string;
-  description: string;
-  icon: string;
-  hasSettings?: boolean;
-}
-
-const METHODS: MethodConfig[] = [
-  {
-    key: 'useObjectStreams',
-    label: 'Object Streams',
-    description: 'Combine PDF objects into compressed streams',
-    icon: '📦',
-  },
-  {
-    key: 'stripMetadata',
-    label: 'Strip Metadata',
-    description: 'Remove title, author, dates, and other metadata',
-    icon: '🧹',
-  },
-  {
-    key: 'recompressImages',  // NEW
-    label: 'Recompress Images',
-    description: 'Re-encode JPEG images at lower quality for smaller files',
-    icon: '🖼️',
-    hasSettings: true,
-  },
-];
+import { motion, AnimatePresence } from 'framer-motion';
+import { Package, Eraser, Image as ImageIcon, Check, Settings2 } from 'lucide-react';
+import { twMerge } from 'tailwind-merge';
 
 interface CompressionMethodsProps {
   options: CompressionOptions;
   onChange: (options: CompressionOptions) => void;
   disabled?: boolean;
   methodResults?: MethodResult[];
-  imageSettings: ImageCompressionSettings;  // NEW
-  onImageSettingsChange: (settings: ImageCompressionSettings) => void;  // NEW
+  imageSettings: ImageCompressionSettings;
+  onImageSettingsChange: (settings: ImageCompressionSettings) => void;
   imageStats?: {
     totalImages: number;
     jpegCount: number;
@@ -62,58 +35,70 @@ export const CompressionMethods = ({
   baselineOverhead,
   isUpdating = false,
 }: CompressionMethodsProps) => {
+
   const toggleMethod = (key: keyof CompressionOptions) => {
     if (disabled) return;
     onChange({ ...options, [key]: !options[key] });
   };
 
-  const getMethodResult = (key: keyof CompressionOptions): MethodResult | undefined => {
+  const getMethodResult = (key: keyof CompressionOptions) => {
     return methodResults?.find(r => r.key === key);
   };
+
+  const firstEnabledIndex = Object.keys(options).findIndex(k => options[k as keyof CompressionOptions]);
+
+  const methods = [
+    {
+      key: 'useObjectStreams' as const,
+      label: 'Object Streams',
+      description: 'Optimize PDF structure',
+      icon: Package,
+    },
+    {
+      key: 'stripMetadata' as const,
+      label: 'Strip Metadata',
+      description: 'Remove hidden data',
+      icon: Eraser,
+    },
+    {
+      key: 'recompressImages' as const,
+      label: 'Compress Images',
+      description: 'Reduce image quality',
+      icon: ImageIcon,
+      hasSettings: true,
+    },
+  ];
 
   const handleQualityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const quality = parseInt(e.target.value, 10);
     onImageSettingsChange({ ...imageSettings, quality });
   };
 
-  const getQualityLabel = (quality: number): string => {
-    if (quality <= 50) return 'Low';
-    if (quality <= 75) return 'Medium';
-    if (quality <= 85) return 'High';
-    return 'Very High';
-  };
-
-  // Calculate the index of the first enabled method
-  const firstEnabledIndex = METHODS.findIndex(m => options[m.key]);
-
   return (
-    <div className="bg-white rounded-xl p-4 shadow-sm">
-      <h2 className="text-sm font-semibold text-gray-700 mb-3">
-        Compression Methods
-      </h2>
+    <div className="bg-white border rounded-lg shadow-sm w-full lg:max-w-xs h-fit self-start sticky top-8">
+      <div className="p-4 border-b bg-slate-50/50">
+        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+          <Settings2 className="w-4 h-4" />
+          Settings
+        </h2>
+      </div>
 
-      <div className="space-y-2">
-        {METHODS.map((method, index) => {
+      <div className="p-2 space-y-1">
+        {methods.map((method, index) => {
           const isEnabled = options[method.key];
           const result = getMethodResult(method.key);
-          const showImageSettings = method.key === 'recompressImages' && isEnabled;
+          const Icon = method.icon;
 
           let displayBytes = 0;
           if (result) {
-            // Start with raw savings from baseline
             displayBytes = result.savedBytes;
-
-            // Logic: The "first" enabled method pays the "baseline overhead" tax.
-            // If this method is enabled and is the first one, subtract overhead.
+            // Apply overhead tax logic same as before (if needed for perfect math, but usually raw savedBytes is enough per method for display)
+            // For simplicity in this list view, we just show what the method saved directly, 
+            // but to match the total we might need to distribute the overhead. 
+            // Let's keep it simple: Show the raw saving attributed to this method.
+            // If we really want to match the "Total Saved" exactly, we'd need to subtract overhead from the first method.
             if (isEnabled && index === firstEnabledIndex) {
               displayBytes -= baselineOverhead;
-            }
-            // If this method is DISABLED, we want to show what it WOULD save if enabled.
-            // If enabling it would make it the first/primary (index < currentFirst), it would pay the tax.
-            else if (!isEnabled) {
-              if (firstEnabledIndex === -1 || index < firstEnabledIndex) {
-                displayBytes -= baselineOverhead;
-              }
             }
           }
 
@@ -122,126 +107,105 @@ export const CompressionMethods = ({
               <button
                 onClick={() => toggleMethod(method.key)}
                 disabled={disabled}
-                className={`
-                  group w-full flex items-center gap-3 p-3 rounded-lg text-left
-                  transition-all duration-150 ease-out
-                  ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
-                  ${isEnabled
-                    ? 'bg-blue-50 border-2 border-blue-500'
-                    : 'bg-gray-50 border-2 border-transparent hover:border-gray-300'
-                  }
-                  ${showImageSettings ? 'rounded-b-none' : ''}
-                `}
-                role="switch"
-                aria-checked={isEnabled}
+                className={twMerge(
+                  "w-full flex items-center gap-3 p-3 rounded-md text-left transition-all duration-200 border",
+                  "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1",
+                  isEnabled
+                    ? "bg-slate-900 border-slate-900 text-white"
+                    : "bg-white border-transparent hover:bg-slate-50 text-slate-600",
+                  disabled && "opacity-50 cursor-not-allowed"
+                )}
               >
-                <span className="text-xl flex-shrink-0">{method.icon}</span>
+                <div className={twMerge(
+                  "flex items-center justify-center",
+                  isEnabled ? "text-white" : "text-slate-400"
+                )}>
+                  <Icon className="w-5 h-5" />
+                </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-medium text-sm ${isEnabled ? 'text-blue-900' : 'text-gray-700'}`}>
-                      {method.label}
-                    </span>
-
-                    {(() => {
-                      if (!result) return null;
-
-                      if (displayBytes > 0) {
-                        return (
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium
-                            ${isEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}>
-                            -{formatBytes(displayBytes)}
-                          </span>
-                        );
-                      }
-
-                      if (displayBytes < 0) {
-                        // Negative savings (bloat) - arguably shouldn't happen often if tool is good, but needed for accuracy
-                        return (
-                          <span className="text-xs px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">
-                            +{formatBytes(Math.abs(displayBytes))}
-                          </span>
-                        );
-                      }
-
-                      return (
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-400">~0</span>
-                      );
-                    })()}
-
-                    {method.key === 'recompressImages' && (
-                      <>
-                        {isUpdating ? (
-                          <span className="text-xs text-blue-600 flex items-center gap-1 animate-pulse">
-                            <span className="inline-block w-2 h-2 bg-blue-500 rounded-full animate-bounce" />
-                            Optimizing...
-                          </span>
-                        ) : (
-                          result?.details && (
-                            <span className="text-xs text-gray-500">
-                              ({result.details.imagesProcessed} optimized)
-                            </span>
-                          )
-                        )}
-                      </>
+                  <div className="font-semibold text-sm leading-none flex justify-between">
+                    <span>{method.label}</span>
+                    {/* Per-Method Savings Badge */}
+                    {isEnabled && displayBytes > 0 && (
+                      <span className="text-[10px] bg-emerald-500/20 text-emerald-100 px-1.5 py-0.5 rounded ml-2">
+                        -{formatBytes(displayBytes)}
+                      </span>
                     )}
                   </div>
-                  <div className={`text-xs max-h-0 overflow-hidden opacity-0 transition-all duration-150
-                    group-hover:max-h-24 group-hover:opacity-100
-                    ${isEnabled ? 'text-blue-700' : 'text-gray-500'}`}>
+                  <div className={twMerge(
+                    "text-xs mt-1 truncate",
+                    isEnabled ? "text-slate-300" : "text-slate-500"
+                  )}>
                     {method.description}
                   </div>
                 </div>
 
-                <div className={`w-10 h-6 rounded-full p-1 transition-colors duration-200 flex-shrink-0
-                  ${isEnabled ? 'bg-blue-500' : 'bg-gray-300'}`}>
-                  <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform duration-200
-                    ${isEnabled ? 'translate-x-4' : 'translate-x-0'}`} />
+                <div className={twMerge(
+                  "w-5 h-5 rounded border flex items-center justify-center transition-colors",
+                  isEnabled
+                    ? "bg-white border-white text-slate-900"
+                    : "bg-transparent border-slate-300 text-transparent"
+                )}>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
                 </div>
               </button>
 
-              {/* Quality Slider - NEW */}
-              {showImageSettings && (
-                <div className="bg-blue-50 border-2 border-t-0 border-blue-500 rounded-b-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label htmlFor="image-quality" className="text-xs font-medium text-blue-900">
-                      Quality: {imageSettings.quality}% ({getQualityLabel(imageSettings.quality)})
-                    </label>
-                  </div>
-                  <input
-                    id="image-quality"
-                    type="range"
-                    min={IMAGE_COMPRESSION.MIN_QUALITY}
-                    max={IMAGE_COMPRESSION.MAX_QUALITY}
-                    value={imageSettings.quality}
-                    onChange={handleQualityChange}
-                    disabled={disabled}
-                    className="w-full h-2 bg-blue-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                  />
-                  <div className="flex justify-between text-xs text-blue-700">
-                    <span>Smaller</span>
-                    <span>Better Quality</span>
-                  </div>
+              {/* Specific Settings for Images */}
+              <AnimatePresence>
+                {method.hasSettings && isEnabled && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-3 pb-3 pt-2">
+                      <div className="bg-slate-50 border rounded p-3 space-y-3">
+                        {/* Image Stats Restoration */}
+                        {imageStats && (
+                          <div className="text-[10px] text-slate-500 bg-white p-2 rounded border mb-2 grid grid-cols-2 gap-2">
+                            <div>
+                              <div className="font-bold text-slate-700">{imageStats.totalImages}</div>
+                              <div>Images Found</div>
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-700">{imageStats.jpegCount}</div>
+                              <div>Optimizable (JPEG)</div>
+                            </div>
+                          </div>
+                        )}
 
-                  {imageStats && imageStats.totalImages > 0 && (
-                    <div className="mt-2 pt-2 border-t border-blue-200">
-                      <p className="text-xs text-blue-800">
-                        📊 Found {imageStats.totalImages} images ({imageStats.jpegCount} JPEG)
-                      </p>
+                        <div className="flex justify-between items-center text-xs font-medium text-slate-700">
+                          <span>Image Quality</span>
+                          <span className="font-mono bg-white px-1.5 py-0.5 rounded border text-slate-900">
+                            {imageSettings.quality}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={IMAGE_COMPRESSION.MIN_QUALITY}
+                          max={IMAGE_COMPRESSION.MAX_QUALITY}
+                          step={5}
+                          value={imageSettings.quality}
+                          onChange={handleQualityChange}
+                          disabled={disabled}
+                          className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
+                        />
+                        {isUpdating && (
+                          <div className="text-[10px] uppercase font-bold text-slate-500 animate-pulse text-center">
+                            Updating Preview...
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  )}
-                </div>
-              )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           );
         })}
       </div>
-
-      {!Object.values(options).some(Boolean) && (
-        <p className="mt-3 text-xs text-amber-600 flex items-center gap-1">
-          <span>⚠️</span> No compression methods selected
-        </p>
-      )}
     </div>
   );
 };

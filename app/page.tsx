@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   UploadZone,
   ResultsDisplay,
@@ -21,11 +22,10 @@ export default function Home() {
   const [options, setOptions] = useState<CompressionOptions>(DEFAULT_COMPRESSION_OPTIONS);
   const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
 
-  // Track settings effectively used to prevent infinite processing loops
   const prevSettingsRef = useRef<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
 
   const handleFileSelect = useCallback((file: File) => {
-    prevSettingsRef.current = imageSettings; // Sync ref immediately on manual action
+    prevSettingsRef.current = imageSettings;
     processFile(file, imageSettings);
   }, [processFile, imageSettings]);
 
@@ -33,26 +33,20 @@ export default function Home() {
     reset();
     setOptions(DEFAULT_COMPRESSION_OPTIONS);
     setImageSettings(DEFAULT_IMAGE_SETTINGS);
-    prevSettingsRef.current = DEFAULT_IMAGE_SETTINGS; // Sync ref on reset
+    prevSettingsRef.current = DEFAULT_IMAGE_SETTINGS;
   }, [reset]);
 
-  // Re-process when image settings change (debounced)
   useEffect(() => {
     if (state.status !== 'done') return;
 
-    // Only process if settings actually CHANGED from what we last processed
-    // This equality check is crucial to stop infinite loops
     if (JSON.stringify(imageSettings) === JSON.stringify(prevSettingsRef.current)) {
       return;
     }
 
-    // Capture file ref to satisfy TS/closure
     const fileToProcess = state.originalFile;
-
-    // Debounce to prevent flashing/overload while sliding
     const timer = setTimeout(() => {
-      prevSettingsRef.current = imageSettings; // Mark as handled
-      processFile(fileToProcess, imageSettings, true); // background mode
+      prevSettingsRef.current = imageSettings;
+      processFile(fileToProcess, imageSettings, true);
     }, 500);
 
     return () => clearTimeout(timer);
@@ -84,78 +78,131 @@ export default function Home() {
     };
   }, [state, options]);
 
-  // Check valid status for showing methods panel
-  // Ideally, if updating in bg, status is still 'done', so panel shows.
-  const isProcessing = state.status === 'processing' || state.status === 'validating';
-  const showMethodsPanel = state.status === 'idle' || state.status === 'done' || isProcessing;
-
   const methodResults = state.status === 'done' ? state.analysis.methodResults : undefined;
   const imageStats = state.status === 'done' ? state.analysis.imageStats : undefined;
   const isUpdating = state.status === 'done' ? state.isUpdating : false;
+  const isProcessing = state.status === 'processing' || state.status === 'validating';
 
   return (
-    <main className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
-        <header className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">🗜️ PDF Compress</h1>
-          <p className="text-gray-600">Compress your PDFs in the browser. No upload to servers.</p>
+    <main className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans selection:bg-slate-200">
+      {/* Background - Technical Grid for Pro feel */}
+      <div className="fixed inset-0 z-0 bg-[linear-gradient(to_right,#e2e8f080_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f080_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+        {/* Header */}
+        <header className="mb-12 flex flex-col items-center md:items-start md:flex-row md:justify-between gap-6">
+          <div className="text-center md:text-left">
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl flex items-center gap-3 justify-center md:justify-start">
+              <span className="text-3xl">🗜️</span>
+              PDF Compress <span className="text-slate-400 font-normal">PRO</span>
+            </h1>
+            <p className="mt-2 text-lg text-slate-500 max-w-2xl">
+              Professional client-side compression. No server uploads. 100% Secure.
+            </p>
+          </div>
         </header>
 
-        <div className="flex flex-col md:flex-row gap-6">
-          {showMethodsPanel && (
-            <aside className="md:w-80 flex-shrink-0">
-              <CompressionMethods
-                options={options}
-                onChange={setOptions}
-                disabled={isProcessing && !isUpdating} // Allow interaction if just bg updating (except maybe file upload)
-                methodResults={methodResults}
-                imageSettings={imageSettings}
-                onImageSettingsChange={setImageSettings}
-                imageStats={imageStats}
-                baselineOverhead={state.status === 'done' ? (state.analysis.baselineSize - state.analysis.originalSize) : 0}
-                isUpdating={isUpdating}
-              />
-            </aside>
-          )}
+        <div className="flex flex-col lg:flex-row gap-8 items-start">
 
-          <div className="flex-1">
-            {state.status === 'idle' && (
-              <UploadZone onFileSelect={handleFileSelect} />
-            )}
+          {/* Sidebar - Controls (Visible when needed) */}
+          <AnimatePresence>
+            {(state.status === 'idle' || state.status === 'done' || isProcessing) && (
+              <motion.aside
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="w-full lg:w-80 flex-shrink-0 space-y-6 lg:sticky lg:top-8"
+              >
+                <CompressionMethods
+                  options={options}
+                  onChange={setOptions}
+                  disabled={isProcessing && !isUpdating}
+                  methodResults={methodResults}
+                  imageSettings={imageSettings}
+                  onImageSettingsChange={setImageSettings}
+                  imageStats={imageStats}
+                  baselineOverhead={state.status === 'done' ? (state.analysis.baselineSize - state.analysis.originalSize) : 0}
+                  isUpdating={isUpdating}
+                />
 
-            {state.status === 'validating' && (
-              <ProcessingIndicator fileName="" progress="Validating file..." />
+                {state.status === 'idle' && (
+                  <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 text-sm text-blue-700">
+                    <p><strong>Tip:</strong> Select your compression preference before or after uploading.</p>
+                  </div>
+                )}
+              </motion.aside>
             )}
+          </AnimatePresence>
 
-            {state.status === 'processing' && (
-              <ProcessingIndicator
-                fileName={state.fileName}
-                progress={state.progress}
-                progressPercent={state.progressPercent}
-              />
-            )}
+          {/* Main Content Area */}
+          <div className="flex-1 w-full min-w-0">
+            <AnimatePresence mode="wait">
 
-            {state.status === 'done' && currentResult && (
-              <ResultsDisplay
-                originalSize={currentResult.originalSize}
-                compressedSize={currentResult.compressedSize}
-                pageCount={currentResult.pageCount}
-                blob={currentResult.blob}
-                originalFileName={state.fileName}
-                onReset={handleReset}
-                imageStats={currentResult.imageStats}
-              />
-            )}
+              {/* IDLE STATE */}
+              {state.status === 'idle' && (
+                <motion.div
+                  key="idle"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                >
+                  <UploadZone onFileSelect={handleFileSelect} />
+                </motion.div>
+              )}
 
-            {state.status === 'error' && (
-              <ErrorDisplay error={state.error} onReset={handleReset} />
-            )}
+              {/* PROCESSING STATE */}
+              {isProcessing && (
+                <motion.div
+                  key="processing"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  className="flex justify-center py-12"
+                >
+                  <ProcessingIndicator
+                    fileName={state.status === 'processing' ? state.fileName : ''}
+                    progress={state.status === 'processing' ? state.progress : 'Validating file...'}
+                    progressPercent={state.status === 'processing' ? state.progressPercent : undefined}
+                  />
+                </motion.div>
+              )}
+
+              {/* RESULTS STATE */}
+              {state.status === 'done' && currentResult && (
+                <motion.div
+                  key="results"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="space-y-6"
+                >
+                  <ResultsDisplay
+                    originalSize={currentResult.originalSize}
+                    compressedSize={currentResult.compressedSize}
+                    pageCount={currentResult.pageCount}
+                    blob={currentResult.blob}
+                    originalFileName={state.fileName}
+                    onReset={handleReset}
+                    imageStats={currentResult.imageStats}
+                  />
+
+
+                </motion.div>
+              )}
+
+              {/* ERROR STATE */}
+              {state.status === 'error' && (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  <ErrorDisplay error={state.error} onReset={handleReset} />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
-        </div>
 
-        <footer className="text-center text-sm text-gray-500 mt-8">
-          <p>🔒 Your files never leave your browser. All processing happens locally.</p>
-        </footer>
+        </div>
       </div>
     </main>
   );
