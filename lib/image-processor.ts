@@ -1,11 +1,11 @@
 /**
  * Image Processor for PDF Compression
- * JPEG-only recompression (safe, no transparency issues)
+ * JPEG-only recompression and downsampling (safe, no transparency issues)
  */
 
 import { PDFDocument, PDFName, PDFDict, PDFArray, PDFStream, PDFRawStream, PDFRef } from 'pdf-lib';
 import type { ImageCompressionSettings, ExtractedImage, RecompressedImage } from './types';
-import { IMAGE_COMPRESSION } from './constants';
+import { IMAGE_COMPRESSION, DPI_OPTIONS } from './constants';
 
 export interface ImageStats {
   totalImages: number;
@@ -13,6 +13,7 @@ export interface ImageStats {
   pngCount: number;
   otherCount: number;
   totalOriginalSize: number;
+  highDpiCount: number;  // Images that could benefit from downsampling
 }
 
 export interface ImageExtractionResult {
@@ -67,12 +68,63 @@ const getColorSpace = (dict: PDFDict): string => {
 };
 
 /**
+ * Estimate DPI based on image dimensions
+ * Assumes a typical 8.5" wide page for reference
+ * Larger images = higher assumed DPI
+ */
+const estimateImageDpi = (width: number, height: number): number => {
+  const largerDimension = Math.max(width, height);
+  // Reference: 8.5" page at various DPIs
+  // 72 DPI = 612px, 150 DPI = 1275px, 300 DPI = 2550px
+  // Simple linear estimate based on larger dimension
+  const REFERENCE_PAGE_INCHES = 11; // 11" for the larger dimension (letter size)
+  return Math.round(largerDimension / REFERENCE_PAGE_INCHES);
+};
+
+/**
+ * Check if image would benefit from downsampling to target DPI
+ */
+const shouldDownsample = (width: number, height: number, targetDpi: number): boolean => {
+  const estimatedDpi = estimateImageDpi(width, height);
+  // Only downsample if estimated DPI is significantly higher than target (20% margin)
+  return estimatedDpi > targetDpi * 1.2;
+};
+
+/**
+ * Calculate new dimensions for target DPI
+ */
+const calculateDownsampledDimensions = (
+  width: number,
+  height: number,
+  targetDpi: number
+): { newWidth: number; newHeight: number; scale: number } => {
+  const currentDpi = estimateImageDpi(width, height);
+  const scale = targetDpi / currentDpi;
+
+  // Don't scale up, only down
+  if (scale >= 1) {
+    return { newWidth: width, newHeight: height, scale: 1 };
+  }
+
+  const newWidth = Math.round(width * scale);
+  const newHeight = Math.round(height * scale);
+
+  // Ensure minimum dimensions
+  if (newWidth < DPI_OPTIONS.MIN_DIMENSION_THRESHOLD || newHeight < DPI_OPTIONS.MIN_DIMENSION_THRESHOLD) {
+    return { newWidth: width, newHeight: height, scale: 1 };
+  }
+
+  return { newWidth, newHeight, scale };
+};
+
+/**
  * Extract all images from PDF, collecting stats
  * Only extracts JPEGs for recompression
  */
 export const extractImages = async (
   pdfDoc: PDFDocument,
-  onProgress?: (message: string, percent?: number) => void
+  onProgress?: (message: string, percent?: number) => void,
+  targetDpi: number = DPI_OPTIONS.DEFAULT_TARGET_DPI
 ): Promise<ImageExtractionResult> => {
   const images: ExtractedImage[] = [];
   const stats: ImageStats = {
@@ -81,6 +133,7 @@ export const extractImages = async (
     pngCount: 0,
     otherCount: 0,
     totalOriginalSize: 0,
+    highDpiCount: 0,
   };
 
   onProgress?.('Scanning for images...', 0);
@@ -130,6 +183,12 @@ export const extractImages = async (
       // Store ref as string for later lookup
       const refStr = `${ref.objectNumber}-${ref.generationNumber}`;
 
+      // Estimate DPI and check if high-DPI
+      const estimatedDpi = estimateImageDpi(width, height);
+      if (shouldDownsample(width, height, targetDpi)) {
+        stats.highDpiCount++;
+      }
+
       images.push({
         ref: refStr,
         format: 'jpeg',
@@ -140,6 +199,7 @@ export const extractImages = async (
         bitsPerComponent: 8,
         pageIndex: 0,
         originalSize,
+        estimatedDpi,
       });
     } else {
       // Count as PNG/other but don't extract for recompression
@@ -158,7 +218,7 @@ export const extractImages = async (
 };
 
 /**
- * Recompress a JPEG image
+ * Recompress and optionally downsample a JPEG image
  */
 export const recompressJpeg = async (
   image: ExtractedImage,
@@ -190,8 +250,26 @@ export const recompressJpeg = async (
     const bitmapWidth = imageBitmap.width;
     const bitmapHeight = imageBitmap.height;
 
-    // Create canvas at actual decoded dimensions (might differ from PDF dimensions)
-    const canvas = new OffscreenCanvas(bitmapWidth, bitmapHeight);
+    // Calculate target dimensions (with potential downsampling)
+    let targetWidth = bitmapWidth;
+    let targetHeight = bitmapHeight;
+    let wasDownsampled = false;
+
+    if (settings.enableDownsampling && shouldDownsample(bitmapWidth, bitmapHeight, settings.targetDpi)) {
+      const { newWidth, newHeight, scale } = calculateDownsampledDimensions(
+        bitmapWidth,
+        bitmapHeight,
+        settings.targetDpi
+      );
+      if (scale < 1) {
+        targetWidth = newWidth;
+        targetHeight = newHeight;
+        wasDownsampled = true;
+      }
+    }
+
+    // Create canvas at target dimensions
+    const canvas = new OffscreenCanvas(targetWidth, targetHeight);
     const ctx = canvas.getContext('2d');
 
     if (!ctx) {
@@ -199,7 +277,13 @@ export const recompressJpeg = async (
       return null;
     }
 
-    ctx.drawImage(imageBitmap, 0, 0);
+    // Use high-quality image smoothing for downsampling
+    if (wasDownsampled) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+    }
+
+    ctx.drawImage(imageBitmap, 0, 0, targetWidth, targetHeight);
     imageBitmap.close();
 
     // Re-encode at target quality
@@ -214,11 +298,14 @@ export const recompressJpeg = async (
       return {
         ref: image.ref,
         bytes: newBytes,
-        width: bitmapWidth,
-        height: bitmapHeight,
+        width: targetWidth,
+        height: targetHeight,
         newSize: newBytes.length,
         originalSize: image.originalSize,
         savedBytes,
+        wasDownsampled,
+        originalWidth: bitmapWidth,
+        originalHeight: bitmapHeight,
       };
     }
 

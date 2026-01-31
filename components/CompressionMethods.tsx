@@ -2,9 +2,9 @@
 
 import type { CompressionOptions, MethodResult, ImageCompressionSettings } from '@/lib/types';
 import { formatBytes } from '@/lib/utils';
-import { IMAGE_COMPRESSION } from '@/lib/constants';
+import { IMAGE_COMPRESSION, DPI_OPTIONS } from '@/lib/constants';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Package, Eraser, Image as ImageIcon, Check, Settings2 } from 'lucide-react';
+import { Package, Eraser, Image as ImageIcon, Check, Settings2, Minimize2 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 
 interface CompressionMethodsProps {
@@ -19,6 +19,7 @@ interface CompressionMethodsProps {
     jpegCount: number;
     pngCount: number;
     otherCount: number;
+    highDpiCount: number;
   };
   baselineOverhead: number;
   isUpdating?: boolean;
@@ -67,11 +68,50 @@ export const CompressionMethods = ({
       icon: ImageIcon,
       hasSettings: true,
     },
+    {
+      key: 'downsampleImages' as const,
+      label: 'Downsample Images',
+      description: 'Reduce image resolution',
+      icon: Minimize2,
+      hasSettings: true,
+    },
   ];
 
   const handleQualityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const quality = parseInt(e.target.value, 10);
     onImageSettingsChange({ ...imageSettings, quality });
+  };
+
+  const handleDpiChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const targetDpi = parseInt(e.target.value, 10);
+    onImageSettingsChange({ ...imageSettings, targetDpi });
+  };
+
+  // Sync downsampling toggle with compression option
+  // Downsampling requires image recompression to be enabled
+  const handleDownsampleToggle = (key: keyof CompressionOptions) => {
+    if (key === 'downsampleImages') {
+      const newEnabled = !options[key];
+      // If enabling downsampling, also enable recompressImages
+      const newOptions = newEnabled
+        ? { ...options, [key]: newEnabled, recompressImages: true }
+        : { ...options, [key]: newEnabled };
+      onChange(newOptions);
+      onImageSettingsChange({ ...imageSettings, enableDownsampling: newEnabled });
+    } else {
+      toggleMethod(key);
+    }
+  };
+
+  // If recompressImages is disabled, also disable downsampling
+  const handleImageCompressionToggle = (key: keyof CompressionOptions) => {
+    if (key === 'recompressImages' && options[key]) {
+      // Disabling recompressImages also disables downsampling
+      onChange({ ...options, [key]: false, downsampleImages: false });
+      onImageSettingsChange({ ...imageSettings, enableDownsampling: false });
+    } else {
+      toggleMethod(key);
+    }
   };
 
   return (
@@ -102,10 +142,20 @@ export const CompressionMethods = ({
             }
           }
 
+          const handleClick = () => {
+            if (method.key === 'downsampleImages') {
+              handleDownsampleToggle(method.key);
+            } else if (method.key === 'recompressImages') {
+              handleImageCompressionToggle(method.key);
+            } else {
+              toggleMethod(method.key);
+            }
+          };
+
           return (
             <div key={method.key}>
               <button
-                onClick={() => toggleMethod(method.key)}
+                onClick={handleClick}
                 disabled={disabled}
                 className={twMerge(
                   "w-full flex items-center gap-3 p-3 rounded-md text-left transition-all duration-200 border",
@@ -151,9 +201,9 @@ export const CompressionMethods = ({
                 </div>
               </button>
 
-              {/* Specific Settings for Images */}
+              {/* Specific Settings for Image Compression */}
               <AnimatePresence>
-                {method.hasSettings && isEnabled && (
+                {method.key === 'recompressImages' && method.hasSettings && isEnabled && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
                     animate={{ opacity: 1, height: 'auto' }}
@@ -162,7 +212,7 @@ export const CompressionMethods = ({
                   >
                     <div className="px-3 pb-3 pt-2">
                       <div className="bg-slate-50 border rounded p-3 space-y-3">
-                        {/* Image Stats Restoration */}
+                        {/* Image Stats */}
                         {imageStats && (
                           <div className="text-[10px] text-slate-500 bg-white p-2 rounded border mb-2 grid grid-cols-2 gap-2">
                             <div>
@@ -192,6 +242,60 @@ export const CompressionMethods = ({
                           disabled={disabled}
                           className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
                         />
+                        {isUpdating && (
+                          <div className="text-[10px] uppercase font-bold text-slate-500 animate-pulse text-center">
+                            Updating Preview...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Specific Settings for Image Downsampling */}
+              <AnimatePresence>
+                {method.key === 'downsampleImages' && method.hasSettings && isEnabled && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="px-3 pb-3 pt-2">
+                      <div className="bg-slate-50 border rounded p-3 space-y-3">
+                        {/* High DPI Stats */}
+                        {imageStats && (
+                          <div className="text-[10px] text-slate-500 bg-white p-2 rounded border mb-2 grid grid-cols-2 gap-2">
+                            <div>
+                              <div className="font-bold text-slate-700">{imageStats.jpegCount}</div>
+                              <div>JPEG Images</div>
+                            </div>
+                            <div>
+                              <div className="font-bold text-amber-600">{imageStats.highDpiCount}</div>
+                              <div>High-DPI</div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex justify-between items-center text-xs font-medium text-slate-700">
+                          <span>Target DPI</span>
+                        </div>
+                        <select
+                          value={imageSettings.targetDpi}
+                          onChange={handleDpiChange}
+                          disabled={disabled}
+                          className="w-full text-sm bg-white border rounded px-2 py-1.5 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                        >
+                          {DPI_OPTIONS.PRESETS.map((preset) => (
+                            <option key={preset.value} value={preset.value}>
+                              {preset.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="text-[10px] text-slate-500">
+                          Lower DPI = smaller files, less detail
+                        </div>
                         {isUpdating && (
                           <div className="text-[10px] uppercase font-bold text-slate-500 animate-pulse text-center">
                             Updating Preview...

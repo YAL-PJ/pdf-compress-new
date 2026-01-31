@@ -81,10 +81,10 @@ export const analyzePdf = async (
   const metaBytes = await metaDoc.save({ useObjectStreams: false });
   const metaSaved = baselineSize - metaBytes.byteLength;
 
-  // 4. Image recompression (NEW)
+  // 4. Image recompression and downsampling
   onProgress?.('Analyzing images...');
   const { pdfDoc: imgDoc } = await loadPdf(arrayBuffer);
-  const { images, stats: imageStats } = await extractImages(imgDoc, onProgress);
+  const { images, stats: imageStats } = await extractImages(imgDoc, onProgress, imageSettings.targetDpi);
 
   let imageSaved = 0;
   let recompressedImageBytes: Uint8Array | null = null;
