@@ -70,11 +70,11 @@ Build the most powerful PDF compressor on the market, starting with free browser
 - [x] Preserve non-JPEG images (PNG with transparency, etc.)
 - [x] Add to methods toggle UI with savings badge
 
-### 2.2 Image Downsampling 🔲
-- [ ] Detect image DPI
-- [ ] Downsample high-DPI images (e.g., 300 → 150 DPI)
-- [ ] Target DPI dropdown (72, 96, 150, 200, 300)
-- [ ] Smart detection: skip already-low-DPI images
+### 2.2 Image Downsampling ✅
+- [x] Detect image DPI (estimated from dimensions)
+- [x] Downsample high-DPI images (e.g., 300 → 150 DPI)
+- [x] Target DPI dropdown (72, 96, 150, 200, 300)
+- [x] Smart detection: skip already-low-DPI images
 
 ### 2.3 Grayscale Conversion 🔲
 - [ ] Convert color images to grayscale
@@ -477,9 +477,9 @@ Build the most powerful PDF compressor on the market, starting with free browser
 
 ## Current Status
 
-**Completed:** Phase 0, Phase 1, Phase 2.1 (Image Recompression)
+**Completed:** Phase 0, Phase 1, Phase 2.1 (Image Recompression), Phase 2.2 (Image Downsampling)
 **Current:** Phase 2 (Free Local Methods)
-**Next milestone:** Image Downsampling (2.2)
+**Next milestone:** Grayscale Conversion (2.3)
 
 ---
 
@@ -499,7 +499,7 @@ Build the most powerful PDF compressor on the market, starting with free browser
 | **Structure** | Remove Web Capture Info | 0-1% | 🔲 Planned |
 | **Structure** | Rebuild PDF (remove incremental saves) | 2-10% | 🔲 Planned |
 | **Images** | JPEG Recompression | 30-70% | ✅ Done |
-| **Images** | Downsampling (DPI reduction) | 50-75% | 🔲 Planned |
+| **Images** | Downsampling (DPI reduction) | 50-75% | ✅ Done |
 | **Images** | Grayscale Conversion | 20-40% | 🔲 Planned |
 | **Images** | Monochrome/1-bit Conversion | 60-90% | 🔲 Planned |
 | **Images** | PNG to JPEG (photos) | 30-60% | 🔲 Planned |

@@ -439,16 +439,17 @@ const handleMethodToggle = (method: MethodConfig) => {
 
 ## Current Status
 
-**Completed:** Phase 0, Phase 1 (MVP with 2 free methods), Phase 2.1 (Image Recompression)
+**Completed:** Phase 0, Phase 1 (MVP with 2 free methods), Phase 2.1 (Image Recompression), Phase 2.2 (Image Downsampling)
 **Current:** Phase 2 (Adding more free browser methods)
-**Next milestone:** Image Downsampling (2.2)
+**Next milestone:** Grayscale Conversion (2.3)
 
-### Implemented Methods (3 total)
+### Implemented Methods (4 total)
 | Method | Savings | Status |
 |--------|---------|--------|
 | Object Streams | 5-20% | ✅ Done |
 | Strip Metadata | 1-5% | ✅ Done |
 | Image Recompression | 30-70% | ✅ Done |
+| Image Downsampling | 50-75% | ✅ Done |
 
 See `ROADMAP.md` for detailed task tracking.
 
@@ -492,4 +493,4 @@ See `ROADMAP.md` for detailed task tracking.
 
 1. Check `ROADMAP.md` for what's planned
 2. Check code comments for implementation details
-3. The highest-impact next step is **Image Downsampling** (DPI reduction)
+3. The next step is **Grayscale Conversion** (2.3)

@@ -27,6 +27,22 @@ export const IMAGE_COMPRESSION = {
   MAX_CANVAS_DIMENSION: 16384,
 } as const;
 
+// DPI downsampling settings
+export const DPI_OPTIONS = {
+  DEFAULT_TARGET_DPI: 150,
+  PRESETS: [
+    { value: 72, label: '72 DPI (screen)' },
+    { value: 96, label: '96 DPI (web)' },
+    { value: 150, label: '150 DPI (ebook)' },
+    { value: 200, label: '200 DPI (balanced)' },
+    { value: 300, label: '300 DPI (print)' },
+  ],
+  // Skip downsampling if image is already below this threshold (with some margin)
+  MIN_DIMENSION_THRESHOLD: 100,  // pixels - don't downsample tiny images
+  // Assume images smaller than this are already low-res
+  LOW_RES_THRESHOLD: 500,  // pixels in largest dimension
+} as const;
+
 export const UI = {
   DEBOUNCE_MS: 150,
 } as const;
