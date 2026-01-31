@@ -186,8 +186,12 @@ export const recompressJpeg = async (
     // Decode image
     const imageBitmap = await createImageBitmap(blob);
 
+    // Store dimensions before closing (accessing after close is undefined behavior)
+    const bitmapWidth = imageBitmap.width;
+    const bitmapHeight = imageBitmap.height;
+
     // Create canvas at actual decoded dimensions (might differ from PDF dimensions)
-    const canvas = new OffscreenCanvas(imageBitmap.width, imageBitmap.height);
+    const canvas = new OffscreenCanvas(bitmapWidth, bitmapHeight);
     const ctx = canvas.getContext('2d');
 
     if (!ctx) {
@@ -210,8 +214,8 @@ export const recompressJpeg = async (
       return {
         ref: image.ref,
         bytes: newBytes,
-        width: imageBitmap.width,
-        height: imageBitmap.height,
+        width: bitmapWidth,
+        height: bitmapHeight,
         newSize: newBytes.length,
         originalSize: image.originalSize,
         savedBytes,
