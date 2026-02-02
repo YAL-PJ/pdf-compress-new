@@ -1,10 +1,11 @@
 /**
  * PDF Compression Web Worker
+ * Supports all Phase 2 compression methods
  */
 
-import { analyzePdf } from '../lib/pdf-processor';
-import type { WorkerMessage, WorkerResponse, ImageCompressionSettings } from '../lib/types';
-import { DEFAULT_IMAGE_SETTINGS } from '../lib/types';
+import { analyzePdf, type ExtendedProcessingSettings } from '../lib/pdf-processor';
+import type { WorkerMessage, WorkerResponse, ImageCompressionSettings, CompressionOptions } from '../lib/types';
+import { DEFAULT_IMAGE_SETTINGS, DEFAULT_COMPRESSION_OPTIONS } from '../lib/types';
 
 const postResponse = (response: WorkerResponse) => {
   self.postMessage(response);
@@ -23,12 +24,19 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   if (type !== 'start') return;
 
   const imageSettings: ImageCompressionSettings = payload.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
+  const options: CompressionOptions = payload.options ?? DEFAULT_COMPRESSION_OPTIONS;
+
+  // Build extended settings that include both image settings and compression options
+  const extendedSettings: ExtendedProcessingSettings = {
+    ...imageSettings,
+    options,
+  };
 
   try {
     const analysis = await analyzePdf(
       payload.arrayBuffer,
       postProgress,
-      imageSettings
+      extendedSettings
     );
 
     const buffer = new Uint8Array(analysis.fullCompressedBytes).buffer as ArrayBuffer;
@@ -46,7 +54,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
-    
+
     let code = 'PROCESSING_FAILED';
     if (message.includes('encrypt') || message.includes('password')) {
       code = 'ENCRYPTED_PDF';

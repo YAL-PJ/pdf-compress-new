@@ -1,5 +1,6 @@
 /**
  * usePdfCompression Hook - manages compression state
+ * Supports all Phase 2 compression methods
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -12,8 +13,9 @@ import type {
   WorkerErrorPayload,
   WorkerProgressPayload,
   ImageCompressionSettings,
+  CompressionOptions,
 } from '@/lib/types';
-import { DEFAULT_IMAGE_SETTINGS } from '@/lib/types';
+import { DEFAULT_IMAGE_SETTINGS, DEFAULT_COMPRESSION_OPTIONS } from '@/lib/types';
 
 export type CompressionState =
   | { status: 'idle' }
@@ -22,9 +24,14 @@ export type CompressionState =
   | { status: 'done'; analysis: CompressionAnalysis; fileName: string; originalFile: File; isUpdating?: boolean }
   | { status: 'error'; error: PdfError };
 
+export interface ProcessingSettings {
+  imageSettings?: ImageCompressionSettings;
+  options?: CompressionOptions;
+}
+
 interface UsePdfCompressionReturn {
   state: CompressionState;
-  processFile: (file: File, imageSettings?: ImageCompressionSettings, isBackground?: boolean) => void;
+  processFile: (file: File, settings?: ProcessingSettings, isBackground?: boolean) => void;
   reset: () => void;
 }
 
@@ -48,9 +55,12 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
 
   const processFile = useCallback((
     file: File,
-    imageSettings: ImageCompressionSettings = DEFAULT_IMAGE_SETTINGS,
+    settings: ProcessingSettings = {},
     isBackground: boolean = false
   ) => {
+    const imageSettings = settings.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
+    const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
+
     isBackgroundRef.current = isBackground;
 
     if (isBackground) {
@@ -149,7 +159,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       workerRef.current?.postMessage(
         {
           type: 'start',
-          payload: { arrayBuffer, fileName, imageSettings }
+          payload: { arrayBuffer, fileName, imageSettings, options }
         },
         [arrayBuffer]
       );

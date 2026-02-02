@@ -3,10 +3,41 @@
  */
 
 export interface CompressionOptions {
+  // Structure (Phase 1)
   useObjectStreams: boolean;
   stripMetadata: boolean;
+
+  // Images (Phase 2.1-2.2)
   recompressImages: boolean;
   downsampleImages: boolean;
+
+  // Images (Phase 2.3-2.8)
+  convertToGrayscale: boolean;
+  pngToJpeg: boolean;
+  convertToMonochrome: boolean;
+  removeAlphaChannels: boolean;
+  removeColorProfiles: boolean;
+  cmykToRgb: boolean;
+
+  // Resources (Phase 2)
+  removeThumbnails: boolean;
+  removeDuplicateResources: boolean;
+  removeUnusedFonts: boolean;
+  removeAttachments: boolean;
+
+  // Interactive (Phase 2.10-2.11)
+  flattenForms: boolean;
+  flattenAnnotations: boolean;
+
+  // Structure Cleanup (Phase 2.12-2.21)
+  removeJavaScript: boolean;
+  removeBookmarks: boolean;
+  removeNamedDestinations: boolean;
+  removeArticleThreads: boolean;
+  removeWebCaptureInfo: boolean;
+  removeHiddenLayers: boolean;
+  removePageLabels: boolean;
+  deepCleanMetadata: boolean;
 }
 
 export interface ImageCompressionSettings {
@@ -17,10 +48,41 @@ export interface ImageCompressionSettings {
 }
 
 export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
+  // Structure (Phase 1) - on by default
   useObjectStreams: true,
   stripMetadata: true,
+
+  // Images (Phase 2.1-2.2)
   recompressImages: true,
   downsampleImages: false,  // Off by default - destructive operation
+
+  // Images (Phase 2.3-2.8) - off by default, destructive
+  convertToGrayscale: false,
+  pngToJpeg: false,
+  convertToMonochrome: false,
+  removeAlphaChannels: false,
+  removeColorProfiles: false,
+  cmykToRgb: false,
+
+  // Resources (Phase 2) - safe to enable by default
+  removeThumbnails: true,
+  removeDuplicateResources: false,  // Can be slow, off by default
+  removeUnusedFonts: false,  // Can cause issues if incorrectly detected, off by default
+  removeAttachments: false,  // User may want to keep attachments
+
+  // Interactive (Phase 2.10-2.11) - off by default, destructive
+  flattenForms: false,
+  flattenAnnotations: false,
+
+  // Structure Cleanup (Phase 2.12-2.21) - mostly safe
+  removeJavaScript: true,  // Security benefit
+  removeBookmarks: false,  // User may need navigation
+  removeNamedDestinations: false,  // User may need internal links
+  removeArticleThreads: true,  // Rarely used
+  removeWebCaptureInfo: true,  // Rarely needed
+  removeHiddenLayers: false,  // Can affect content
+  removePageLabels: false,  // May affect pagination display
+  deepCleanMetadata: false,  // More aggressive than stripMetadata
 };
 
 export const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
@@ -98,7 +160,8 @@ export interface WorkerMessage {
   payload: {
     arrayBuffer: ArrayBuffer;
     fileName: string;
-    imageSettings?: ImageCompressionSettings;  // NEW
+    imageSettings?: ImageCompressionSettings;
+    options?: CompressionOptions;  // All compression options
   };
 }
 

@@ -1,11 +1,21 @@
 /**
  * Image Processor for PDF Compression
- * JPEG-only recompression and downsampling (safe, no transparency issues)
+ * Handles JPEG recompression, downsampling, grayscale conversion,
+ * and monochrome conversion.
  */
 
-import { PDFDocument, PDFName, PDFDict, PDFArray, PDFStream, PDFRawStream, PDFRef } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFDict, PDFArray, PDFStream, PDFRawStream } from 'pdf-lib';
 import type { ImageCompressionSettings, ExtractedImage, RecompressedImage } from './types';
 import { IMAGE_COMPRESSION, DPI_OPTIONS } from './constants';
+
+// Extended image settings for Phase 2 methods
+export interface ExtendedImageSettings extends ImageCompressionSettings {
+  convertToGrayscale?: boolean;
+  pngToJpeg?: boolean;
+  convertToMonochrome?: boolean;
+  removeAlphaChannels?: boolean;
+  monochromeThreshold?: number; // 0-255, default 128
+}
 
 export interface ImageStats {
   totalImages: number;
@@ -117,6 +127,61 @@ const calculateDownsampledDimensions = (
   return { newWidth, newHeight, scale };
 };
 
+
+/**
+ * Convert RGB image data to grayscale using luminance formula
+ */
+const convertToGrayscaleData = (
+  ctx: OffscreenCanvasRenderingContext2D,
+  width: number,
+  height: number
+): void => {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    // Luminance formula: 0.299*R + 0.587*G + 0.114*B
+    const gray = Math.round(
+      0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+    );
+    data[i] = gray;     // R
+    data[i + 1] = gray; // G
+    data[i + 2] = gray; // B
+    // Alpha (data[i + 3]) stays unchanged
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+};
+
+/**
+ * Convert image to monochrome (1-bit black and white)
+ */
+const convertToMonochromeData = (
+  ctx: OffscreenCanvasRenderingContext2D,
+  width: number,
+  height: number,
+  threshold: number = 128
+): void => {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let i = 0; i < data.length; i += 4) {
+    // Convert to grayscale first
+    const gray = Math.round(
+      0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+    );
+    // Apply threshold
+    const bw = gray >= threshold ? 255 : 0;
+    data[i] = bw;     // R
+    data[i + 1] = bw; // G
+    data[i + 2] = bw; // B
+    // Alpha stays unchanged
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+};
+
+
 /**
  * Extract all images from PDF, collecting stats
  * Only extracts JPEGs for recompression
@@ -219,10 +284,11 @@ export const extractImages = async (
 
 /**
  * Recompress and optionally downsample a JPEG image
+ * Supports extended settings for grayscale and monochrome conversion
  */
 export const recompressJpeg = async (
   image: ExtractedImage,
-  settings: ImageCompressionSettings
+  settings: ImageCompressionSettings | ExtendedImageSettings
 ): Promise<RecompressedImage | null> => {
   // Skip tiny images
   if (image.originalSize < settings.minSizeThreshold) {
@@ -286,6 +352,18 @@ export const recompressJpeg = async (
     ctx.drawImage(imageBitmap, 0, 0, targetWidth, targetHeight);
     imageBitmap.close();
 
+    // Apply extended image processing if settings are provided
+    const extSettings = settings as ExtendedImageSettings;
+
+    // Apply monochrome conversion (takes priority over grayscale)
+    if (extSettings.convertToMonochrome) {
+      convertToMonochromeData(ctx, targetWidth, targetHeight, extSettings.monochromeThreshold ?? 128);
+    }
+    // Apply grayscale conversion
+    else if (extSettings.convertToGrayscale) {
+      convertToGrayscaleData(ctx, targetWidth, targetHeight);
+    }
+
     // Re-encode at target quality
     const quality = settings.quality / 100;
     const newBlob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
@@ -319,11 +397,12 @@ export const recompressJpeg = async (
 
 /**
  * Recompress all JPEG images
+ * Supports extended settings for grayscale/monochrome conversion
  * Returns results and separate stats for downsampling
  */
 export const recompressImages = async (
   images: ExtractedImage[],
-  settings: ImageCompressionSettings,
+  settings: ImageCompressionSettings | ExtendedImageSettings,
   onProgress?: (message: string, percent?: number) => void
 ): Promise<{ results: RecompressedImage[]; downsampleSavings: number }> => {
   const results: RecompressedImage[] = [];
@@ -433,3 +512,4 @@ export const embedRecompressedImages = async (
 export const calculateImageSavings = (recompressedImages: RecompressedImage[]): number => {
   return recompressedImages.reduce((total, img) => total + img.savedBytes, 0);
 };
+
