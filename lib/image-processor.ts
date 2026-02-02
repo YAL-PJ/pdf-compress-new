@@ -1,10 +1,10 @@
 /**
  * Image Processor for PDF Compression
  * Handles JPEG recompression, downsampling, grayscale conversion,
- * PNG to JPEG conversion, monochrome conversion, and more.
+ * and monochrome conversion.
  */
 
-import { PDFDocument, PDFName, PDFDict, PDFArray, PDFStream, PDFRawStream, PDFRef } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFDict, PDFArray, PDFStream, PDFRawStream } from 'pdf-lib';
 import type { ImageCompressionSettings, ExtractedImage, RecompressedImage } from './types';
 import { IMAGE_COMPRESSION, DPI_OPTIONS } from './constants';
 
@@ -127,42 +127,6 @@ const calculateDownsampledDimensions = (
   return { newWidth, newHeight, scale };
 };
 
-/**
- * Check if stream uses FlateDecode (PNG-like)
- */
-const isPngStream = (dict: PDFDict): boolean => {
-  const filter = dict.get(PDFName.of('Filter'));
-
-  if (filter instanceof PDFName) {
-    return filter.toString() === '/FlateDecode';
-  }
-
-  if (filter instanceof PDFArray) {
-    for (let i = 0; i < filter.size(); i++) {
-      const f = filter.get(i);
-      if (f instanceof PDFName && f.toString() === '/FlateDecode') {
-        return true;
-      }
-    }
-  }
-
-  return false;
-};
-
-/**
- * Check if image has an SMask (alpha channel)
- */
-const hasAlphaChannel = (dict: PDFDict): boolean => {
-  return dict.has(PDFName.of('SMask'));
-};
-
-/**
- * Check if image uses CMYK color space
- */
-const isCmykImage = (dict: PDFDict): boolean => {
-  const colorSpace = getColorSpace(dict);
-  return colorSpace === 'DeviceCMYK' || colorSpace === 'CMYK';
-};
 
 /**
  * Convert RGB image data to grayscale using luminance formula
@@ -217,98 +181,6 @@ const convertToMonochromeData = (
   ctx.putImageData(imageData, 0, 0);
 };
 
-/**
- * Remove alpha channel by compositing on white background
- */
-const removeAlphaFromContext = (
-  ctx: OffscreenCanvasRenderingContext2D,
-  width: number,
-  height: number
-): void => {
-  // Get current image data
-  const imageData = ctx.getImageData(0, 0, width, height);
-  const data = imageData.data;
-
-  // Composite each pixel onto white
-  for (let i = 0; i < data.length; i += 4) {
-    const alpha = data[i + 3] / 255;
-    // Blend with white (255)
-    data[i] = Math.round(data[i] * alpha + 255 * (1 - alpha));     // R
-    data[i + 1] = Math.round(data[i + 1] * alpha + 255 * (1 - alpha)); // G
-    data[i + 2] = Math.round(data[i + 2] * alpha + 255 * (1 - alpha)); // B
-    data[i + 3] = 255; // Full opacity
-  }
-
-  ctx.putImageData(imageData, 0, 0);
-};
-
-// Extended extracted image type that includes PNG data
-export interface ExtractedPngImage extends ExtractedImage {
-  format: 'png';
-  hasAlpha: boolean;
-  decodedBytes?: Uint8Array; // Decoded pixel data
-}
-
-/**
- * Extract PNG (FlateDecode) images from PDF
- */
-export const extractPngImages = async (
-  pdfDoc: PDFDocument,
-  onProgress?: (message: string, percent?: number) => void
-): Promise<{ images: ExtractedPngImage[]; count: number }> => {
-  const images: ExtractedPngImage[] = [];
-  let count = 0;
-
-  const context = pdfDoc.context;
-  const allRefs = context.enumerateIndirectObjects();
-
-  for (const [ref, obj] of allRefs) {
-    if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) {
-      continue;
-    }
-
-    const stream = obj;
-    const dict = stream.dict;
-
-    const subtype = dict.get(PDFName.of('Subtype'));
-    if (!(subtype instanceof PDFName && subtype.toString() === '/Image')) {
-      continue;
-    }
-
-    if (!isPngStream(dict)) {
-      continue;
-    }
-
-    count++;
-    const { width, height } = getImageDimensions(dict);
-    const colorSpace = getColorSpace(dict);
-    const hasAlpha = hasAlphaChannel(dict);
-
-    let bytes: Uint8Array;
-    if (stream instanceof PDFRawStream) {
-      bytes = stream.contents;
-    } else {
-      bytes = stream.getContents();
-    }
-
-    const refStr = `${ref.objectNumber}-${ref.generationNumber}`;
-
-    images.push({
-      ref: refStr,
-      format: 'png',
-      bytes,
-      width,
-      height,
-      colorSpace,
-      bitsPerComponent: 8,
-      pageIndex: 0,
-      originalSize: bytes.length,
-      hasAlpha,
-    });
-  }
-
-  return { images, count };
-};
 
 /**
  * Extract all images from PDF, collecting stats
@@ -525,11 +397,12 @@ export const recompressJpeg = async (
 
 /**
  * Recompress all JPEG images
+ * Supports extended settings for grayscale/monochrome conversion
  * Returns results and separate stats for downsampling
  */
 export const recompressImages = async (
   images: ExtractedImage[],
-  settings: ImageCompressionSettings,
+  settings: ImageCompressionSettings | ExtendedImageSettings,
   onProgress?: (message: string, percent?: number) => void
 ): Promise<{ results: RecompressedImage[]; downsampleSavings: number }> => {
   const results: RecompressedImage[] = [];
@@ -640,149 +513,3 @@ export const calculateImageSavings = (recompressedImages: RecompressedImage[]): 
   return recompressedImages.reduce((total, img) => total + img.savedBytes, 0);
 };
 
-/**
- * Convert a PNG image (without alpha) to JPEG
- * Returns null if the image has transparency that should be preserved
- */
-export const convertPngToJpeg = async (
-  pngImage: ExtractedPngImage,
-  quality: number = 75,
-  removeAlpha: boolean = false
-): Promise<RecompressedImage | null> => {
-  // Skip if image has alpha and we don't want to remove it
-  if (pngImage.hasAlpha && !removeAlpha) {
-    return null;
-  }
-
-  // Skip tiny or oversized images
-  if (
-    pngImage.width > IMAGE_COMPRESSION.MAX_CANVAS_DIMENSION ||
-    pngImage.height > IMAGE_COMPRESSION.MAX_CANVAS_DIMENSION ||
-    pngImage.width <= 0 ||
-    pngImage.height <= 0
-  ) {
-    return null;
-  }
-
-  try {
-    // For FlateDecode images in PDF, we need to decode the raw pixel data
-    // This is complex because PDF stores raw pixel data, not PNG files
-    // For now, we'll skip PNG conversion as it requires decoding the zlib stream
-    // and reconstructing the image from raw pixel data
-
-    // TODO: Implement proper FlateDecode -> JPEG conversion
-    // This would require:
-    // 1. Decompress the zlib/deflate stream
-    // 2. Interpret the raw pixel data based on ColorSpace and BitsPerComponent
-    // 3. Draw to canvas and encode as JPEG
-
-    return null;
-  } catch (err) {
-    console.warn('Failed to convert PNG to JPEG:', pngImage.ref, err);
-    return null;
-  }
-};
-
-/**
- * Recompress images with extended settings (grayscale, monochrome, etc.)
- */
-export const recompressImagesExtended = async (
-  images: ExtractedImage[],
-  settings: ExtendedImageSettings,
-  onProgress?: (message: string, percent?: number) => void
-): Promise<{
-  results: RecompressedImage[];
-  downsampleSavings: number;
-  grayscaleSavings: number;
-  monochromeSavings: number;
-}> => {
-  const results: RecompressedImage[] = [];
-  const total = images.length;
-  let downsampleSavings = 0;
-  let grayscaleSavings = 0;
-  let monochromeSavings = 0;
-
-  if (total === 0) {
-    return { results, downsampleSavings, grayscaleSavings, monochromeSavings };
-  }
-
-  onProgress?.(`Processing ${total} images...`, 0);
-
-  for (let i = 0; i < total; i++) {
-    const image = images[i];
-    const result = await recompressJpeg(image, settings);
-
-    if (result) {
-      results.push(result);
-
-      // Track savings by type
-      if (result.wasDownsampled && result.originalWidth && result.originalHeight) {
-        const originalPixels = result.originalWidth * result.originalHeight;
-        const newPixels = result.width * result.height;
-        const pixelReductionRatio = 1 - (newPixels / originalPixels);
-        downsampleSavings += Math.round(result.savedBytes * pixelReductionRatio);
-      }
-
-      // Estimate grayscale/monochrome savings (color data reduction)
-      if (settings.convertToMonochrome) {
-        // Monochrome can save significant space in JPEG (fewer DCT coefficients)
-        monochromeSavings += Math.round(result.savedBytes * 0.3);
-      } else if (settings.convertToGrayscale) {
-        // Grayscale saves space by eliminating color channels
-        grayscaleSavings += Math.round(result.savedBytes * 0.2);
-      }
-    }
-
-    const progress = Math.round(((i + 1) / total) * 100);
-    onProgress?.(`Processed ${i + 1}/${total} images`, progress);
-  }
-
-  return { results, downsampleSavings, grayscaleSavings, monochromeSavings };
-};
-
-/**
- * Process images for CMYK to RGB conversion
- * CMYK images are larger (4 channels) than RGB (3 channels)
- */
-export const processCmykImages = async (
-  pdfDoc: PDFDocument,
-  onProgress?: (message: string, percent?: number) => void
-): Promise<{ processed: number; savedBytes: number }> => {
-  let processed = 0;
-  let savedBytes = 0;
-
-  const context = pdfDoc.context;
-  const allRefs = context.enumerateIndirectObjects();
-
-  for (const [ref, obj] of allRefs) {
-    if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) {
-      continue;
-    }
-
-    const stream = obj;
-    const dict = stream.dict;
-
-    const subtype = dict.get(PDFName.of('Subtype'));
-    if (!(subtype instanceof PDFName && subtype.toString() === '/Image')) {
-      continue;
-    }
-
-    // Check if CMYK
-    const colorSpace = dict.get(PDFName.of('ColorSpace'));
-    if (colorSpace instanceof PDFName && colorSpace.toString() === '/DeviceCMYK') {
-      // Mark for conversion - actual conversion requires image decoding
-      // For now, just update the color space marker (images will need re-encoding)
-      processed++;
-      // Estimate 25% savings from 4 channels to 3 channels
-      let bytes: Uint8Array;
-      if (stream instanceof PDFRawStream) {
-        bytes = stream.contents;
-      } else {
-        bytes = stream.getContents();
-      }
-      savedBytes += Math.round(bytes.length * 0.25);
-    }
-  }
-
-  return { processed, savedBytes };
-};
