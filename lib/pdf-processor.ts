@@ -87,18 +87,26 @@ export const analyzePdf = async (
   const { images, stats: imageStats } = await extractImages(imgDoc, onProgress, imageSettings.targetDpi);
 
   let imageSaved = 0;
+  let downsampleSaved = 0;
   let recompressedImageBytes: Uint8Array | null = null;
   let imagesProcessed = 0;
   let imagesSkipped = 0;
+  let imagesDownsampled = 0;
 
   if (images.length > 0) {
     onProgress?.(`Found ${images.length} JPEG images, recompressing...`);
 
-    const recompressedImages = await recompressImages(images, imageSettings, onProgress);
+    const { results: recompressedImages, downsampleSavings } = await recompressImages(images, imageSettings, onProgress);
 
     imagesProcessed = recompressedImages.length;
     imagesSkipped = images.length - imagesProcessed;
-    imageSaved = calculateImageSavings(recompressedImages);
+    imagesDownsampled = recompressedImages.filter(img => img.wasDownsampled).length;
+
+    const totalSavings = calculateImageSavings(recompressedImages);
+
+    // Separate downsampling savings from recompression savings
+    downsampleSaved = downsampleSavings;
+    imageSaved = totalSavings - downsampleSavings; // Recompression-only savings
 
     if (recompressedImages.length > 0) {
       onProgress?.('Building compressed PDF with optimized images...');
@@ -144,6 +152,15 @@ export const analyzePdf = async (
       details: {
         imagesProcessed,
         imagesSkipped,
+      },
+    },
+    {
+      key: 'downsampleImages',
+      savedBytes: downsampleSaved,
+      compressedSize: baselineSize - downsampleSaved,
+      details: {
+        imagesProcessed: imagesDownsampled,
+        imagesSkipped: imagesProcessed - imagesDownsampled,
       },
     },
   ];

@@ -319,17 +319,19 @@ export const recompressJpeg = async (
 
 /**
  * Recompress all JPEG images
+ * Returns results and separate stats for downsampling
  */
 export const recompressImages = async (
   images: ExtractedImage[],
   settings: ImageCompressionSettings,
   onProgress?: (message: string, percent?: number) => void
-): Promise<RecompressedImage[]> => {
+): Promise<{ results: RecompressedImage[]; downsampleSavings: number }> => {
   const results: RecompressedImage[] = [];
   const total = images.length;
+  let downsampleSavings = 0;
 
   if (total === 0) {
-    return results;
+    return { results, downsampleSavings };
   }
 
   onProgress?.(`Recompressing ${total} JPEG images...`, 0);
@@ -341,13 +343,25 @@ export const recompressImages = async (
 
     if (result) {
       results.push(result);
+
+      // Track downsampling savings separately
+      if (result.wasDownsampled && result.originalWidth && result.originalHeight) {
+        // Estimate how much of the savings came from downsampling
+        // by comparing the dimension reduction ratio
+        const originalPixels = result.originalWidth * result.originalHeight;
+        const newPixels = result.width * result.height;
+        const pixelReductionRatio = 1 - (newPixels / originalPixels);
+
+        // Attribute proportional savings to downsampling
+        downsampleSavings += Math.round(result.savedBytes * pixelReductionRatio);
+      }
     }
 
     const progress = Math.round(((i + 1) / total) * 100);
     onProgress?.(`Processed ${i + 1}/${total} images`, progress);
   }
 
-  return results;
+  return { results, downsampleSavings };
 };
 
 /**
