@@ -26,8 +26,8 @@ export default function Home() {
 
   const handleFileSelect = useCallback((file: File) => {
     prevSettingsRef.current = imageSettings;
-    processFile(file, imageSettings);
-  }, [processFile, imageSettings]);
+    processFile(file, { imageSettings, options });
+  }, [processFile, imageSettings, options]);
 
   const handleReset = useCallback(() => {
     reset();
@@ -46,11 +46,11 @@ export default function Home() {
     const fileToProcess = state.originalFile;
     const timer = setTimeout(() => {
       prevSettingsRef.current = imageSettings;
-      processFile(fileToProcess, imageSettings, true);
+      processFile(fileToProcess, { imageSettings, options }, true);
     }, 500);
 
     return () => clearTimeout(timer);
-  }, [imageSettings, state, processFile]);
+  }, [imageSettings, options, state, processFile]);
 
   const currentResult = useMemo(() => {
     if (state.status !== 'done') return null;
