@@ -38,6 +38,13 @@ export interface CompressionOptions {
   removeHiddenLayers: boolean;
   removePageLabels: boolean;
   deepCleanMetadata: boolean;
+
+  // Advanced Optimization (Phase 2 - New)
+  inlineToXObject: boolean;       // 2.2 Convert inline images to XObjects
+  compressContentStreams: boolean; // 2.3 Compress/recompress content streams
+  removeOrphanObjects: boolean;   // 2.4 Remove unreferenced objects
+  removeAlternateContent: boolean; // 2.5 Remove alternate images, print/screen-only
+  removeInvisibleText: boolean;   // 2.6 Remove invisible OCR text
 }
 
 export interface ImageCompressionSettings {
@@ -83,6 +90,13 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   removeHiddenLayers: false,  // Can affect content
   removePageLabels: false,  // May affect pagination display
   deepCleanMetadata: false,  // More aggressive than stripMetadata
+
+  // Advanced Optimization (Phase 2 - New)
+  inlineToXObject: false,        // Off - rarely needed, can increase size
+  compressContentStreams: true,  // On - safe and beneficial
+  removeOrphanObjects: true,     // On - safe cleanup
+  removeAlternateContent: false, // Off - may affect print quality
+  removeInvisibleText: false,    // Off - may affect searchability/accessibility
 };
 
 export const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
@@ -142,6 +156,8 @@ export interface ExtractedImage {
   originalSize: number;
   // Estimated DPI based on typical PDF usage (larger images = higher DPI)
   estimatedDpi?: number;
+  // Whether image has transparency (SMask/Mask) that should be preserved
+  hasTransparency?: boolean;
 }
 
 // Recompressed/downsampled image
