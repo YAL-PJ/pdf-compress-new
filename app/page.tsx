@@ -9,8 +9,12 @@ import {
   ErrorDisplay,
   CompressionMethods,
   PresetSelector,
+  BatchUploadZone,
+  FileQueueList,
 } from '@/components';
+import { useBatchCompression } from '@/hooks/useBatchCompression';
 import { usePdfCompression } from '@/hooks/usePdfCompression';
+import { usePageManager } from '@/hooks/usePageManager';
 import {
   DEFAULT_COMPRESSION_OPTIONS,
   DEFAULT_IMAGE_SETTINGS,
@@ -22,6 +26,14 @@ export default function Home() {
   const { state, processFile, reset } = usePdfCompression();
   const [options, setOptions] = useState<CompressionOptions>(DEFAULT_COMPRESSION_OPTIONS);
   const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
+
+  // Batch processing
+  const [isBatchMode, setIsBatchMode] = useState(false);
+  const { queue, addFiles, removeFile, clearQueue, updateFileStatus } = useBatchCompression();
+
+  // Page management - lifted state
+  const pageCount = state.status === 'done' ? state.analysis.pageCount : 0;
+  const { pages, toggleDelete, rotatePage } = usePageManager(pageCount);
 
   const prevSettingsRef = useRef<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
 
@@ -36,6 +48,21 @@ export default function Home() {
     setImageSettings(DEFAULT_IMAGE_SETTINGS);
     prevSettingsRef.current = DEFAULT_IMAGE_SETTINGS;
   }, [reset]);
+
+  // Handle batch file selection
+  const handleBatchFilesSelect = useCallback((files: File[]) => {
+    addFiles(files);
+  }, [addFiles]);
+
+  // Toggle between single and batch mode
+  const toggleBatchMode = useCallback(() => {
+    setIsBatchMode(prev => !prev);
+    if (isBatchMode) {
+      clearQueue();
+    } else {
+      handleReset();
+    }
+  }, [isBatchMode, clearQueue, handleReset]);
 
   useEffect(() => {
     if (state.status !== 'done') return;
@@ -161,8 +188,29 @@ export default function Home() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
+                  className="space-y-4"
                 >
-                  <UploadZone onFileSelect={handleFileSelect} />
+                  {/* Mode Toggle */}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={toggleBatchMode}
+                      className="text-sm px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors"
+                    >
+                      {isBatchMode ? '← Single File Mode' : 'Batch Mode →'}
+                    </button>
+                  </div>
+
+                  {/* Upload Zone - Single or Batch */}
+                  {isBatchMode ? (
+                    <BatchUploadZone onFilesSelect={handleBatchFilesSelect} />
+                  ) : (
+                    <UploadZone onFileSelect={handleFileSelect} />
+                  )}
+
+                  {/* Batch Queue */}
+                  {isBatchMode && queue.length > 0 && (
+                    <FileQueueList queue={queue} onRemove={removeFile} />
+                  )}
                 </motion.div>
               )}
 
@@ -200,6 +248,9 @@ export default function Home() {
                     originalFileName={state.fileName}
                     onReset={handleReset}
                     imageStats={currentResult.imageStats}
+                    pages={pages}
+                    onToggleDeletePage={toggleDelete}
+                    onRotatePage={rotatePage}
                   />
 
 

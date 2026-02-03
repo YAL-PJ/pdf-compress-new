@@ -1,12 +1,15 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatBytes, calculateSavings, getOutputFilename } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { Download, RefreshCw, FileCheck, ArrowRight, X } from 'lucide-react';
+import { Download, RefreshCw, FileCheck, ArrowRight, X, Loader2 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { PageGrid } from './PageGrid';
-// import { VisualDiff } from './VisualDiff'; // Keep commented out until used
+import { VisualDiff } from './VisualDiff';
+import { renderPageToImage } from '@/lib/pdf-renderer';
+
+import type { PageState } from '@/hooks/usePageManager';
 
 interface ResultsDisplayProps {
   originalSize: number;
@@ -22,6 +25,10 @@ interface ResultsDisplayProps {
     pngCount: number;
     otherCount: number;
   };
+  // Page management (lifted state)
+  pages?: PageState[];
+  onToggleDeletePage?: (pageIndex: number) => void;
+  onRotatePage?: (pageIndex: number) => void;
 }
 
 export const ResultsDisplay = ({
@@ -33,9 +40,55 @@ export const ResultsDisplay = ({
   originalFileName,
   onReset,
   imageStats,
+  pages,
+  onToggleDeletePage,
+  onRotatePage,
 }: ResultsDisplayProps) => {
   const blobUrlRef = useRef<string | null>(null);
   const { savedBytes, savedPercent, isSmaller } = calculateSavings(originalSize, compressedSize);
+
+  // Visual diff state
+  const [diffImages, setDiffImages] = useState<{ original: string; compressed: string } | null>(null);
+  const [diffLoading, setDiffLoading] = useState(false);
+  const [diffError, setDiffError] = useState(false);
+
+  // Generate visual diff preview images
+  useEffect(() => {
+    let cancelled = false;
+
+    const generatePreviews = async () => {
+      if (!originalFile || !blob) return;
+
+      setDiffLoading(true);
+      setDiffError(false);
+
+      try {
+        // Render page 1 of original
+        const originalImage = await renderPageToImage(originalFile, 1, 1.0);
+
+        // Create a File from the compressed blob for rendering
+        const compressedFile = new File([blob], 'compressed.pdf', { type: 'application/pdf' });
+        const compressedImage = await renderPageToImage(compressedFile, 1, 1.0);
+
+        if (!cancelled) {
+          setDiffImages({ original: originalImage, compressed: compressedImage });
+          setDiffLoading(false);
+        }
+      } catch (err) {
+        console.warn('Failed to generate diff previews:', err);
+        if (!cancelled) {
+          setDiffError(true);
+          setDiffLoading(false);
+        }
+      }
+    };
+
+    generatePreviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [originalFile, blob]);
 
   useEffect(() => {
     return () => {
@@ -141,15 +194,39 @@ export const ResultsDisplay = ({
         </div>
 
 
-        {/* Visual Difference Tool - Mocked for now until we have image extraction hooked up */}
-        {/* <div className="space-y-2">
-           <h3 className="text-sm font-semibold text-slate-700">Visual Quality Check</h3>
-           <VisualDiff originalImageSrc="/mock-original.jpg" compressedImageSrc="/mock-compressed.jpg" />
-        </div> */}
+        {/* Visual Difference Tool */}
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-slate-700">Visual Quality Comparison</h3>
+          {diffLoading && (
+            <div className="flex items-center justify-center h-48 bg-slate-50 rounded-lg border border-slate-200">
+              <div className="flex items-center gap-2 text-slate-500">
+                <Loader2 className="w-5 h-5 animate-spin" />
+                <span className="text-sm">Generating preview...</span>
+              </div>
+            </div>
+          )}
+          {diffError && (
+            <div className="flex items-center justify-center h-32 bg-slate-50 rounded-lg border border-slate-200">
+              <p className="text-sm text-slate-400">Unable to generate visual comparison</p>
+            </div>
+          )}
+          {diffImages && !diffLoading && !diffError && (
+            <VisualDiff
+              originalImageSrc={diffImages.original}
+              compressedImageSrc={diffImages.compressed}
+            />
+          )}
+        </div>
 
         {/* Page Manager Tool */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
-          <PageGrid file={originalFile} pageCount={pageCount} />
+          <PageGrid
+            file={originalFile}
+            pageCount={pageCount}
+            pages={pages}
+            onToggleDelete={onToggleDeletePage}
+            onRotate={onRotatePage}
+          />
         </div>
 
         {/* Action Buttons - Solid Blocks */}
