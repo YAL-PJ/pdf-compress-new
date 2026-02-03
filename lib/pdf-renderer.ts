@@ -1,41 +1,77 @@
+/**
+ * PDF Renderer - Renders PDF pages to images using PDF.js
+ * Uses dynamic imports to avoid SSR issues
+ */
 
-import * as pdfjsLib from 'pdfjs-dist';
+// Lazy-loaded pdfjs-dist module
+let pdfjsLib: typeof import('pdfjs-dist') | null = null;
 
-// Make sure to copy the worker file to your public folder or configure the workerSrc correctly
-// For next.js, it's often easiest to use a CDN or copy the worker during build
-pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+/**
+ * Lazily initialize PDF.js
+ */
+const getPdfjs = async () => {
+  if (pdfjsLib) return pdfjsLib;
 
-export const renderPageToImage = async (file: File, pageIndex: number = 1, scale: number = 1.5): Promise<string> => {
-    const arrayBuffer = await file.arrayBuffer();
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-    const pdf = await loadingTask.promise;
+  // Dynamic import to avoid SSR issues
+  pdfjsLib = await import('pdfjs-dist');
 
-    // Validate page index
-    const numPages = pdf.numPages;
-    if (pageIndex < 1 || pageIndex > numPages) {
-        throw new Error(`Invalid page index ${pageIndex}. PDF has ${numPages} pages.`);
-    }
+  // Configure worker
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-    const page = await pdf.getPage(pageIndex);
+  return pdfjsLib;
+};
 
-    const viewport = page.getViewport({ scale });
+/**
+ * Render a PDF page to a JPEG data URL
+ */
+export const renderPageToImage = async (
+  file: File,
+  pageIndex: number = 1,
+  scale: number = 1.5
+): Promise<string> => {
+  // Get PDF.js lazily
+  const pdfjs = await getPdfjs();
 
-    // Create canvas
-    const canvas = document.createElement('canvas');
-    const context = canvas.getContext('2d');
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
 
-    if (!context) {
-        throw new Error('Canvas context not available');
-    }
+  // Validate page index
+  const numPages = pdf.numPages;
+  if (pageIndex < 1 || pageIndex > numPages) {
+    throw new Error(`Invalid page index ${pageIndex}. PDF has ${numPages} pages.`);
+  }
 
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
+  const page = await pdf.getPage(pageIndex);
+  const viewport = page.getViewport({ scale });
 
-    await page.render({
-        canvasContext: context,
-        viewport: viewport,
-        canvas: canvas,
-    }).promise;
+  // Create canvas
+  const canvas = document.createElement('canvas');
+  const context = canvas.getContext('2d');
 
-    return canvas.toDataURL('image/jpeg', 0.9);
+  if (!context) {
+    throw new Error('Canvas context not available');
+  }
+
+  canvas.height = viewport.height;
+  canvas.width = viewport.width;
+
+  await page.render({
+    canvasContext: context,
+    viewport: viewport,
+    canvas: canvas,
+  }).promise;
+
+  return canvas.toDataURL('image/jpeg', 0.9);
+};
+
+/**
+ * Get total number of pages in a PDF
+ */
+export const getPdfPageCount = async (file: File): Promise<number> => {
+  const pdfjs = await getPdfjs();
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+  const pdf = await loadingTask.promise;
+  return pdf.numPages;
 };
