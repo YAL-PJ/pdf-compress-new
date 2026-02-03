@@ -29,6 +29,8 @@ interface ResultsDisplayProps {
   pages?: PageState[];
   onToggleDeletePage?: (pageIndex: number) => void;
   onRotatePage?: (pageIndex: number) => void;
+  onReorderPages?: (fromPosition: number, toPosition: number) => void;
+  onMovePage?: (pageIndex: number, direction: 'up' | 'down') => void;
 }
 
 export const ResultsDisplay = ({
@@ -43,6 +45,8 @@ export const ResultsDisplay = ({
   pages,
   onToggleDeletePage,
   onRotatePage,
+  onReorderPages,
+  onMovePage,
 }: ResultsDisplayProps) => {
   const blobUrlRef = useRef<string | null>(null);
   const { savedBytes, savedPercent, isSmaller } = calculateSavings(originalSize, compressedSize);
@@ -226,6 +230,8 @@ export const ResultsDisplay = ({
             pages={pages}
             onToggleDelete={onToggleDeletePage}
             onRotate={onRotatePage}
+            onReorder={onReorderPages}
+            onMovePage={onMovePage}
           />
         </div>
 
