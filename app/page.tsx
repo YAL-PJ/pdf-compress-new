@@ -29,11 +29,19 @@ export default function Home() {
 
   // Batch processing
   const [isBatchMode, setIsBatchMode] = useState(false);
-  const { queue, addFiles, removeFile, clearQueue, updateFileStatus } = useBatchCompression();
+  const {
+    queue,
+    isProcessing: isBatchProcessing,
+    stats: batchStats,
+    addFiles,
+    removeFile,
+    clearQueue,
+    startProcessing: startBatchProcessing,
+  } = useBatchCompression();
 
   // Page management - lifted state
   const pageCount = state.status === 'done' ? state.analysis.pageCount : 0;
-  const { pages, toggleDelete, rotatePage } = usePageManager(pageCount);
+  const { pages, toggleDelete, rotatePage, reorderPages, movePage } = usePageManager(pageCount);
 
   const prevSettingsRef = useRef<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
 
@@ -53,6 +61,11 @@ export default function Home() {
   const handleBatchFilesSelect = useCallback((files: File[]) => {
     addFiles(files);
   }, [addFiles]);
+
+  // Start batch processing
+  const handleStartBatchProcessing = useCallback(() => {
+    startBatchProcessing({ imageSettings, options });
+  }, [startBatchProcessing, imageSettings, options]);
 
   // Toggle between single and batch mode
   const toggleBatchMode = useCallback(() => {
@@ -181,10 +194,10 @@ export default function Home() {
           <div className="flex-1 w-full min-w-0">
             <AnimatePresence mode="wait">
 
-              {/* IDLE STATE */}
-              {state.status === 'idle' && (
+              {/* IDLE STATE / BATCH MODE */}
+              {(state.status === 'idle' || isBatchMode) && !isProcessing && (
                 <motion.div
-                  key="idle"
+                  key="idle-batch"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
@@ -194,7 +207,8 @@ export default function Home() {
                   <div className="flex justify-end">
                     <button
                       onClick={toggleBatchMode}
-                      className="text-sm px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors"
+                      disabled={isBatchProcessing}
+                      className="text-sm px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isBatchMode ? '← Single File Mode' : 'Batch Mode →'}
                     </button>
@@ -202,20 +216,57 @@ export default function Home() {
 
                   {/* Upload Zone - Single or Batch */}
                   {isBatchMode ? (
-                    <BatchUploadZone onFilesSelect={handleBatchFilesSelect} />
+                    <>
+                      <BatchUploadZone
+                        onFilesSelect={handleBatchFilesSelect}
+                        disabled={isBatchProcessing}
+                      />
+
+                      {/* Batch Queue */}
+                      {queue.length > 0 && (
+                        <>
+                          <FileQueueList queue={queue} onRemove={removeFile} />
+
+                          {/* Batch Action Buttons */}
+                          <div className="flex gap-3">
+                            {batchStats.queued > 0 && (
+                              <button
+                                onClick={handleStartBatchProcessing}
+                                disabled={isBatchProcessing}
+                                className="flex-1 px-4 py-3 rounded-md bg-slate-900 text-white font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                {isBatchProcessing ? (
+                                  <>
+                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    Processing...
+                                  </>
+                                ) : (
+                                  <>
+                                    Compress {batchStats.queued} File{batchStats.queued !== 1 ? 's' : ''}
+                                  </>
+                                )}
+                              </button>
+                            )}
+
+                            <button
+                              onClick={clearQueue}
+                              disabled={isBatchProcessing}
+                              className="px-4 py-3 rounded-md border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              Clear All
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </>
                   ) : (
                     <UploadZone onFileSelect={handleFileSelect} />
-                  )}
-
-                  {/* Batch Queue */}
-                  {isBatchMode && queue.length > 0 && (
-                    <FileQueueList queue={queue} onRemove={removeFile} />
                   )}
                 </motion.div>
               )}
 
-              {/* PROCESSING STATE */}
-              {isProcessing && (
+              {/* PROCESSING STATE (Single file mode only) */}
+              {isProcessing && !isBatchMode && (
                 <motion.div
                   key="processing"
                   initial={{ opacity: 0, scale: 0.98 }}
@@ -231,8 +282,8 @@ export default function Home() {
                 </motion.div>
               )}
 
-              {/* RESULTS STATE */}
-              {state.status === 'done' && currentResult && (
+              {/* RESULTS STATE (Single file mode only) */}
+              {state.status === 'done' && currentResult && !isBatchMode && (
                 <motion.div
                   key="results"
                   initial={{ opacity: 0, y: 10 }}
@@ -251,14 +302,16 @@ export default function Home() {
                     pages={pages}
                     onToggleDeletePage={toggleDelete}
                     onRotatePage={rotatePage}
+                    onReorderPages={reorderPages}
+                    onMovePage={movePage}
                   />
 
 
                 </motion.div>
               )}
 
-              {/* ERROR STATE */}
-              {state.status === 'error' && (
+              {/* ERROR STATE (Single file mode only) */}
+              {state.status === 'error' && !isBatchMode && (
                 <motion.div
                   key="error"
                   initial={{ opacity: 0 }}
