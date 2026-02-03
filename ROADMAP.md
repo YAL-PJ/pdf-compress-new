@@ -11,67 +11,67 @@
 ## Current Status
 
 - **Phase 0-1:** Complete (MVP, core architecture, web worker)
-- **Phase 2:** 24 methods implemented, 5 gaps remaining
-- **Phase 3:** UI mostly complete, 2 gaps remaining
+- **Phase 2:** ✅ Complete (30 methods implemented)
+- **Phase 3:** ✅ Complete (Page management, batch processing, presets)
 
 ---
 
-## Phase 2 Completion: Remaining Compression Methods
+## Phase 2 Completion: ✅ All Methods Implemented
 
-> Optional for launch - these are nice-to-have improvements
+> All 6 advanced compression methods have been implemented
 
-### 2.1 PNG to JPEG Conversion (Full Implementation)
-- [ ] Full PNG decoding (FlateDecode to raw pixels)
-- [ ] Detect photos vs graphics (only convert photos)
-- [ ] Preserve PNGs that need transparency
+### 2.1 PNG to JPEG Conversion ✅
+- [x] Full PNG decoding (FlateDecode to raw pixels)
+- [x] Detect photos vs graphics (only convert photos)
+- [x] Preserve PNGs that need transparency
 - **Impact:** 30-60% savings on photo PNGs
 
-### 2.2 Inline Image to XObject
-- [ ] Detect inline images in content streams
-- [ ] Convert to XObject references
-- [ ] Enable deduplication across pages
+### 2.2 Inline Image to XObject ✅
+- [x] Detect inline images in content streams
+- [x] Convert to XObject references
+- [x] Enable deduplication across pages
 - **Impact:** 0-5% savings
 
-### 2.3 Content Stream Compression
-- [ ] Apply Flate compression to uncompressed streams
-- [ ] Re-compress poorly compressed streams
+### 2.3 Content Stream Compression ✅
+- [x] Apply Flate compression to uncompressed streams
+- [x] Re-compress poorly compressed streams
 - **Impact:** 5-15% savings
 
-### 2.4 Rebuild PDF Structure
-- [ ] Remove incremental save data
-- [ ] Remove orphan/dead objects
-- [ ] Clean cross-reference table
+### 2.4 Rebuild PDF Structure ✅
+- [x] Remove incremental save data
+- [x] Remove orphan/dead objects
+- [x] Clean cross-reference table
 - **Impact:** 2-10% savings
 
-### 2.5 Remove Alternate Content
-- [ ] Remove alternate images (high/low res pairs)
-- [ ] Remove print-only content
-- [ ] Remove screen-only content
+### 2.5 Remove Alternate Content ✅
+- [x] Remove alternate images (high/low res pairs)
+- [x] Remove print-only content
+- [x] Remove screen-only content
 - **Impact:** 0-20% savings
 
-### 2.6 Remove Invisible Text
-- [ ] Detect text with rendering mode 3 (invisible)
-- [ ] Common in OCR'd documents
+### 2.6 Remove Invisible Text ✅
+- [x] Detect text with rendering mode 3 (invisible)
+- [x] Common in OCR'd documents
 - **Impact:** 0-5% savings
 
 ---
 
-## Phase 3 Completion: UI Features
+## Phase 3 Completion: ✅ All UI Features Implemented
 
-> Required for launch
+> All UI features are now complete
 
-### 3.1 Page Drag Reorder
-- [ ] Implement drag-and-drop in page thumbnail grid
-- [ ] Visual feedback during drag
-- [ ] Update page order in output PDF
-- [ ] Keyboard accessibility (move with arrows)
+### 3.1 Page Drag Reorder ✅
+- [x] Implement drag-and-drop in page thumbnail grid
+- [x] Visual feedback during drag (drop indicators, position badges)
+- [x] Update page order in output PDF
+- [x] Keyboard accessibility (Shift+Arrow to move, R to rotate, Del to delete)
 
-### 3.2 Batch Processing
-- [ ] Enable multi-file upload in UploadZone
-- [ ] Implement queue processing logic
-- [ ] Show per-file progress
-- [ ] Zip download for multiple compressed files
-- [ ] Individual download option per file
+### 3.2 Batch Processing ✅
+- [x] Enable multi-file upload in UploadZone
+- [x] Implement queue processing logic with web worker management
+- [x] Show per-file progress tracking
+- [x] Zip download for multiple compressed files (using pako)
+- [x] Individual download option per file
 
 ---
 
@@ -187,7 +187,7 @@
 ## Launch Checklist
 
 ### Pre-Launch
-- [ ] All Phase 3 gaps complete
+- [x] All Phase 3 gaps complete
 - [ ] Cross-browser tested
 - [ ] Mobile tested
 - [ ] Error tracking live
