@@ -207,29 +207,29 @@ Build the most powerful PDF compressor on the market, starting with free browser
 
 ## Phase 3: Free UI Enhancements
 
-### 3.1 Page Management 🔲
+### 3.1 Page Management 🔲 (Partial)
 - [x] Page thumbnail grid (using PDF.js)
 - [x] Page selection for deletion
-- [x] Drag to reorder pages
-- [x] Select all / deselect all
-- [x] Delete blank pages automatically
+- [ ] Drag to reorder pages
+- [ ] Select all / deselect all
+- [ ] Delete blank pages automatically
 
-### 3.2 Visual Feedback 🔲
-- [x] Before/after visual diff slider
+### 3.2 Visual Feedback 🔲 (Partial)
+- [x] Before/after visual diff slider (UI implemented, logic pending)
 - [ ] Size heatmap (which pages are largest)
 - [ ] Preview compressed output
-- [x] Image-by-image comparison
+- [ ] Image-by-image comparison
 
-### 3.3 Presets 🔲
+### 3.3 Presets ✅
 - [x] "Maximum" preset (aggressive, smallest files)
 - [x] "Balanced" preset (good quality/size ratio)
 - [x] "Quality" preset (minimal loss)
-- [x] Custom preset saving (localStorage)
+- [x] Custom preset saving (in-memory)
 
 ### 3.4 Batch Processing 🔲
-- [x] Multiple file upload
-- [x] Queue with progress for each file
-- [x] Batch compression with same settings
+- [ ] Multiple file upload (UI supports single only currently)
+- [x] Queue with progress for each file (Hook implemented)
+- [ ] Batch compression with same settings
 - [ ] Zip download for multiple files
 
 ---
@@ -480,8 +480,14 @@ Build the most powerful PDF compressor on the market, starting with free browser
 ## Current Status
 
 **Completed:** Phase 0, Phase 1, Phase 2 (Free Local Methods - 20+ methods implemented)
-**Current:** Phase 3 Planning (Free UI Enhancements)
-**Next milestone:** Page Management (3.1)
+**Current:** Phase 3 (Free UI Enhancements) - Partially Implemented
+**Next milestone:** Connect Visual Diff Logic & Enable Batch Processing
+
+### Phase 3 Implementation Status:
+- **Presets:** ✅ Complete (Recommended/Maximum/Custom)
+- **Page Management:** ⚠️ Partial (Thumbnails & Deletion implemented, Reordering pending)
+- **Visual Feedback:** ⚠️ Partial (UI component ready, awaiting image extraction logic)
+- **Batch Processing:** 🔲 Planned (Hook created, UI currently single-file only)
 
 ### Phase 2 Implementation Summary:
 - **Image Processing:** Recompression, Downsampling, Grayscale, Monochrome, Alpha removal, ICC removal
