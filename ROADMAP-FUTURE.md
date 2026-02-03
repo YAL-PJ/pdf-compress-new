@@ -81,10 +81,11 @@ Build the most powerful PDF compressor on the market, starting with free browser
 - [x] Optional toggle (some users need color)
 - [x] Applied during image recompression pipeline
 
-### 2.4 PNG to JPEG Conversion 🔲 (Partial)
+### 2.4 PNG to JPEG Conversion ✅
 - [x] UI toggle implemented
-- [ ] Full PNG decoding requires additional work (FlateDecode to raw pixels)
-- [ ] Preserve PNGs that need transparency
+- [x] Full PNG decoding (FlateDecode to raw pixels)
+- [x] Photo vs graphics detection (only convert photos)
+- [x] Preserve PNGs that need transparency
 
 ### 2.5 Monochrome/1-bit Conversion ✅
 - [x] Convert images to 1-bit black & white
@@ -97,10 +98,10 @@ Build the most powerful PDF compressor on the market, starting with free browser
 - [x] Flatten transparency to white background during recompression
 - [x] Applied during image processing
 
-### 2.7 Inline Image to XObject 🔲
-- [ ] Detect inline images in content streams
-- [ ] Convert to XObject references (more efficient)
-- [ ] Enables deduplication across pages
+### 2.7 Inline Image to XObject ✅
+- [x] Detect inline images in content streams
+- [x] Convert to XObject references (more efficient)
+- [x] Enables deduplication across pages
 
 ### 2.8 Remove Color Profiles (ICC) ✅
 - [x] Strip embedded ICC color profiles
@@ -178,25 +179,25 @@ Build the most powerful PDF compressor on the market, starting with free browser
 - [x] Remove MarkInfo
 - [x] Clear page-level metadata
 
-### 2.23 Content Stream Compression 🔲
-- [ ] Apply Flate compression to uncompressed streams
-- [ ] Re-compress poorly compressed streams
-- [ ] Requires content stream parsing
+### 2.23 Content Stream Compression ✅
+- [x] Apply Flate compression to uncompressed streams
+- [x] Re-compress poorly compressed streams
+- [x] Content stream parsing implemented
 
-### 2.24 Rebuild PDF Structure 🔲
-- [ ] Remove incremental save data
-- [ ] Remove orphan/dead objects
-- [ ] Handled partially by pdf-lib's save()
+### 2.24 Rebuild PDF Structure ✅
+- [x] Remove incremental save data
+- [x] Remove orphan/dead objects
+- [x] Cross-reference table optimization
 
-### 2.25 Remove Alternate Content 🔲
-- [ ] Remove alternate images (high/low res pairs)
-- [ ] Remove print-only content
-- [ ] Remove screen-only content
+### 2.25 Remove Alternate Content ✅
+- [x] Remove alternate images (high/low res pairs)
+- [x] Remove print-only content
+- [x] Remove screen-only content
 
-### 2.26 Remove Invisible Text 🔲
-- [ ] Detect text with rendering mode 3 (invisible)
-- [ ] Common in OCR'd documents
-- [ ] Requires content stream parsing
+### 2.26 Remove Invisible Text ✅
+- [x] Detect text with rendering mode 3 (invisible)
+- [x] Common in OCR'd documents
+- [x] Content stream parsing implemented
 
 ### 2.27 Unused Font Removal ✅
 - [x] UI toggle implemented
@@ -207,12 +208,13 @@ Build the most powerful PDF compressor on the market, starting with free browser
 
 ## Phase 3: Free UI Enhancements
 
-### 3.1 Page Management 🔲 (Partial)
+### 3.1 Page Management ✅
 - [x] Page thumbnail grid (using PDF.js)
 - [x] Page selection for deletion
-- [ ] Drag to reorder pages
-- [ ] Select all / deselect all
-- [ ] Delete blank pages automatically
+- [x] Drag to reorder pages (HTML5 drag-and-drop with visual feedback)
+- [x] Keyboard accessibility (Shift+Arrow to move, R to rotate, Del to delete)
+- [ ] Select all / deselect all (nice-to-have)
+- [ ] Delete blank pages automatically (nice-to-have)
 
 ### 3.2 Visual Feedback 🔲 (Partial)
 - [x] Before/after visual diff slider (UI implemented, logic pending)
@@ -226,11 +228,12 @@ Build the most powerful PDF compressor on the market, starting with free browser
 - [x] "Quality" preset (minimal loss)
 - [x] Custom preset saving (in-memory)
 
-### 3.4 Batch Processing 🔲
-- [ ] Multiple file upload (UI supports single only currently)
-- [x] Queue with progress for each file (Hook implemented)
-- [ ] Batch compression with same settings
-- [ ] Zip download for multiple files
+### 3.4 Batch Processing ✅
+- [x] Multiple file upload enabled
+- [x] Queue with progress for each file (web worker management)
+- [x] Batch compression with same settings
+- [x] Zip download for multiple files (using pako)
+- [x] Individual download option per file
 
 ---
 
@@ -479,27 +482,28 @@ Build the most powerful PDF compressor on the market, starting with free browser
 
 ## Current Status
 
-**Completed:** Phase 0, Phase 1, Phase 2 (Free Local Methods - 24+ methods implemented)
-**Current:** Phase 3 (Free UI Enhancements) - Mostly Complete
-**Next milestone:** Page Deletion in Output & Batch Queue Processing Logic
+**Completed:** Phase 0, Phase 1, Phase 2 (30 compression methods), Phase 3 (UI enhancements)
+**Current:** Phase 4 (Production Polish)
+**Next milestone:** Error handling, cross-browser testing, deployment
 
-### Phase 3 Implementation Status:
+### Phase 3 Implementation Status: ✅ Complete
 - **Presets:** ✅ Complete (Recommended/Maximum/Custom)
-- **Page Management:** ✅ Complete (Thumbnails, Deletion UI, State lifted - Reordering pending)
+- **Page Management:** ✅ Complete (Thumbnails, Deletion, Drag Reorder, Keyboard accessibility)
 - **Visual Feedback:** ✅ Complete (Visual Diff slider with PDF.js rendering)
-- **Batch Processing:** ⚠️ Partial (UI complete, queue processing logic pending)
+- **Batch Processing:** ✅ Complete (Queue management, ZIP export, individual downloads)
 
-### Phase 2 Implementation Summary:
-- **Image Processing:** Recompression, Downsampling, Grayscale, Monochrome, Alpha removal, ICC removal
+### Phase 2 Implementation Summary: ✅ Complete (30 methods)
+- **Image Processing:** Recompression, Downsampling, Grayscale, Monochrome, Alpha removal, ICC removal, PNG to JPEG
 - **Resources:** Thumbnails, Duplicates detection, Attachments, Unused fonts detection
 - **Interactive:** Form flattening, Annotation flattening
 - **Structure:** JavaScript/Actions, Bookmarks, Named destinations, Article threads, Web capture, Hidden layers, Page labels, Deep metadata clean
+- **Advanced:** Inline to XObject, Content stream compression, Orphan removal, Alternate content removal, Invisible text removal
 
 ---
 
 ## Compression Methods Summary
 
-### Free (Browser-Based) — 24 Methods
+### Free (Browser-Based) — 30 Methods ✅
 | Category | Method | Potential Savings | Status |
 |----------|--------|-------------------|--------|
 | **Structure** | Object Streams | 5-20% | ✅ Done |
@@ -511,26 +515,26 @@ Build the most powerful PDF compressor on the market, starting with free browser
 | **Structure** | Remove Article Threads | 0-1% | ✅ Done |
 | **Structure** | Remove Page Labels | 0-1% | ✅ Done |
 | **Structure** | Remove Web Capture Info | 0-1% | ✅ Done |
-| **Structure** | Rebuild PDF (remove incremental saves) | 2-10% | 🔲 Planned |
+| **Structure** | Rebuild PDF (remove incremental saves) | 2-10% | ✅ Done |
 | **Images** | JPEG Recompression | 30-70% | ✅ Done |
 | **Images** | Downsampling (DPI reduction) | 50-75% | ✅ Done |
 | **Images** | Grayscale Conversion | 20-40% | ✅ Done |
 | **Images** | Monochrome/1-bit Conversion | 60-90% | ✅ Done |
-| **Images** | PNG to JPEG (photos) | 30-60% | 🔲 Partial |
+| **Images** | PNG to JPEG (photos) | 30-60% | ✅ Done |
 | **Images** | CMYK to RGB | 10-25% | ✅ Done |
 | **Images** | Remove Alpha Channels | 5-20% | ✅ Done |
 | **Images** | Remove ICC Profiles | 1-10% | ✅ Done |
 | **Images** | Remove Thumbnails | 1-5% | ✅ Done |
-| **Images** | Inline to XObject | 0-5% | 🔲 Planned |
+| **Images** | Inline to XObject | 0-5% | ✅ Done |
 | **Resources** | Duplicate Resource Removal | 5-30% | ✅ Done |
 | **Resources** | Remove Unused Fonts | 0-10% | ✅ Done |
 | **Resources** | Remove Attachments | varies | ✅ Done |
 | **Interactive** | Flatten Forms | 5-15% | ✅ Done |
 | **Interactive** | Flatten Annotations | 5-15% | ✅ Done |
 | **Layers** | Remove/Flatten Layers | 0-10% | ✅ Done |
-| **Content** | Remove Alternate Content | 0-20% | 🔲 Planned |
-| **Content** | Remove Invisible Text | 0-5% | 🔲 Planned |
-| **Streams** | Content Stream Compression | 5-15% | 🔲 Planned |
+| **Content** | Remove Alternate Content | 0-20% | ✅ Done |
+| **Content** | Remove Invisible Text | 0-5% | ✅ Done |
+| **Streams** | Content Stream Compression | 5-15% | ✅ Done |
 
 ### Paid (Server-Based) — 18 Methods
 | Category | Method | Potential Savings | Status |
