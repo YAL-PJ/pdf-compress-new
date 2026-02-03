@@ -372,6 +372,9 @@ export const extractImages = async (
     // Store ref as string for later lookup
     const refStr = `${ref.objectNumber}-${ref.generationNumber}`;
 
+    // Check for transparency
+    const hasTransparency = hasAlphaChannel(dict);
+
     if (isJpegStream(dict)) {
       stats.jpegCount++;
 
@@ -392,6 +395,7 @@ export const extractImages = async (
         pageIndex: 0,
         originalSize,
         estimatedDpi,
+        hasTransparency,
       });
     } else if (isPngStream(dict)) {
       stats.pngCount++;
@@ -414,6 +418,7 @@ export const extractImages = async (
           pageIndex: 0,
           originalSize,
           estimatedDpi,
+          hasTransparency,
         });
       }
     } else {
@@ -771,11 +776,118 @@ const pixelsToImageData = (
 };
 
 /**
- * Convert a PNG image to JPEG
+ * Analyze image data to determine if it's a photo vs graphics.
+ * Photos have high color variance, smooth gradients.
+ * Graphics have solid colors, sharp edges, limited palette.
+ *
+ * Returns a score from 0 (graphics) to 1 (photo).
+ */
+const analyzeImageType = (imageData: ImageData): { isPhoto: boolean; score: number } => {
+  const data = imageData.data;
+  const width = imageData.width;
+  const height = imageData.height;
+  const pixelCount = width * height;
+
+  // Sample pixels for analysis (max 10000 for performance)
+  const sampleSize = Math.min(pixelCount, 10000);
+  const stride = Math.max(1, Math.floor(pixelCount / sampleSize));
+
+  // Track unique colors
+  const colorSet = new Set<number>();
+  let gradientScore = 0;
+  let edgeScore = 0;
+  let sampledPixels = 0;
+
+  for (let i = 0; i < data.length && sampledPixels < sampleSize; i += stride * 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+
+    // Quantize to reduce unique colors (5 bits per channel)
+    const quantized = ((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3);
+    colorSet.add(quantized);
+
+    // Check gradient smoothness (compare with neighbor if possible)
+    if (i + 4 < data.length) {
+      const dr = Math.abs(r - data[i + 4]);
+      const dg = Math.abs(g - data[i + 5]);
+      const db = Math.abs(b - data[i + 6]);
+      const diff = dr + dg + db;
+
+      // Small differences indicate smooth gradients (photos)
+      if (diff < 30) {
+        gradientScore++;
+      }
+      // Large differences indicate edges (graphics)
+      if (diff > 100) {
+        edgeScore++;
+      }
+    }
+
+    sampledPixels++;
+  }
+
+  // Calculate metrics
+  const uniqueColorRatio = colorSet.size / Math.min(sampleSize, 32768);
+  const gradientRatio = gradientScore / Math.max(sampledPixels - 1, 1);
+  const edgeRatio = edgeScore / Math.max(sampledPixels - 1, 1);
+
+  // Photos: high unique colors, high gradients, low sharp edges
+  // Graphics: low unique colors, low gradients, high sharp edges
+  const photoScore =
+    (uniqueColorRatio * 0.4) +
+    (gradientRatio * 0.4) +
+    ((1 - edgeRatio) * 0.2);
+
+  // Threshold: 0.3 is a good balance
+  const isPhoto = photoScore > 0.3;
+
+  return { isPhoto, score: photoScore };
+};
+
+/**
+ * Check if an image has meaningful transparency that should be preserved.
+ * Returns true if the image has non-trivial alpha values.
+ */
+const hasSignificantTransparency = (
+  pdfDoc: PDFDocument,
+  imageRef: string
+): boolean => {
+  const context = pdfDoc.context;
+  const [objNum, genNum] = imageRef.split('-').map(Number);
+
+  // Find the image object
+  const allRefs = context.enumerateIndirectObjects();
+  for (const [ref, obj] of allRefs) {
+    if (ref.objectNumber === objNum && ref.generationNumber === genNum) {
+      if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) {
+        continue;
+      }
+      const dict = obj.dict;
+
+      // Check for SMask (soft mask - alpha channel)
+      const smask = dict.get(PDFName.of('SMask'));
+      if (smask) return true;
+
+      // Check for Mask (hard mask)
+      const mask = dict.get(PDFName.of('Mask'));
+      if (mask) return true;
+
+      break;
+    }
+  }
+
+  return false;
+};
+
+/**
+ * Convert a PNG image to JPEG with photo detection and transparency check.
+ * Only converts photographic images without transparency.
  */
 const convertPngToJpeg = async (
   image: ExtractedImage,
-  quality: number
+  quality: number,
+  skipPhotoDetection: boolean = false
 ): Promise<RecompressedImage | null> => {
   if (image.format !== 'png') return null;
 
@@ -787,6 +899,11 @@ const convertPngToJpeg = async (
     image.width <= 0 ||
     image.height <= 0
   ) {
+    return null;
+  }
+
+  // Skip images marked as needing transparency
+  if (image.hasTransparency) {
     return null;
   }
 
@@ -808,6 +925,16 @@ const convertPngToJpeg = async (
     if (!ctx) return null;
 
     const imageData = pixelsToImageData(pixels, image.width, image.height, image.colorSpace);
+
+    // Photo detection - only convert photos, not graphics
+    if (!skipPhotoDetection) {
+      const analysis = analyzeImageType(imageData);
+      if (!analysis.isPhoto) {
+        // Skip graphics - they don't compress well as JPEG
+        return null;
+      }
+    }
+
     ctx.putImageData(imageData, 0, 0);
 
     // Convert to JPEG

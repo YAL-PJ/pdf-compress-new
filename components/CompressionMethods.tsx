@@ -31,6 +31,11 @@ import {
   Paperclip,
   ChevronDown,
   ChevronRight,
+  Boxes,
+  Archive,
+  Recycle,
+  SplitSquareHorizontal,
+  ScanEye,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useState } from 'react';
@@ -86,6 +91,7 @@ export const CompressionMethods = ({
     'Resources': false,
     'Interactive': false,
     'Cleanup': false,
+    'Advanced': false,
   });
 
   const toggleCategory = (category: string) => {
@@ -280,6 +286,42 @@ export const CompressionMethods = ({
           label: 'Remove Page Labels',
           description: 'Delete custom numbering',
           icon: Hash,
+        },
+      ],
+    },
+    {
+      name: 'Advanced',
+      methods: [
+        {
+          key: 'compressContentStreams',
+          label: 'Compress Streams',
+          description: 'Optimize content encoding',
+          icon: Archive,
+        },
+        {
+          key: 'removeOrphanObjects',
+          label: 'Remove Orphans',
+          description: 'Clean dead objects',
+          icon: Recycle,
+        },
+        {
+          key: 'inlineToXObject',
+          label: 'Inline to XObject',
+          description: 'Convert inline images',
+          icon: Boxes,
+        },
+        {
+          key: 'removeAlternateContent',
+          label: 'Remove Alternates',
+          description: 'Remove print/screen-only',
+          icon: SplitSquareHorizontal,
+        },
+        {
+          key: 'removeInvisibleText',
+          label: 'Remove Invisible Text',
+          description: 'Strip hidden OCR text',
+          icon: ScanEye,
+          warning: 'May affect searchability',
         },
       ],
     },

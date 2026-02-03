@@ -25,6 +25,15 @@ import {
   removeDuplicateResources,
   removeUnusedFonts,
 } from './resource-processor';
+import {
+  convertInlineImagesToXObjects,
+  compressContentStreams,
+  removeInvisibleText,
+} from './content-stream-processor';
+import {
+  removeOrphanObjects,
+  removeAlternateContent,
+} from './pdf-optimizer';
 
 export const loadPdf = async (
   arrayBuffer: ArrayBuffer
@@ -112,6 +121,11 @@ export const analyzePdf = async (
   let cmykSaved = 0;
   let duplicateSaved = 0;
   let fontSaved = 0;
+  let inlineToXObjectSaved = 0;
+  let contentStreamSaved = 0;
+  let orphansSaved = 0;
+  let alternateSaved = 0;
+  let invisibleTextSaved = 0;
 
   let recompressedImageBytes: Uint8Array | null = null;
   let imagesProcessed = 0;
@@ -239,6 +253,66 @@ export const analyzePdf = async (
       const fontBytes = await fontDoc.save({ useObjectStreams: false });
       fontSaved = Math.max(0, sizeBefore - fontBytes.byteLength);
       workingBuffer = fontBytes.buffer as ArrayBuffer;
+    }
+  }
+
+  // Convert inline images to XObjects (2.2)
+  if (options.inlineToXObject) {
+    onProgress?.('Converting inline images to XObjects...');
+    const { pdfDoc: inlineDoc } = await loadPdf(workingBuffer);
+    const inlineResult = await convertInlineImagesToXObjects(inlineDoc, onProgress);
+    inlineToXObjectSaved = inlineResult.savedBytes;
+    if (inlineResult.converted > 0) {
+      const inlineBytes = await inlineDoc.save({ useObjectStreams: false });
+      workingBuffer = inlineBytes.buffer as ArrayBuffer;
+    }
+  }
+
+  // Compress content streams (2.3)
+  if (options.compressContentStreams) {
+    onProgress?.('Compressing content streams...');
+    const { pdfDoc: streamDoc } = await loadPdf(workingBuffer);
+    const streamResult = await compressContentStreams(streamDoc, onProgress);
+    contentStreamSaved = streamResult.savedBytes;
+    if (streamResult.streamsCompressed > 0) {
+      const streamBytes = await streamDoc.save({ useObjectStreams: false });
+      workingBuffer = streamBytes.buffer as ArrayBuffer;
+    }
+  }
+
+  // Remove orphan objects (2.4)
+  if (options.removeOrphanObjects) {
+    onProgress?.('Removing orphan objects...');
+    const { pdfDoc: orphanDoc } = await loadPdf(workingBuffer);
+    const orphanResult = await removeOrphanObjects(orphanDoc, onProgress);
+    orphansSaved = orphanResult.savedBytes;
+    if (orphanResult.orphansRemoved > 0) {
+      const orphanBytes = await orphanDoc.save({ useObjectStreams: false });
+      workingBuffer = orphanBytes.buffer as ArrayBuffer;
+    }
+  }
+
+  // Remove alternate content (2.5)
+  if (options.removeAlternateContent) {
+    onProgress?.('Removing alternate content...');
+    const { pdfDoc: altDoc } = await loadPdf(workingBuffer);
+    const altResult = await removeAlternateContent(altDoc, onProgress);
+    alternateSaved = altResult.savedBytes;
+    if (altResult.alternatesRemoved > 0 || altResult.printOnlyRemoved > 0 || altResult.screenOnlyRemoved > 0) {
+      const altBytes = await altDoc.save({ useObjectStreams: false });
+      workingBuffer = altBytes.buffer as ArrayBuffer;
+    }
+  }
+
+  // Remove invisible text (2.6)
+  if (options.removeInvisibleText) {
+    onProgress?.('Removing invisible text...');
+    const { pdfDoc: invisDoc } = await loadPdf(workingBuffer);
+    const invisResult = await removeInvisibleText(invisDoc, onProgress);
+    invisibleTextSaved = invisResult.savedBytes;
+    if (invisResult.pagesProcessed > 0) {
+      const invisBytes = await invisDoc.save({ useObjectStreams: false });
+      workingBuffer = invisBytes.buffer as ArrayBuffer;
     }
   }
 
@@ -415,6 +489,32 @@ export const analyzePdf = async (
       key: 'deepCleanMetadata',
       savedBytes: totalStructSaved > 0 && options.deepCleanMetadata ? Math.floor(totalStructSaved / 3) : 0,
       compressedSize: baselineSize,
+    },
+    // Advanced optimization methods (Phase 2 - New)
+    {
+      key: 'inlineToXObject',
+      savedBytes: inlineToXObjectSaved,
+      compressedSize: baselineSize - inlineToXObjectSaved,
+    },
+    {
+      key: 'compressContentStreams',
+      savedBytes: contentStreamSaved,
+      compressedSize: baselineSize - contentStreamSaved,
+    },
+    {
+      key: 'removeOrphanObjects',
+      savedBytes: orphansSaved,
+      compressedSize: baselineSize - orphansSaved,
+    },
+    {
+      key: 'removeAlternateContent',
+      savedBytes: alternateSaved,
+      compressedSize: baselineSize - alternateSaved,
+    },
+    {
+      key: 'removeInvisibleText',
+      savedBytes: invisibleTextSaved,
+      compressedSize: baselineSize - invisibleTextSaved,
     },
   ];
 
