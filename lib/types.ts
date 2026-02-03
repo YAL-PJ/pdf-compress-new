@@ -117,6 +117,9 @@ export interface CompressionAnalysis {
     pngCount: number;
     otherCount: number;
     highDpiCount: number;
+    cmykCount: number;
+    iccCount: number;
+    alphaCount: number;
   };
 }
 
@@ -182,6 +185,9 @@ export interface WorkerSuccessPayload {
     pngCount: number;
     otherCount: number;
     highDpiCount: number;
+    cmykCount: number;
+    iccCount: number;
+    alphaCount: number;
   };
 }
 

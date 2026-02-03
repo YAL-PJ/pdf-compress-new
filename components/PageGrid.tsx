@@ -1,17 +1,34 @@
 'use client';
 
 import { PageThumbnail } from './PageThumbnail';
-import { usePageManager } from '@/hooks/usePageManager';
+import { usePageManager, PageState } from '@/hooks/usePageManager';
 import { LayoutGrid } from 'lucide-react';
 
 interface PageGridProps {
     file: File;
     pageCount: number;
     className?: string;
+    // Optional: accept external state (for lifted state pattern)
+    pages?: PageState[];
+    onToggleDelete?: (pageIndex: number) => void;
+    onRotate?: (pageIndex: number) => void;
 }
 
-export const PageGrid = ({ file, pageCount, className }: PageGridProps) => {
-    const { pages, toggleDelete, rotatePage } = usePageManager(pageCount);
+export const PageGrid = ({
+    file,
+    pageCount,
+    className,
+    pages: externalPages,
+    onToggleDelete: externalToggleDelete,
+    onRotate: externalRotate,
+}: PageGridProps) => {
+    // Use internal state if external state not provided
+    const internal = usePageManager(pageCount);
+
+    // Use external state if provided, otherwise use internal
+    const pages = externalPages ?? internal.pages;
+    const toggleDelete = externalToggleDelete ?? internal.toggleDelete;
+    const rotatePage = externalRotate ?? internal.rotatePage;
 
     return (
         <div className={className}>

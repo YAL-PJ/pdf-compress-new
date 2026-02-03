@@ -439,17 +439,61 @@ const handleMethodToggle = (method: MethodConfig) => {
 
 ## Current Status
 
-**Completed:** Phase 0, Phase 1 (MVP with 2 free methods), Phase 2.1 (Image Recompression), Phase 2.2 (Image Downsampling)
-**Current:** Phase 2 (Adding more free browser methods)
-**Next milestone:** Grayscale Conversion (2.3)
+**Completed:** Phase 0, Phase 1, Phase 2 (Free Local Methods - 24+ methods implemented)
+**Current:** Phase 3 (Free UI Enhancements) - Partially Implemented
+**Next milestone:** Complete Page Deletion Integration & Batch Queue Processing
 
-### Implemented Methods (4 total)
+### Phase 3 Progress
+| Feature | Status |
+|---------|--------|
+| Presets (Recommended/Maximum) | ✅ Complete |
+| Visual Diff Slider | ✅ Complete |
+| Page Management (Thumbnails/Delete) | ✅ Complete (state lifted) |
+| Batch Processing UI | ✅ Complete |
+| Page Deletion in Output | 🔲 Pending |
+| Batch Queue Processing | 🔲 Pending |
+
+### Implemented Methods (24+ total)
+
+**Structure Cleanup:**
 | Method | Savings | Status |
 |--------|---------|--------|
 | Object Streams | 5-20% | ✅ Done |
 | Strip Metadata | 1-5% | ✅ Done |
+| Deep Metadata Clean | 1-5% | ✅ Done |
+| Remove Bookmarks | 0-2% | ✅ Done |
+| Remove JavaScript | 0-1% | ✅ Done |
+| Remove Named Destinations | 0-1% | ✅ Done |
+| Remove Article Threads | 0-1% | ✅ Done |
+| Remove Page Labels | 0-1% | ✅ Done |
+| Remove Web Capture | 0-1% | ✅ Done |
+
+**Image Processing:**
+| Method | Savings | Status |
+|--------|---------|--------|
 | Image Recompression | 30-70% | ✅ Done |
 | Image Downsampling | 50-75% | ✅ Done |
+| Grayscale Conversion | 20-40% | ✅ Done |
+| Monochrome Conversion | 60-90% | ✅ Done |
+| PNG to JPEG | 30-60% | ✅ Done |
+| Remove Alpha Channels | 5-20% | ✅ Done |
+| Remove ICC Profiles | 1-10% | ✅ Done |
+| CMYK to RGB | 10-25% | ✅ Done |
+| Remove Thumbnails | 1-5% | ✅ Done |
+
+**Resources:**
+| Method | Savings | Status |
+|--------|---------|--------|
+| Duplicate Removal | 5-30% | ✅ Done |
+| Remove Unused Fonts | 0-10% | ✅ Done |
+| Remove Attachments | varies | ✅ Done |
+
+**Interactive:**
+| Method | Savings | Status |
+|--------|---------|--------|
+| Flatten Forms | 5-15% | ✅ Done |
+| Flatten Annotations | 5-15% | ✅ Done |
+| Remove Hidden Layers | 0-10% | ✅ Done |
 
 See `ROADMAP.md` for detailed task tracking.
 
@@ -493,4 +537,4 @@ See `ROADMAP.md` for detailed task tracking.
 
 1. Check `ROADMAP.md` for what's planned
 2. Check code comments for implementation details
-3. The next step is **Grayscale Conversion** (2.3)
+3. The next step is **Complete Phase 3** (Page Deletion & Batch Queue Processing)
