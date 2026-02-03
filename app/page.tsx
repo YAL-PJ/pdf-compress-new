@@ -195,7 +195,8 @@ export default function Home() {
                     originalSize={currentResult.originalSize}
                     compressedSize={currentResult.compressedSize}
                     pageCount={currentResult.pageCount}
-                    blob={currentResult.blob}
+                    blob={currentResult.blob} // This is the COMPRESSED blob (or original if no changes)
+                    originalFile={state.originalFile} // New Prop: Need original file for thumbnails/diff
                     originalFileName={state.fileName}
                     onReset={handleReset}
                     imageStats={currentResult.imageStats}

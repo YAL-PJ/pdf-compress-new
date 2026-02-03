@@ -5,12 +5,15 @@ import { formatBytes, calculateSavings, getOutputFilename } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { Download, RefreshCw, FileCheck, ArrowRight, X } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { PageGrid } from './PageGrid';
+// import { VisualDiff } from './VisualDiff'; // Keep commented out until used
 
 interface ResultsDisplayProps {
   originalSize: number;
   compressedSize: number;
   pageCount: number;
   blob: Blob;
+  originalFile: File;
   originalFileName: string;
   onReset: () => void;
   imageStats?: {
@@ -26,6 +29,7 @@ export const ResultsDisplay = ({
   compressedSize,
   pageCount,
   blob,
+  originalFile,
   originalFileName,
   onReset,
   imageStats,
@@ -90,7 +94,7 @@ export const ResultsDisplay = ({
         </button>
       </div>
 
-      <div className="p-6 space-y-6">
+      <div className="p-6 space-y-8">
         {/* Visual Comparison */}
         <div className="space-y-4">
           <div className="flex items-end justify-between text-sm">
@@ -134,6 +138,18 @@ export const ResultsDisplay = ({
               </motion.span>
             </div>
           </div>
+        </div>
+
+
+        {/* Visual Difference Tool - Mocked for now until we have image extraction hooked up */}
+        {/* <div className="space-y-2">
+           <h3 className="text-sm font-semibold text-slate-700">Visual Quality Check</h3>
+           <VisualDiff originalImageSrc="/mock-original.jpg" compressedImageSrc="/mock-compressed.jpg" />
+        </div> */}
+
+        {/* Page Manager Tool */}
+        <div className="space-y-4 pt-4 border-t border-slate-100">
+          <PageGrid file={originalFile} pageCount={pageCount} />
         </div>
 
         {/* Action Buttons - Solid Blocks */}
