@@ -1,10 +1,9 @@
-/**
- * Component barrel exports
- * Enables clean imports: import { UploadZone, ResultsDisplay } from '@/components'
- */
-
-export { UploadZone } from './UploadZone';
-export { ResultsDisplay } from './ResultsDisplay';
-export { ProcessingIndicator } from './ProcessingIndicator';
-export { ErrorDisplay } from './ErrorDisplay';
-export { CompressionMethods } from './CompressionMethods';
+export * from './UploadZone';
+export * from './ResultsDisplay';
+export * from './ProcessingIndicator';
+export * from './ErrorDisplay';
+export * from './CompressionMethods';
+export * from './PresetSelector';
+export * from './VisualDiff';
+export * from './PageGrid';
+export * from './batch';

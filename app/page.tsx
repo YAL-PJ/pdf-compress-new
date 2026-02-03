@@ -8,6 +8,7 @@ import {
   ProcessingIndicator,
   ErrorDisplay,
   CompressionMethods,
+  PresetSelector,
 } from '@/components';
 import { usePdfCompression } from '@/hooks/usePdfCompression';
 import {
@@ -113,6 +114,21 @@ export default function Home() {
                 exit={{ opacity: 0, x: -20 }}
                 className="w-full lg:w-80 flex-shrink-0 space-y-6 lg:sticky lg:top-8"
               >
+                <div className="bg-white border rounded-lg shadow-sm p-4">
+                  <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">
+                    Compression Levels
+                  </h2>
+                  <PresetSelector
+                    options={options}
+                    imageSettings={imageSettings}
+                    onSelect={(newOptions, newSettings) => {
+                      setOptions(newOptions);
+                      setImageSettings(newSettings);
+                    }}
+                    disabled={isProcessing && !isUpdating}
+                  />
+                </div>
+
                 <CompressionMethods
                   options={options}
                   onChange={setOptions}

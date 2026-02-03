@@ -208,28 +208,28 @@ Build the most powerful PDF compressor on the market, starting with free browser
 ## Phase 3: Free UI Enhancements
 
 ### 3.1 Page Management 🔲
-- [ ] Page thumbnail grid (using PDF.js)
-- [ ] Page selection for deletion
-- [ ] Drag to reorder pages
-- [ ] Select all / deselect all
-- [ ] Delete blank pages automatically
+- [x] Page thumbnail grid (using PDF.js)
+- [x] Page selection for deletion
+- [x] Drag to reorder pages
+- [x] Select all / deselect all
+- [x] Delete blank pages automatically
 
 ### 3.2 Visual Feedback 🔲
-- [ ] Before/after visual diff slider
+- [x] Before/after visual diff slider
 - [ ] Size heatmap (which pages are largest)
 - [ ] Preview compressed output
-- [ ] Image-by-image comparison
+- [x] Image-by-image comparison
 
 ### 3.3 Presets 🔲
-- [ ] "Maximum" preset (aggressive, smallest files)
-- [ ] "Balanced" preset (good quality/size ratio)
-- [ ] "Quality" preset (minimal loss)
-- [ ] Custom preset saving (localStorage)
+- [x] "Maximum" preset (aggressive, smallest files)
+- [x] "Balanced" preset (good quality/size ratio)
+- [x] "Quality" preset (minimal loss)
+- [x] Custom preset saving (localStorage)
 
 ### 3.4 Batch Processing 🔲
-- [ ] Multiple file upload
-- [ ] Queue with progress for each file
-- [ ] Batch compression with same settings
+- [x] Multiple file upload
+- [x] Queue with progress for each file
+- [x] Batch compression with same settings
 - [ ] Zip download for multiple files
 
 ---
