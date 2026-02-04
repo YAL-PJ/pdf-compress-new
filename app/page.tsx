@@ -11,6 +11,7 @@ import {
   PresetSelector,
   BatchUploadZone,
   FileQueueList,
+  ErrorBoundary,
 } from '@/components';
 import { useBatchCompression } from '@/hooks/useBatchCompression';
 import { usePdfCompression } from '@/hooks/usePdfCompression';
@@ -125,23 +126,32 @@ export default function Home() {
   const isProcessing = state.status === 'processing' || state.status === 'validating';
 
   return (
-    <main className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans selection:bg-slate-200">
-      {/* Background - Technical Grid for Pro feel */}
-      <div className="fixed inset-0 z-0 bg-[linear-gradient(to_right,#e2e8f080_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f080_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+    <ErrorBoundary>
+      <main
+        id="main-content"
+        className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans selection:bg-slate-200"
+        role="main"
+      >
+        {/* Background - Technical Grid for Pro feel */}
+        <div
+          className="fixed inset-0 z-0 bg-[linear-gradient(to_right,#e2e8f080_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f080_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"
+          aria-hidden="true"
+        />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
-        {/* Header */}
-        <header className="mb-12 flex flex-col items-center md:items-start md:flex-row md:justify-between gap-6">
-          <div className="text-center md:text-left">
-            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl flex items-center gap-3 justify-center md:justify-start">
-              <span className="text-3xl">🗜️</span>
-              PDF Compress <span className="text-slate-400 font-normal">PRO</span>
-            </h1>
-            <p className="mt-2 text-lg text-slate-500 max-w-2xl">
-              Professional client-side compression. No server uploads. 100% Secure.
-            </p>
-          </div>
-        </header>
+        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12">
+          {/* Header */}
+          <header className="mb-8 sm:mb-12 flex flex-col items-center md:items-start md:flex-row md:justify-between gap-4 sm:gap-6">
+            <div className="text-center md:text-left">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl flex items-center gap-2 sm:gap-3 justify-center md:justify-start">
+                <span className="text-2xl sm:text-3xl" aria-hidden="true">🗜️</span>
+                <span>PDF Compress</span>
+                <span className="text-slate-400 font-normal text-lg sm:text-xl md:text-2xl">PRO</span>
+              </h1>
+              <p className="mt-2 text-base sm:text-lg text-slate-500 max-w-2xl">
+                Professional client-side compression. No server uploads. 100% Secure.
+              </p>
+            </div>
+          </header>
 
         <div className="flex flex-col lg:flex-row gap-8 items-start">
 
@@ -323,8 +333,9 @@ export default function Home() {
             </AnimatePresence>
           </div>
 
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </ErrorBoundary>
   );
 }

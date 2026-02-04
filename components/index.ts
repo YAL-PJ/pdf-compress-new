@@ -7,3 +7,5 @@ export * from './PresetSelector';
 export * from './VisualDiff';
 export * from './PageGrid';
 export * from './batch';
+export * from './Skeleton';
+export { ErrorBoundary } from './ErrorBoundary';
