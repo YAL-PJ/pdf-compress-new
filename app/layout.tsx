@@ -3,7 +3,7 @@ import Script from "next/script";
 import { AnalyticsScript } from "@/components";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://pdfcompress.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.freecompresspdf.com";
 
 /* =========================
    METADATA (SEO)
