@@ -12,6 +12,7 @@ import {
   BatchUploadZone,
   FileQueueList,
   ErrorBoundary,
+  BetaFeedbackBanner,
 } from '@/components';
 import { useBatchCompression } from '@/hooks/useBatchCompression';
 import { usePdfCompression } from '@/hooks/usePdfCompression';
@@ -123,9 +124,12 @@ export default function Home() {
 
   return (
     <ErrorBoundary>
+      {/* BETA FEEDBACK BANNER - Fixed at top */}
+      <BetaFeedbackBanner />
+
       <main
         id="main-content"
-        className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans selection:bg-slate-200"
+        className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans selection:bg-slate-200 pt-10"
         role="main"
       >
         {/* Background - Technical Grid for Pro feel */}
