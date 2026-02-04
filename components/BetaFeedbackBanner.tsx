@@ -19,7 +19,7 @@ import { twMerge } from 'tailwind-merge';
    CONFIGURATION
 ========================= */
 const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfKz7APwz8S1jNcqApZIr-XgV7AjxbYNfi36eUD8RTgUmcctg/formResponse';
-const GOOGLE_SHEET_CSV_URL = 'YOUR_PUBLISHED_SHEET_CSV_URL'; // Publish your linked Google Sheet: File → Share → Publish to web → CSV
+const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRYkc_ORMeBD68CZErjqvblL73Ph4wuwGlDyP9kyidZpTEUyTGMhJkWehM4S-W3lNtht7nClqozYt1x/pub?gid=1952833366&single=true&output=csv';
 
 // Google Form field entry IDs
 const FORM_FIELDS = {
@@ -86,17 +86,6 @@ export const BetaFeedbackBanner = () => {
   // Fetch submissions from published Google Sheet
   useEffect(() => {
     const fetchSubmissions = async () => {
-      if (GOOGLE_SHEET_CSV_URL === 'YOUR_PUBLISHED_SHEET_CSV_URL') {
-        // Demo data when not configured
-        setSubmissions([
-          { type: 'feature', message: 'Add support for batch compression of multiple files at once', contact: 'Alex' },
-          { type: 'feedback', message: 'Love how fast this is! The privacy-first approach is exactly what I needed.', contact: '' },
-          { type: 'feature', message: 'Would be great to have a dark mode option', contact: 'Sam' },
-        ]);
-        setIsLoadingSubmissions(false);
-        return;
-      }
-
       try {
         const response = await fetch(GOOGLE_SHEET_CSV_URL);
         const csv = await response.text();
