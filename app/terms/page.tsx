@@ -42,7 +42,7 @@ export default function TermsOfService() {
 
           <h2>1. Acceptance of Terms</h2>
           <p>
-            By accessing or using PDF Compress at pdfcompress.app (the “Service”),
+            By accessing or using PDF Compress at freecompresspdf.com (the "Service"),
             you agree to be bound by these Terms of Service (“Terms”). If you do
             not agree to these Terms, please do not use the Service.
           </p>
@@ -155,7 +155,7 @@ export default function TermsOfService() {
             For questions about these Terms, contact us at:
           </p>
           <ul>
-            <li>Email: legal@pdfcompress.app</li>
+            <li>Email: legal@freecompresspdf.com</li>
           </ul>
 
           <hr className="my-12" />

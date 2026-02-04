@@ -182,7 +182,7 @@ export default function PrivacyPolicy() {
             at:
           </p>
           <ul>
-            <li>Email: privacy@pdfcompress.app</li>
+            <li>Email: privacy@freecompresspdf.com</li>
           </ul>
 
           <hr className="my-12" />
