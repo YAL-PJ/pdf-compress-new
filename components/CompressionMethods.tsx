@@ -15,7 +15,6 @@ import {
   FileImage,
   Square,
   Layers,
-  FileCode,
   Bookmark,
   Link2,
   Newspaper,
@@ -54,7 +53,7 @@ interface CompressionMethodsProps {
     otherCount: number;
     highDpiCount: number;
   };
-  baselineOverhead: number;
+  baselineOverhead?: number; // Reserved for future use
   isUpdating?: boolean;
 }
 
@@ -81,7 +80,7 @@ export const CompressionMethods = ({
   imageSettings,
   onImageSettingsChange,
   imageStats,
-  baselineOverhead,
+  baselineOverhead: _baselineOverhead,
   isUpdating = false,
 }: CompressionMethodsProps) => {
 
