@@ -3,7 +3,7 @@ import { MetadataRoute } from 'next';
 export const dynamic = 'force-static';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://pdfcompress.app';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.freecompresspdf.com';
 
   const now = new Date();
 
