@@ -113,7 +113,10 @@ export default function Home() {
     setOptions(o);
     setImageSettings(s);
     trackPresetSelected(s.quality <= 60 ? 'maximum' : 'recommended');
-  }, []);
+    if (state.status === 'done' && state.originalFile) {
+      processFile(state.originalFile, { options: o, imageSettings: s }, true);
+    }
+  }, [state, processFile]);
 
   const showLanding =
     state.status === 'idle' && !isBatchMode && queue.length === 0;
@@ -206,20 +209,62 @@ export default function Home() {
         )}
 
         {state.status === 'done' && (
-          <ResultsDisplay
-            originalSize={state.analysis.originalSize}
-            compressedSize={state.analysis.baselineSize}
-            pageCount={state.analysis.pageCount}
-            blob={state.analysis.fullBlob}
-            originalFile={state.originalFile}
-            originalFileName={state.fileName}
-            onReset={handleReset}
-            pages={pages}
-            onToggleDeletePage={toggleDelete}
-            onRotatePage={rotatePage}
-            onReorderPages={reorderPages}
-            onMovePage={movePage}
-          />
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Sidebar Controls */}
+            <div className="lg:w-80 flex-shrink-0 space-y-6">
+              <div className="bg-white rounded-lg p-4 shadow-sm border border-slate-200">
+                <h3 className="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-amber-500" />
+                  Quick Presets
+                </h3>
+                <PresetSelector
+                  options={options}
+                  imageSettings={imageSettings}
+                  onSelect={handlePresetSelect}
+                  disabled={state.isUpdating}
+                />
+              </div>
+
+              <CompressionMethods
+                options={options}
+                onChange={(newOptions) => {
+                  setOptions(newOptions);
+                  if (state.status === 'done' && state.originalFile) {
+                    processFile(state.originalFile, { options: newOptions, imageSettings }, true);
+                  }
+                }}
+                imageSettings={imageSettings}
+                onImageSettingsChange={(newSettings) => {
+                  setImageSettings(newSettings);
+                  if (state.status === 'done' && state.originalFile) {
+                    processFile(state.originalFile, { options, imageSettings: newSettings }, true);
+                  }
+                }}
+                disabled={state.isUpdating}
+                methodResults={state.analysis.methodResults}
+                imageStats={state.analysis.imageStats}
+                isUpdating={state.isUpdating}
+              />
+            </div>
+
+            {/* Main Results Area */}
+            <div className="flex-1 min-w-0">
+              <ResultsDisplay
+                originalSize={state.analysis.originalSize}
+                compressedSize={state.analysis.baselineSize}
+                pageCount={state.analysis.pageCount}
+                blob={state.analysis.fullBlob}
+                originalFile={state.originalFile}
+                originalFileName={state.fileName}
+                onReset={handleReset}
+                pages={pages}
+                onToggleDeletePage={toggleDelete}
+                onRotatePage={rotatePage}
+                onReorderPages={reorderPages}
+                onMovePage={movePage}
+              />
+            </div>
+          </div>
         )}
 
         {state.status === 'error' && (
