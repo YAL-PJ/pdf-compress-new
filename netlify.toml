@@ -1,24 +1,10 @@
 [build]
   command = "npm run build"
-  publish = ".next"
+  publish = "out"
 
 [build.environment]
   NODE_VERSION = "20"
   NPM_FLAGS = "--legacy-peer-deps"
-
-# =========================
-# Next.js support
-# =========================
-[[plugins]]
-  package = "@netlify/plugin-nextjs"
-
-# =========================
-# Redirects (Next.js routing)
-# =========================
-[[redirects]]
-  from = "/*"
-  to = "/.netlify/functions/___netlify-handler"
-  status = 200
 
 # =========================
 # Security headers (global)
@@ -30,6 +16,8 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://plausible.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://plausible.io https://*.sentry.io; worker-src 'self' blob:; frame-ancestors 'self'; form-action 'self'; base-uri 'self'"
 
 # =========================
 # Long-term cache: Next.js static assets

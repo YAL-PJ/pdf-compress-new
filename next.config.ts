@@ -48,6 +48,7 @@ const securityHeaders = [
 ========================= */
 const nextConfig: NextConfig = {
   // General
+  output: "export",
   poweredByHeader: false,
   compress: true,
   generateEtags: true,
@@ -56,11 +57,9 @@ const nextConfig: NextConfig = {
   // Sentry
   productionBrowserSourceMaps: false,
 
-  // Image optimization (merged)
+  // Image optimization (static export compatible)
   images: {
-    formats: ["image/avif", "image/webp"],
-    deviceSizes: [640, 750, 828, 1080, 1200],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+    unoptimized: true,
   },
 
   // Headers (MERGED, single implementation)
