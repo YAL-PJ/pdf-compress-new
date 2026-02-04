@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { AnalyticsScript, CookieConsent } from "@/components";
+import { AnalyticsScript } from "@/components";
 import "./globals.css";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://pdfcompress.app";
@@ -141,7 +141,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const plausibleDomain = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
+  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
   return (
     <html lang="en">
@@ -152,14 +152,22 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
 
-        {/* Plausible Analytics (privacy-friendly) */}
-        {plausibleDomain && (
-          <Script
-            defer
-            data-domain={plausibleDomain}
-            src="https://plausible.io/js/script.js"
-            strategy="afterInteractive"
-          />
+        {/* Google Analytics */}
+        {gaMeasurementId && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="afterInteractive"
+            />
+            <Script id="google-analytics" strategy="afterInteractive">
+              {`
+                window.dataLayer = window.dataLayer || [];
+                function gtag(){dataLayer.push(arguments);}
+                gtag('js', new Date());
+                gtag('config', '${gaMeasurementId}');
+              `}
+            </Script>
+          </>
         )}
       </head>
 
@@ -171,11 +179,8 @@ export default function RootLayout({
 
         {children}
 
-        {/* Optional analytics wrapper (events, helpers, etc.) */}
+        {/* Analytics event tracking */}
         <AnalyticsScript />
-
-        {/* Cookie consent banner */}
-        <CookieConsent />
       </body>
     </html>
   );

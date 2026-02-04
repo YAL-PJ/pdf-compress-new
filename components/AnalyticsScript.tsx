@@ -1,29 +1,16 @@
 'use client';
 
-import Script from 'next/script';
-
 /**
- * Plausible Analytics Script Component
+ * Google Analytics Script Component
  *
- * Configure via environment variables:
- * - NEXT_PUBLIC_PLAUSIBLE_DOMAIN: Your site domain (e.g., "pdfcompress.app")
- * - NEXT_PUBLIC_PLAUSIBLE_HOST: Self-hosted Plausible URL (optional, defaults to plausible.io)
+ * The main GA script is loaded in layout.tsx.
+ * This component can be used for additional client-side analytics setup if needed.
+ *
+ * Configure via environment variable:
+ * - NEXT_PUBLIC_GA_MEASUREMENT_ID: Your GA4 Measurement ID (e.g., "G-XXXXXXXXXX")
  */
 export function AnalyticsScript() {
-  const domain = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
-  const host = process.env.NEXT_PUBLIC_PLAUSIBLE_HOST || 'https://plausible.io';
-
-  // Don't load if no domain configured or in development
-  if (!domain) {
-    return null;
-  }
-
-  return (
-    <Script
-      defer
-      data-domain={domain}
-      src={`${host}/js/script.js`}
-      strategy="afterInteractive"
-    />
-  );
+  // The main GA script is loaded in layout.tsx
+  // This component is kept for potential future client-side analytics features
+  return null;
 }

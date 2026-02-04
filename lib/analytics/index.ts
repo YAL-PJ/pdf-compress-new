@@ -1,9 +1,5 @@
 /**
- * Privacy-friendly analytics using Plausible
- * - No cookies
- * - No personal data collection
- * - GDPR compliant
- * - Self-hosted option available
+ * Analytics using Google Analytics (gtag.js)
  */
 
 // Event names for type safety
@@ -54,19 +50,21 @@ export interface EventProps {
   faqQuestion?: string;
 }
 
-// Plausible window extension
+// Google Analytics window extension
 declare global {
   interface Window {
-    plausible?: (
-      event: string,
-      options?: { props?: Record<string, string | number | boolean> }
+    gtag?: (
+      command: 'event' | 'config' | 'js',
+      targetId: string | Date,
+      config?: Record<string, unknown>
     ) => void;
+    dataLayer?: unknown[];
   }
 }
 
 /**
  * Track a custom event
- * Safe to call even if Plausible isn't loaded
+ * Safe to call even if Google Analytics isn't loaded
  */
 export function trackEvent(event: AnalyticsEvent, props?: EventProps): void {
   // Only track in browser
@@ -82,11 +80,9 @@ export function trackEvent(event: AnalyticsEvent, props?: EventProps): void {
     return;
   }
 
-  // Track with Plausible if available
-  if (window.plausible) {
-    window.plausible(event, {
-      props: props as Record<string, string | number | boolean>,
-    });
+  // Track with Google Analytics if available
+  if (window.gtag) {
+    window.gtag('event', event, props as Record<string, unknown>);
   }
 }
 

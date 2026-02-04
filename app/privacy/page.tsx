@@ -121,16 +121,16 @@ export default function PrivacyPolicy() {
           <h3>Limited Information We May Collect</h3>
           <ul>
             <li>
-              <strong>Analytics (optional):</strong> Aggregated page views and
-              feature usage via{' '}
+              <strong>Analytics:</strong> Aggregated page views and feature usage
+              via{' '}
               <a
-                href="https://plausible.io"
+                href="https://analytics.google.com"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Plausible Analytics
+                Google Analytics
               </a>
-              , which does not use cookies or track individuals.
+              . This helps us understand how users interact with our site.
             </li>
             <li>
               <strong>Error reports:</strong> Technical error data (e.g. browser
@@ -140,15 +140,15 @@ export default function PrivacyPolicy() {
 
           <h2>Cookies</h2>
           <p>
-            PDF Compress does not use tracking or advertising cookies. Essential
-            cookies may be used only for basic functionality such as remembering
-            cookie consent preferences.
+            PDF Compress uses cookies for analytics purposes via Google Analytics.
+            These cookies help us understand how visitors use our site. We do not
+            use advertising or tracking cookies beyond basic analytics.
           </p>
 
           <h2>Third-Party Services</h2>
           <ul>
             <li>
-              <strong>Plausible Analytics</strong> – privacy-focused analytics
+              <strong>Google Analytics</strong> – website analytics
             </li>
             <li>
               <strong>Sentry</strong> – error tracking (no file data)
