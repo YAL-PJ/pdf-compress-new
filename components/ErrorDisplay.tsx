@@ -114,7 +114,7 @@ export const ErrorDisplay = ({ error, onReset }: ErrorDisplayProps) => {
       </div>
 
       {/* Help text */}
-      <p className="mt-4 text-xs text-slate-400 text-center">
+      <p className="mt-4 text-xs text-slate-600 text-center">
         If this problem persists, please report it so we can investigate.
       </p>
     </div>

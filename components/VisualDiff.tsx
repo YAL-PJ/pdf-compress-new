@@ -105,7 +105,7 @@ export const VisualDiff = ({
 
       {/* BEFORE (CLIPPED) */}
       <div
-        className="absolute inset-y-0 left-0 overflow-hidden border-r border-white/50 bg-slate-100"
+        className="absolute inset-y-0 left-0 overflow-hidden border-r-2 border-slate-400 bg-slate-100"
         style={{ width: `${sliderPosition}%` }}
       >
         <img
@@ -132,7 +132,7 @@ export const VisualDiff = ({
         }}
       >
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 bg-white rounded-full shadow-lg flex items-center justify-center cursor-ew-resize hover:scale-110 transition-transform">
-          <GripVertical className="w-4 h-4 text-slate-400" />
+          <GripVertical className="w-4 h-4 text-slate-600" />
         </div>
       </div>
 

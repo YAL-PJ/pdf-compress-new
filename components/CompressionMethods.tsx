@@ -375,7 +375,7 @@ export const CompressionMethods = ({
         >
           <div className={twMerge(
             "flex items-center justify-center",
-            isEnabled ? "text-white" : "text-slate-400"
+            isEnabled ? "text-white" : "text-slate-600"
           )}>
             <Icon className="w-4 h-4" />
           </div>
@@ -421,11 +421,11 @@ export const CompressionMethods = ({
                   {imageStats && (
                     <div className="text-[9px] text-slate-600 bg-white p-1.5 rounded border grid grid-cols-2 gap-1">
                       <div>
-                        <div className="font-bold text-slate-700">{imageStats.totalImages}</div>
+                        <div className="font-bold text-slate-800">{imageStats.totalImages}</div>
                         <div>Images</div>
                       </div>
                       <div>
-                        <div className="font-bold text-slate-700">{imageStats.jpegCount}</div>
+                        <div className="font-bold text-slate-800">{imageStats.jpegCount}</div>
                         <div>JPEG</div>
                       </div>
                     </div>
@@ -465,13 +465,13 @@ export const CompressionMethods = ({
               <div className="px-2 pb-2 pt-1">
                 <div className="bg-slate-50 border rounded p-2 space-y-2">
                   {imageStats && (
-                    <div className="text-[9px] text-slate-500 bg-white p-1.5 rounded border grid grid-cols-2 gap-1">
+                    <div className="text-[9px] text-slate-600 bg-white p-1.5 rounded border grid grid-cols-2 gap-1">
                       <div>
-                        <div className="font-bold text-slate-700">{imageStats.jpegCount}</div>
+                        <div className="font-bold text-slate-800">{imageStats.jpegCount}</div>
                         <div>JPEG</div>
                       </div>
                       <div>
-                        <div className="font-bold text-amber-600">{imageStats.highDpiCount}</div>
+                        <div className="font-bold text-amber-700">{imageStats.highDpiCount}</div>
                         <div>High-DPI</div>
                       </div>
                     </div>
@@ -532,12 +532,12 @@ export const CompressionMethods = ({
               >
                 <div className="flex items-center gap-2">
                   {isExpanded ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
                   ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
                   )}
                   <span className="text-xs font-bold text-slate-800">{category.name}</span>
-                  <span className="text-[10px] text-slate-500">
+                  <span className="text-[10px] text-slate-600">
                     {stats.enabled}/{stats.total}
                   </span>
                 </div>
@@ -569,7 +569,7 @@ export const CompressionMethods = ({
 
       {isUpdating && (
         <div className="p-2 border-t">
-          <div className="text-[10px] uppercase font-bold text-slate-500 animate-pulse text-center">
+          <div className="text-[10px] uppercase font-bold text-slate-700 animate-pulse text-center">
             Updating Preview...
           </div>
         </div>

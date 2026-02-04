@@ -56,7 +56,7 @@ export const PresetSelector = ({
                         title={preset.description}
                     >
                         <div className="flex items-center gap-2 mb-1">
-                            <Icon className={twMerge("w-4 h-4", isActive ? "text-emerald-400" : "text-slate-400")} />
+                            <Icon className={twMerge("w-4 h-4", isActive ? "text-emerald-400" : "text-slate-600")} />
                             <span className="text-sm font-bold">{preset.label}</span>
                         </div>
                         <div className={twMerge(

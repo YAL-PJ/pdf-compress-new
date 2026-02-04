@@ -3,7 +3,7 @@ import Script from "next/script";
 import { AnalyticsScript } from "@/components";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://pdfcompress.app";
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.freecompresspdf.com";
 
 /* =========================
    METADATA (SEO)
@@ -141,7 +141,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MCMZ8KMLXL";
 
   return (
     <html lang="en">
