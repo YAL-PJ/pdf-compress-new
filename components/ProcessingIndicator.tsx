@@ -56,7 +56,7 @@ export const ProcessingIndicator = ({
               aria-valuemin={0}
               aria-valuemax={100}
             >
-              <div className="w-full h-full opacity-30 bg-[length:10px_10px] bg-[linear-gradient(45deg,rgba(255,255,255,0.2)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.2)_50%,rgba(255,255,255,0.2)_75%,transparent_75%,transparent)] animate-[progress-stripe_1s_linear_infinite]" />
+              <div className="w-full h-full opacity-70 bg-[length:10px_10px] bg-[linear-gradient(45deg,rgba(255,255,255,0.4)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.4)_50%,rgba(255,255,255,0.4)_75%,transparent_75%,transparent)] animate-[progress-stripe_1s_linear_infinite]" />
             </motion.div>
           </div>
           <p className="text-xs font-semibold text-primary text-right">{progressPercent}%</p>

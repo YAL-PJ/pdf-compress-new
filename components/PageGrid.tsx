@@ -159,7 +159,7 @@ export const PageGrid = ({
             <div className="flex items-center gap-2 mb-4 text-slate-700 font-medium">
                 <LayoutGrid className="w-5 h-5" />
                 <h3>Page Manager</h3>
-                <span className="text-sm text-slate-400 font-normal ml-auto">
+                <span className="text-sm text-slate-600 font-normal ml-auto">
                     {pages.filter(p => !p.isDeleted).length} of {pageCount} pages selected
                 </span>
             </div>
@@ -199,7 +199,7 @@ export const PageGrid = ({
                         )}
                     >
                         {/* Drag handle indicator */}
-                        <div className="absolute top-1 left-1 z-10 p-1 rounded bg-slate-900/60 text-white opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity">
+                        <div className="absolute top-1 left-1 z-10 p-1 rounded bg-slate-900/90 text-white opacity-0 group-hover:opacity-100 hover:opacity-100 transition-opacity">
                             <GripVertical className="w-3 h-3" />
                         </div>
 
