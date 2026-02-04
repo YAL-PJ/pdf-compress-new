@@ -6,28 +6,18 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
 });
 
-// Security headers for production
+/* =========================
+   SECURITY HEADERS (MERGED)
+========================= */
 const securityHeaders = [
-  {
-    key: "X-DNS-Prefetch-Control",
-    value: "on",
-  },
+  { key: "X-DNS-Prefetch-Control", value: "on" },
   {
     key: "Strict-Transport-Security",
     value: "max-age=63072000; includeSubDomains; preload",
   },
-  {
-    key: "X-Content-Type-Options",
-    value: "nosniff",
-  },
-  {
-    key: "X-Frame-Options",
-    value: "SAMEORIGIN",
-  },
-  {
-    key: "X-XSS-Protection",
-    value: "1; mode=block",
-  },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "X-XSS-Protection", value: "1; mode=block" },
   {
     key: "Referrer-Policy",
     value: "strict-origin-when-cross-origin",
@@ -37,7 +27,6 @@ const securityHeaders = [
     value: "camera=(), microphone=(), geolocation=()",
   },
   {
-    // Content Security Policy - allows inline scripts needed for Next.js
     key: "Content-Security-Policy",
     value: [
       "default-src 'self'",
@@ -54,44 +43,48 @@ const securityHeaders = [
   },
 ];
 
+/* =========================
+   NEXT CONFIG
+========================= */
 const nextConfig: NextConfig = {
-  // Sentry configuration for source maps
+  // General
+  poweredByHeader: false,
+  compress: true,
+  generateEtags: true,
+  reactStrictMode: true,
+
+  // Sentry
   productionBrowserSourceMaps: false,
 
-  // Optimize builds
-  poweredByHeader: false,
+  // Image optimization (merged)
+  images: {
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [640, 750, 828, 1080, 1200],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
+  },
 
-  // Compression is handled by the hosting provider (Vercel/Netlify)
-  compress: true,
-
-  // Security headers
+  // Headers (MERGED, single implementation)
   async headers() {
     return [
       {
-        // Apply security headers to all routes
         source: "/:path*",
         headers: securityHeaders,
+      },
+      {
+        // Long-term cache for static assets
+        source: "/(.*)\\.(ico|png|jpg|jpeg|gif|svg|woff|woff2)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
       },
     ];
   },
 
-  // Redirects for common patterns
-  async redirects() {
-    return [
-      // Redirect www to non-www (configure your DNS for this too)
-      // Uncomment if using custom domain
-      // {
-      //   source: '/:path*',
-      //   has: [{ type: 'host', value: 'www.pdfcompress.app' }],
-      //   destination: 'https://pdfcompress.app/:path*',
-      //   permanent: true,
-      // },
-    ];
-  },
-
-  // Webpack configuration for web workers
+  // Webpack config for Web Workers
   webpack: (config, { isServer }) => {
-    // Handle web workers
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -101,35 +94,28 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-
-  // Image optimization (if needed later)
-  images: {
-    formats: ["image/avif", "image/webp"],
-  },
 };
 
-// Apply bundle analyzer
+/* =========================
+   PLUGINS
+========================= */
+
+// Bundle analyzer
 const configWithAnalyzer = withBundleAnalyzer(nextConfig);
 
-// Sentry configuration options
+// Sentry plugin options
 const sentryWebpackPluginOptions = {
-  // Suppresses all Sentry logs
   silent: true,
-
-  // Organization and project for source maps (set in environment)
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
-
-  // Upload source maps only in production with valid DSN
   disableServerWebpackPlugin: !process.env.SENTRY_DSN,
   disableClientWebpackPlugin: !process.env.NEXT_PUBLIC_SENTRY_DSN,
-
-  // Hide source maps from client bundles
   hideSourceMaps: true,
-
-  // Automatically tree-shake Sentry logger statements
   disableLogger: true,
 };
 
-// Export with Sentry wrapper
-export default withSentryConfig(configWithAnalyzer, sentryWebpackPluginOptions);
+// Export final config
+export default withSentryConfig(
+  configWithAnalyzer,
+  sentryWebpackPluginOptions
+);

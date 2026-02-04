@@ -2,39 +2,83 @@
   command = "npm run build"
   publish = ".next"
 
-# Next.js requires the Netlify Next.js plugin
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--legacy-peer-deps"
+
+# =========================
+# Next.js support
+# =========================
 [[plugins]]
   package = "@netlify/plugin-nextjs"
 
-# Caching for static assets
-[[headers]]
-  for = "/static/*"
-  [headers.values]
-    Cache-Control = "public, max-age=31536000, immutable"
+# =========================
+# Redirects (Next.js routing)
+# =========================
+[[redirects]]
+  from = "/*"
+  to = "/.netlify/functions/___netlify-handler"
+  status = 200
 
+# =========================
+# Security headers (global)
+# =========================
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-XSS-Protection = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# =========================
+# Long-term cache: Next.js static assets
+# =========================
 [[headers]]
   for = "/_next/static/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Cache fonts
 [[headers]]
-  for = "*.woff2"
+  for = "/static/*"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
-# Cache images
+# =========================
+# Long-term cache: JS / CSS
+# =========================
 [[headers]]
-  for = "*.png"
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# =========================
+# Fonts
+# =========================
+[[headers]]
+  for = "/*.woff2"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# =========================
+# Images
+# =========================
+[[headers]]
+  for = "/*.png"
   [headers.values]
     Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
 
 [[headers]]
-  for = "*.svg"
+  for = "/*.svg"
   [headers.values]
     Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
 
-# Environment variables placeholder (set in Netlify UI)
-[build.environment]
-  # NODE_VERSION is set automatically
-  NPM_FLAGS = "--legacy-peer-deps"
+[[headers]]
+  for = "/favicon.ico"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
