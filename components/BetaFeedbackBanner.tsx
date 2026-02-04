@@ -42,6 +42,66 @@ export const BetaFeedbackBanner = () => {
   const [contact, setContact] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [recentFeedback, setRecentFeedback] = useState<Array<{ text: string, type: FeedbackType, date: string }>>([]);
+  const [showAllFeedback, setShowAllFeedback] = useState(false);
+
+  useEffect(() => {
+    const fetchFeedback = async () => {
+      try {
+        const response = await fetch(GOOGLE_SHEET_CSV_URL);
+        const csvText = await response.text();
+
+        // Simple CSV parser that handles quotes
+        const parseCSV = (text: string) => {
+          const lines = text.split('\n');
+          return lines.slice(1).map(line => {
+            const matches = [];
+            let inQuote = false;
+            let current = '';
+
+            for (let i = 0; i < line.length; i++) {
+              const char = line[i];
+              if (char === '"') {
+                inQuote = !inQuote;
+              } else if (char === ',' && !inQuote) {
+                matches.push(current.trim());
+                current = '';
+              } else {
+                current += char;
+              }
+            }
+            matches.push(current.trim());
+            return matches;
+          });
+        };
+
+        const rows = parseCSV(csvText);
+        const validFeeedback = rows
+          .map(row => {
+            // Row format: Timestamp, Name, Feedback, Feature
+            const feedback = row[2]?.replace(/^"|"$/g, '').replace(/""/g, '"');
+            const feature = row[3]?.replace(/^"|"$/g, '').replace(/""/g, '"');
+            const date = row[0]?.split(' ')[0]; // Just the date part
+
+            if (feedback) return { text: feedback, type: 'feedback' as FeedbackType, date };
+            if (feature) return { text: feature, type: 'feature' as FeedbackType, date };
+            return null;
+          })
+          .filter((item): item is { text: string, type: FeedbackType, date: string } =>
+            item !== null && item.text.length > 0 && item.text.length < 150 // Filter out very long ones
+          )
+          .reverse(); // Show newest first
+
+        setRecentFeedback(validFeeedback);
+      } catch (error) {
+        console.error('Failed to fetch feedback:', error);
+      }
+    };
+
+    if (isExpanded) {
+      fetchFeedback();
+    }
+  }, [isExpanded]);
 
   const handleSubmit = async () => {
     if (!message.trim() || isSubmitting) return;
@@ -82,13 +142,14 @@ export const BetaFeedbackBanner = () => {
 
 
 
+
   return (
     <div className="fixed top-0 left-0 right-0 z-50">
       {/* Collapsed Bar */}
       <motion.div
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="bg-slate-900 text-white shadow-md"
+        className="bg-slate-900 text-white shadow-md relative z-20"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-10">
@@ -137,7 +198,7 @@ export const BetaFeedbackBanner = () => {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="bg-slate-50 border-b border-slate-200 shadow-lg overflow-hidden"
+            className="bg-slate-50 border-b border-slate-200 shadow-lg overflow-hidden relative z-10"
           >
             <div className="max-w-2xl mx-auto px-4 py-4">
               {/* Success State */}
@@ -147,89 +208,132 @@ export const BetaFeedbackBanner = () => {
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="flex items-center justify-center gap-3 py-4"
+                    className="flex items-center justify-center gap-3 py-8"
                   >
-                    <div className="w-8 h-8 rounded-full bg-slate-900 flex items-center justify-center">
-                      <Check className="w-4 h-4 text-white" />
+                    <div className="w-10 h-10 rounded-full bg-slate-900 flex items-center justify-center">
+                      <Check className="w-5 h-5 text-white" />
                     </div>
-                    <span className="text-sm font-medium text-slate-900">
-                      Thanks for your {activeTab === 'feature' ? 'feature request' : 'feedback'}!
-                    </span>
+                    <div className="text-center">
+                      <h4 className="text-slate-900 font-medium">Thanks for your input!</h4>
+                      <p className="text-slate-500 text-sm">We're listening and improving.</p>
+                    </div>
                   </motion.div>
                 ) : (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
+                    className="space-y-6"
                   >
-                    {/* Tab Switch */}
-                    <div className="flex gap-2 mb-3">
-                      <button
-                        onClick={() => setActiveTab('feedback')}
-                        className={twMerge(
-                          'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
-                          activeTab === 'feedback'
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                        )}
-                      >
-                        <MessageSquare className="w-3 h-3" />
-                        Feedback
-                      </button>
-                      <button
-                        onClick={() => setActiveTab('feature')}
-                        className={twMerge(
-                          'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
-                          activeTab === 'feature'
-                            ? 'bg-slate-900 text-white'
-                            : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
-                        )}
-                      >
-                        <Lightbulb className="w-3 h-3" />
-                        Feature Request
-                      </button>
+                    {/* Input Area */}
+                    <div>
+                      {/* Tab Switch */}
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          onClick={() => setActiveTab('feedback')}
+                          className={twMerge(
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
+                            activeTab === 'feedback'
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                          )}
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          Feedback
+                        </button>
+                        <button
+                          onClick={() => setActiveTab('feature')}
+                          className={twMerge(
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
+                            activeTab === 'feature'
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                          )}
+                        >
+                          <Lightbulb className="w-3 h-3" />
+                          Feature Request
+                        </button>
+                      </div>
+
+                      {/* Compact Form */}
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={contact}
+                          onChange={(e) => setContact(e.target.value)}
+                          placeholder="Name/Email (optional)"
+                          className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
+                        />
+                        <input
+                          type="text"
+                          value={message}
+                          onChange={(e) => setMessage(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && message.trim()) {
+                              handleSubmit();
+                            }
+                          }}
+                          placeholder={
+                            activeTab === 'feature'
+                              ? 'I wish this app could...'
+                              : 'Something is not working...'
+                          }
+                          className="flex-1 px-3 py-2 text-sm rounded border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
+                        />
+                        <button
+                          onClick={handleSubmit}
+                          disabled={!message.trim() || isSubmitting}
+                          className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                        >
+                          {isSubmitting ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <>
+                              <Send className="w-3.5 h-3.5" />
+                              <span className="hidden sm:inline">Send</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
 
-                    {/* Compact Form */}
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <input
-                        type="text"
-                        value={contact}
-                        onChange={(e) => setContact(e.target.value)}
-                        placeholder="Name/Email (optional)"
-                        className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
-                      />
-                      <input
-                        type="text"
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && message.trim()) {
-                            handleSubmit();
-                          }
-                        }}
-                        placeholder={
-                          activeTab === 'feature'
-                            ? 'Describe the feature you want...'
-                            : 'Share your thoughts or report issues...'
-                        }
-                        className="flex-1 px-3 py-2 text-sm rounded border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
-                      />
-                      <button
-                        onClick={handleSubmit}
-                        disabled={!message.trim() || isSubmitting}
-                        className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                      >
-                        {isSubmitting ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <>
-                            <Send className="w-3.5 h-3.5" />
-                            <span className="hidden sm:inline">Send</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                    {/* Community Feedback Ticker */}
+                    {recentFeedback.length > 0 && (
+                      <div className="pt-4 border-t border-slate-200">
+                        <div className="flex items-center justify-between mb-3">
+                          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            Recent Community Input
+                          </h4>
+                          {recentFeedback.length > 2 && (
+                            <button
+                              onClick={() => setShowAllFeedback(!showAllFeedback)}
+                              className="text-[10px] font-medium text-slate-400 hover:text-slate-600 transition-colors"
+                            >
+                              {showAllFeedback ? 'Show Less' : `See All (${recentFeedback.length})`}
+                            </button>
+                          )}
+                        </div>
+                        <div className={`grid gap-2 ${showAllFeedback ? 'sm:grid-cols-2' : 'sm:grid-cols-2'}`}>
+                          {recentFeedback
+                            .slice(0, showAllFeedback ? undefined : 2)
+                            .map((item, i) => (
+                              <div key={i} className="bg-white p-3 rounded border border-slate-100 shadow-sm text-xs">
+                                <div className="flex items-center gap-1.5 mb-1.5 text-slate-400">
+                                  {item.type === 'feature' ? (
+                                    <Lightbulb className="w-3 h-3 text-amber-500" />
+                                  ) : (
+                                    <MessageSquare className="w-3 h-3 text-blue-500" />
+                                  )}
+                                  <span className="capitalize">{item.type}</span>
+                                  <span>•</span>
+                                  <span>{item.date}</span>
+                                </div>
+                                <p className="text-slate-700">"{item.text}"</p>
+                              </div>
+                            ))}
+                        </div>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
