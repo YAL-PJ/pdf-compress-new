@@ -128,11 +128,9 @@ export default function Home() {
 
   if (showLanding) {
     return (
-      <main className="bg-slate-50">
-        {/* BETA FEEDBACK BANNER */}
-        <section className="max-w-4xl mx-auto px-4 pt-8">
-          <BetaFeedbackBanner />
-        </section>
+      <main className="bg-slate-50 pt-10">
+        {/* BETA FEEDBACK BANNER - Fixed at top */}
+        <BetaFeedbackBanner />
 
         {/* HERO */}
         <section className="py-16 text-center max-w-6xl mx-auto px-4">
@@ -200,7 +198,8 @@ export default function Home() {
   ========================= */
 
   return (
-    <main className="min-h-screen bg-slate-50 px-4 py-8 max-w-7xl mx-auto">
+    <main className="min-h-screen bg-slate-50 px-4 py-8 pt-14 max-w-7xl mx-auto">
+      <BetaFeedbackBanner />
       <AnimatePresence>
         {(state.status === 'idle' || isBatchMode) && (
           <UploadZone onFileSelect={handleFileSelect} />
