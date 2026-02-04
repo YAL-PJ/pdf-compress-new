@@ -9,7 +9,6 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
-  X,
   User,
   Loader2
 } from 'lucide-react';
@@ -37,26 +36,12 @@ type FeedbackType = 'feedback' | 'feature';
    COMPONENT
 ========================= */
 export const BetaFeedbackBanner = () => {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [isDismissed, setIsDismissed] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<FeedbackType>('feedback');
   const [message, setMessage] = useState('');
   const [contact, setContact] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-
-  // Check localStorage for dismissed state
-  useEffect(() => {
-    const dismissed = localStorage.getItem('betaBannerDismissed');
-    if (dismissed === 'true') {
-      setIsDismissed(true);
-    }
-  }, []);
-
-  const handleDismiss = () => {
-    setIsDismissed(true);
-    localStorage.setItem('betaBannerDismissed', 'true');
-  };
 
   const handleSubmit = async () => {
     if (!message.trim() || isSubmitting) return;
@@ -95,7 +80,7 @@ export const BetaFeedbackBanner = () => {
     }
   };
 
-  if (isDismissed) return null;
+
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50">
@@ -113,10 +98,10 @@ export const BetaFeedbackBanner = () => {
                 BETA
               </span>
               <span className="text-sm text-slate-300 hidden sm:inline">
-                Help shape this tool with your feedback
+                Building this with you! Please help us improve 🚀
               </span>
               <span className="text-sm text-slate-300 sm:hidden">
-                Share feedback
+                Help us improve 🚀
               </span>
             </div>
 
@@ -129,7 +114,7 @@ export const BetaFeedbackBanner = () => {
                 {isExpanded ? (
                   <>
                     <ChevronUp className="w-3 h-3" />
-                    <span className="hidden sm:inline">Close</span>
+                    <span className="hidden sm:inline">Collapse</span>
                   </>
                 ) : (
                   <>
@@ -138,13 +123,6 @@ export const BetaFeedbackBanner = () => {
                     <span className="sm:hidden">Feedback</span>
                   </>
                 )}
-              </button>
-              <button
-                onClick={handleDismiss}
-                className="p-1 text-slate-400 hover:text-white transition-colors"
-                aria-label="Dismiss banner"
-              >
-                <X className="w-4 h-4" />
               </button>
             </div>
           </div>
