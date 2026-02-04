@@ -52,6 +52,8 @@ export default function GlobalError({
                 Try Again
               </button>
 
+              {/* Using <a> intentionally - global-error replaces entire HTML so next/link won't work */}
+              {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 href="/"
                 className="flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"

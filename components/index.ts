@@ -9,3 +9,4 @@ export * from './PageGrid';
 export * from './batch';
 export * from './Skeleton';
 export { ErrorBoundary } from './ErrorBoundary';
+export { CookieConsent } from './CookieConsent';

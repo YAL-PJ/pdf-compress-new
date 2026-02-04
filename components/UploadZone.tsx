@@ -1,9 +1,8 @@
 'use client';
 
 import { useCallback, useState, useId } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { FileUp, File, ArrowUp } from 'lucide-react';
-import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 interface UploadZoneProps {
