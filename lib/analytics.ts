@@ -1,6 +1,6 @@
 /**
  * Analytics module for tracking user events
- * Uses Plausible Analytics for privacy-friendly tracking
+ * Uses Google Analytics (gtag.js)
  */
 
 type EventName =
@@ -23,21 +23,26 @@ interface EventProps {
 
 declare global {
   interface Window {
-    plausible?: (event: string, options?: { props?: EventProps }) => void;
+    gtag?: (
+      command: 'event' | 'config' | 'js',
+      targetId: string | Date,
+      config?: Record<string, unknown>
+    ) => void;
+    dataLayer?: unknown[];
   }
 }
 
 /**
  * Track an analytics event
- * Events are only sent if Plausible is loaded
+ * Events are only sent if Google Analytics is loaded
  */
 export function trackEvent(name: EventName, props?: EventProps): void {
   // Only track in production or if explicitly enabled
   if (typeof window === 'undefined') return;
 
-  // Use Plausible if available
-  if (window.plausible) {
-    window.plausible(name, props ? { props } : undefined);
+  // Use Google Analytics if available
+  if (window.gtag) {
+    window.gtag('event', name, props);
   }
 
   // Log events in development for debugging
