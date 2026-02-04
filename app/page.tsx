@@ -134,7 +134,7 @@ export default function Home() {
             <Lock className="w-4 h-4" /> Files never leave your browser
           </span>
 
-          <h1 className="mt-6 text-5xl font-extrabold">
+          <h1 className="mt-6 text-5xl font-extrabold text-slate-900">
             Compress PDFs <span className="text-blue-600">Without Uploading</span>
           </h1>
 
@@ -177,7 +177,7 @@ export default function Home() {
                 <div className="w-12 h-12 rounded-full bg-slate-900 text-white mx-auto mb-4 flex items-center justify-center font-bold">
                   {s.number}
                 </div>
-                <h3 className="font-bold">{s.title}</h3>
+                <h3 className="font-bold text-slate-900">{s.title}</h3>
                 <p className="text-slate-600">{s.description}</p>
               </div>
             ))}
