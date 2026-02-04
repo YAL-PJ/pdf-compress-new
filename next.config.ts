@@ -62,6 +62,16 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
 
+  // Experimental features
+  experimental: {
+    // Optimize CSS bundling to reduce unused preload warnings
+    optimizeCss: true,
+    // Use strict CSS chunking to bundle CSS with its JavaScript
+    // This prevents preload warnings by ensuring CSS is loaded
+    // only when its associated JS chunk is needed
+    cssChunking: "strict",
+  },
+
   // Headers (MERGED, single implementation)
   async headers() {
     return [
@@ -82,7 +92,7 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Webpack config for Web Workers
+  // Webpack config for Web Workers and CSS optimization
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -90,6 +100,21 @@ const nextConfig: NextConfig = {
         fs: false,
         path: false,
       };
+
+      // Disable automatic CSS preload hints to prevent browser warnings
+      // about preloaded resources not being used within a few seconds
+      if (config.optimization?.splitChunks?.cacheGroups) {
+        const cacheGroups = config.optimization.splitChunks
+          .cacheGroups as Record<
+          string,
+          { chunks?: string; enforce?: boolean }
+        >;
+        // Consolidate CSS into fewer chunks to reduce preload warnings
+        if (cacheGroups.styles) {
+          cacheGroups.styles.chunks = "all";
+          cacheGroups.styles.enforce = true;
+        }
+      }
     }
     return config;
   },
