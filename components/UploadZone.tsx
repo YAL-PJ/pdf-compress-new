@@ -114,10 +114,10 @@ export const UploadZone = ({ onFileSelect, disabled = false }: UploadZoneProps) 
             </p>
           </div>
 
-          <div className="flex items-center gap-2 text-xs font-mono text-slate-400 bg-slate-50/80 px-3 py-1.5 rounded border border-slate-100">
+          <div className="flex items-center gap-2 text-xs font-mono text-slate-600 bg-slate-100 px-3 py-1.5 rounded border border-slate-200">
             <File className="w-3.5 h-3.5" />
             <span>PDF ONLY</span>
-            <span className="text-slate-300">|</span>
+            <span className="text-slate-400">|</span>
             <span>MAX 50MB</span>
           </div>
         </div>
