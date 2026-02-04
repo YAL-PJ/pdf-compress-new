@@ -24,6 +24,7 @@ import {
   PresetSelector,
   BatchUploadZone,
   FileQueueList,
+  BetaFeedbackBanner,
 } from '@/components';
 
 import { Footer } from '@/components/landing/Footer';
@@ -128,8 +129,13 @@ export default function Home() {
   if (showLanding) {
     return (
       <main className="bg-slate-50">
+        {/* BETA FEEDBACK BANNER */}
+        <section className="max-w-4xl mx-auto px-4 pt-8">
+          <BetaFeedbackBanner />
+        </section>
+
         {/* HERO */}
-        <section className="py-24 text-center max-w-6xl mx-auto px-4">
+        <section className="py-16 text-center max-w-6xl mx-auto px-4">
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">
             <Lock className="w-4 h-4" /> Files never leave your browser
           </span>
