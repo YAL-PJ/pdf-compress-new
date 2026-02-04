@@ -2,6 +2,7 @@
 
 import { CompressionOptions, ImageCompressionSettings } from '@/lib/types';
 import { PRESETS, PresetId, getPresetForCurrentSettings } from '@/lib/presets';
+import { trackPresetSelect } from '@/lib/analytics';
 import { motion } from 'framer-motion';
 import { twMerge } from 'tailwind-merge';
 
@@ -22,6 +23,9 @@ export const PresetSelector = ({
 
     const handlePresetClick = (presetId: PresetId) => {
         if (disabled || presetId === 'custom') return;
+
+        // Track preset selection
+        trackPresetSelect(presetId);
 
         const preset = PRESETS[presetId];
         onSelect(preset.options, preset.imageSettings);
