@@ -1,14 +1,24 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
-import { CookieConsent } from "@/components";
+import { AnalyticsScript, CookieConsent } from "@/components";
 import "./globals.css";
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://pdfcompress.app";
+
+/* =========================
+   METADATA (SEO)
+========================= */
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
+
   title: {
     default: "PDF Compress - Free Online PDF Compressor | No Upload Required",
     template: "%s | PDF Compress",
   },
-  description: "Compress PDFs instantly in your browser. 100% free, 100% private - your files never leave your device. 24+ compression methods, batch processing, page management.",
+
+  description:
+    "Compress PDFs instantly in your browser. 100% free and privacy-first — your files never leave your device. 24+ compression methods, batch processing, and page management.",
+
   keywords: [
     "PDF compression",
     "PDF compressor",
@@ -18,24 +28,32 @@ export const metadata: Metadata = {
     "PDF optimizer",
     "shrink PDF",
     "PDF size reducer",
-    "online PDF compressor",
     "browser PDF compression",
     "private PDF compression",
     "batch PDF compression",
   ],
+
   authors: [{ name: "PDF Compress" }],
   creator: "PDF Compress",
   publisher: "PDF Compress",
-  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://pdfcompress.app"),
-  alternates: {
-    canonical: "/",
+
+  formatDetection: {
+    email: false,
+    telephone: false,
   },
+
+  alternates: {
+    canonical: siteUrl,
+  },
+
   openGraph: {
     title: "PDF Compress - Free Online PDF Compressor",
-    description: "Compress PDFs instantly in your browser. 100% free, 100% private - your files never leave your device.",
+    description:
+      "Compress PDFs instantly in your browser. 100% free and privacy-first — your files never leave your device.",
     type: "website",
-    locale: "en_US",
+    url: siteUrl,
     siteName: "PDF Compress",
+    locale: "en_US",
     images: [
       {
         url: "/og-image.png",
@@ -45,12 +63,15 @@ export const metadata: Metadata = {
       },
     ],
   },
+
   twitter: {
     card: "summary_large_image",
     title: "PDF Compress - Free Online PDF Compressor",
-    description: "Compress PDFs instantly in your browser. 100% free, 100% private.",
+    description:
+      "Compress PDFs instantly in your browser. 100% free and privacy-first.",
     images: ["/og-image.png"],
   },
+
   robots: {
     index: true,
     follow: true,
@@ -62,12 +83,17 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
+
   verification: {
-    // Add your verification codes here
     // google: "your-google-verification-code",
   },
+
+  category: "technology",
 };
 
+/* =========================
+   VIEWPORT
+========================= */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -78,17 +104,55 @@ export const viewport: Viewport = {
   ],
 };
 
+/* =========================
+   STRUCTURED DATA (JSON-LD)
+========================= */
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  name: "PDF Compress",
+  description:
+    "Free online PDF compressor that runs entirely in your browser. Privacy-first: your files never leave your device.",
+  url: siteUrl,
+  applicationCategory: "UtilityApplication",
+  operatingSystem: "Any",
+  offers: {
+    "@type": "Offer",
+    price: "0",
+    priceCurrency: "USD",
+  },
+  featureList: [
+    "24+ compression methods",
+    "Browser-based processing",
+    "No file uploads required",
+    "Batch processing",
+    "Page management",
+    "Visual quality comparison",
+  ],
+  browserRequirements:
+    "Requires JavaScript. Works in Chrome, Firefox, Safari, Edge.",
+};
+
+/* =========================
+   ROOT LAYOUT
+========================= */
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   const plausibleDomain = process.env.NEXT_PUBLIC_PLAUSIBLE_DOMAIN;
 
   return (
     <html lang="en">
       <head>
-        {/* Plausible Analytics - Privacy-friendly analytics */}
+        {/* JSON-LD structured data */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+
+        {/* Plausible Analytics (privacy-friendly) */}
         {plausibleDomain && (
           <Script
             defer
@@ -98,16 +162,17 @@ export default function RootLayout({
           />
         )}
       </head>
+
       <body className="antialiased">
-        {/* Skip link for accessibility - allows keyboard users to skip navigation */}
-        <a
-          href="#main-content"
-          className="skip-link"
-        >
+        {/* Skip link for accessibility */}
+        <a href="#main-content" className="skip-link">
           Skip to main content
         </a>
 
         {children}
+
+        {/* Optional analytics wrapper (events, helpers, etc.) */}
+        <AnalyticsScript />
 
         {/* Cookie consent banner */}
         <CookieConsent />

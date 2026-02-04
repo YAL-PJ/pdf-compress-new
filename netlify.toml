@@ -6,13 +6,23 @@
   NODE_VERSION = "20"
   NPM_FLAGS = "--legacy-peer-deps"
 
-# Redirects for Next.js app
+# =========================
+# Next.js support
+# =========================
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# =========================
+# Redirects (Next.js routing)
+# =========================
 [[redirects]]
   from = "/*"
   to = "/.netlify/functions/___netlify-handler"
   status = 200
 
-# Headers for security and performance
+# =========================
+# Security headers (global)
+# =========================
 [[headers]]
   for = "/*"
   [headers.values]
@@ -21,6 +31,22 @@
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
 
+# =========================
+# Long-term cache: Next.js static assets
+# =========================
+[[headers]]
+  for = "/_next/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# =========================
+# Long-term cache: JS / CSS
+# =========================
 [[headers]]
   for = "/*.js"
   [headers.values]
@@ -31,16 +57,28 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# =========================
+# Fonts
+# =========================
 [[headers]]
   for = "/*.woff2"
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+# =========================
+# Images
+# =========================
+[[headers]]
+  for = "/*.png"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
+[[headers]]
+  for = "/*.svg"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, stale-while-revalidate=604800"
+
 [[headers]]
   for = "/favicon.ico"
   [headers.values]
     Cache-Control = "public, max-age=86400"
-
-# Next.js plugin for Netlify
-[[plugins]]
-  package = "@netlify/plugin-nextjs"

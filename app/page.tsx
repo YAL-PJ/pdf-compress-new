@@ -1,7 +1,20 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Shield,
+  Zap,
+  FileDown,
+  Lock,
+  Settings,
+  Layers,
+  ArrowRight,
+  Check,
+  ChevronDown,
+} from 'lucide-react';
+
 import {
   UploadZone,
   ResultsDisplay,
@@ -11,33 +24,60 @@ import {
   PresetSelector,
   BatchUploadZone,
   FileQueueList,
-  ErrorBoundary,
 } from '@/components';
-import {
-  LandingHero,
-  FeaturesSection,
-  HowItWorksSection,
-  FAQSection,
-  Footer,
-} from '@/components/landing';
+
+import Footer from '@/components/landing/Footer';
+
 import { useBatchCompression } from '@/hooks/useBatchCompression';
 import { usePdfCompression } from '@/hooks/usePdfCompression';
 import { usePageManager } from '@/hooks/usePageManager';
+
 import {
   DEFAULT_COMPRESSION_OPTIONS,
   DEFAULT_IMAGE_SETTINGS,
   CompressionOptions,
   ImageCompressionSettings,
 } from '@/lib/types';
-import { trackFileUpload, trackCompressionCompleted, trackBatchStarted, trackPresetSelected } from '@/lib/analytics';
+
+import {
+  trackFileUpload,
+  trackCompressionCompleted,
+  trackBatchStarted,
+  trackPresetSelected,
+} from '@/lib/analytics';
+
+/* =========================
+   STATIC LANDING DATA
+========================= */
+
+const features = [
+  { icon: Shield, title: '100% Private', description: 'Your files never leave your browser.' },
+  { icon: Zap, title: 'Lightning Fast', description: 'WebAssembly + Web Workers.' },
+  { icon: FileDown, title: 'Up to 90% Smaller', description: '24+ compression methods.' },
+  { icon: Settings, title: 'Full Control', description: 'Presets or fine-tuned settings.' },
+  { icon: Layers, title: 'Page Management', description: 'Reorder, rotate, delete pages.' },
+  { icon: Lock, title: 'No Sign-up Required', description: 'No accounts, no limits.' },
+];
+
+const steps = [
+  { number: '1', title: 'Upload PDF', description: 'Drag & drop or browse.' },
+  { number: '2', title: 'Choose Compression', description: 'Preset or custom.' },
+  { number: '3', title: 'Download', description: 'Instant results.' },
+];
+
+/* =========================
+   HOME COMPONENT
+========================= */
 
 export default function Home() {
   const { state, processFile, reset } = usePdfCompression();
+
   const [options, setOptions] = useState<CompressionOptions>(DEFAULT_COMPRESSION_OPTIONS);
   const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
-
-  // Batch processing
   const [isBatchMode, setIsBatchMode] = useState(false);
+
+  const prevSettingsRef = useRef(DEFAULT_IMAGE_SETTINGS);
+
   const {
     queue,
     isProcessing: isBatchProcessing,
@@ -48,15 +88,16 @@ export default function Home() {
     startProcessing: startBatchProcessing,
   } = useBatchCompression();
 
-  // Page management - lifted state
   const pageCount = state.status === 'done' ? state.analysis.pageCount : 0;
-  const { pages, toggleDelete, rotatePage, reorderPages, movePage } = usePageManager(pageCount);
+  const { pages, toggleDelete, rotatePage, reorderPages, movePage } =
+    usePageManager(pageCount);
 
-  const prevSettingsRef = useRef<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
+  /* =========================
+     HANDLERS
+  ========================= */
 
   const handleFileSelect = useCallback((file: File) => {
-    // Track file upload
-    trackFileUpload(file.size / (1024 * 1024), false);
+    trackFileUpload(file.size / 1024 / 1024, false);
     prevSettingsRef.current = imageSettings;
     processFile(file, { imageSettings, options });
   }, [processFile, imageSettings, options]);
@@ -68,345 +109,125 @@ export default function Home() {
     prevSettingsRef.current = DEFAULT_IMAGE_SETTINGS;
   }, [reset]);
 
-  // Handle batch file selection
-  const handleBatchFilesSelect = useCallback((files: File[]) => {
-    files.forEach(file => {
-      trackFileUpload(file.size / (1024 * 1024), true);
-    });
-    addFiles(files);
-  }, [addFiles]);
-
-  // Start batch processing
-  const handleStartBatchProcessing = useCallback(() => {
-    trackBatchStarted(batchStats.queued);
-    startBatchProcessing({ imageSettings, options });
-  }, [startBatchProcessing, imageSettings, options, batchStats.queued]);
-
-  // Toggle between single and batch mode
-  const toggleBatchMode = useCallback(() => {
-    setIsBatchMode(prev => !prev);
-    if (isBatchMode) {
-      clearQueue();
-    } else {
-      handleReset();
-    }
-  }, [isBatchMode, clearQueue, handleReset]);
-
-  // Handle preset selection with tracking
-  const handlePresetSelect = useCallback((newOptions: CompressionOptions, newSettings: ImageCompressionSettings) => {
-    setOptions(newOptions);
-    setImageSettings(newSettings);
-    // Determine which preset based on options
-    const isMaximum = newOptions.recompressImages && newSettings.quality <= 60;
-    trackPresetSelected(isMaximum ? 'maximum' : 'recommended');
+  const handlePresetSelect = useCallback((o: CompressionOptions, s: ImageCompressionSettings) => {
+    setOptions(o);
+    setImageSettings(s);
+    trackPresetSelected(s.quality <= 60 ? 'maximum' : 'recommended');
   }, []);
 
-  useEffect(() => {
-    if (state.status !== 'done') return;
+  const showLanding =
+    state.status === 'idle' && !isBatchMode && queue.length === 0;
 
-    if (JSON.stringify(imageSettings) === JSON.stringify(prevSettingsRef.current)) {
-      return;
-    }
+  /* =========================
+     LANDING VIEW
+  ========================= */
 
-    const fileToProcess = state.originalFile;
-    const timer = setTimeout(() => {
-      prevSettingsRef.current = imageSettings;
-      processFile(fileToProcess, { imageSettings, options }, true);
-    }, 500);
+  if (showLanding) {
+    return (
+      <main className="bg-slate-50">
+        {/* HERO */}
+        <section className="py-24 text-center max-w-6xl mx-auto px-4">
+          <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm">
+            <Lock className="w-4 h-4" /> Files never leave your browser
+          </span>
 
-    return () => clearTimeout(timer);
-  }, [imageSettings, options, state, processFile]);
+          <h1 className="mt-6 text-5xl font-extrabold">
+            Compress PDFs <span className="text-blue-600">Without Uploading</span>
+          </h1>
 
-  // Track compression completion
-  useEffect(() => {
-    if (state.status === 'done' && !state.isUpdating) {
-      const { analysis } = state;
-      const savingsPercent = ((analysis.originalSize - analysis.baselineSize) / analysis.originalSize) * 100;
-      trackCompressionCompleted(
-        analysis.originalSize / (1024 * 1024),
-        analysis.baselineSize / (1024 * 1024),
-        savingsPercent
-      );
-    }
-  }, [state]);
+          <p className="mt-6 text-xl text-slate-600 max-w-2xl mx-auto">
+            Professional client-side PDF compression. 24+ methods. 100% private.
+          </p>
 
-  const currentResult = useMemo(() => {
-    if (state.status !== 'done') return null;
+          <div className="mt-10">
+            <button
+              onClick={() => {}}
+              className="px-8 py-4 bg-slate-900 text-white rounded-lg font-bold"
+            >
+              Scroll to upload ↓
+            </button>
+          </div>
 
-    const { analysis } = state;
-    const hasSelectedMethods = Object.values(options).some(Boolean);
+          <div className="mt-12 max-w-xl mx-auto">
+            <UploadZone onFileSelect={handleFileSelect} />
+          </div>
+        </section>
 
-    let totalSaved = 0;
-    for (const result of analysis.methodResults) {
-      if (options[result.key]) {
-        totalSaved += result.savedBytes;
-      }
-    }
+        {/* FEATURES */}
+        <section className="py-24 bg-white">
+          <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8 px-4">
+            {features.map(f => (
+              <div key={f.title} className="p-6 rounded-xl border">
+                <f.icon className="w-8 h-8 mb-3" />
+                <h3 className="font-bold">{f.title}</h3>
+                <p className="text-slate-600">{f.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-    const estimatedSize = hasSelectedMethods
-      ? analysis.baselineSize - totalSaved
-      : analysis.originalSize;
+        {/* HOW IT WORKS */}
+        <section className="py-24 bg-slate-50">
+          <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8 px-4 text-center">
+            {steps.map(s => (
+              <div key={s.number}>
+                <div className="w-12 h-12 rounded-full bg-slate-900 text-white mx-auto mb-4 flex items-center justify-center font-bold">
+                  {s.number}
+                </div>
+                <h3 className="font-bold">{s.title}</h3>
+                <p className="text-slate-600">{s.description}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-    return {
-      originalSize: analysis.originalSize,
-      compressedSize: estimatedSize,
-      pageCount: analysis.pageCount,
-      blob: hasSelectedMethods ? analysis.fullBlob : state.originalFile,
-      imageStats: analysis.imageStats,
-    };
-  }, [state, options]);
+        <Footer />
+      </main>
+    );
+  }
 
-  const methodResults = state.status === 'done' ? state.analysis.methodResults : undefined;
-  const imageStats = state.status === 'done' ? state.analysis.imageStats : undefined;
-  const isUpdating = state.status === 'done' ? state.isUpdating : false;
-  const isProcessing = state.status === 'processing' || state.status === 'validating';
-  const isIdle = state.status === 'idle' && !isBatchMode;
-  const showLandingContent = isIdle && queue.length === 0;
+  /* =========================
+     APP VIEW
+  ========================= */
 
   return (
-    <ErrorBoundary>
-      <main
-        id="main-content"
-        className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans selection:bg-slate-200"
-        role="main"
-      >
-        {/* Background - Technical Grid for Pro feel */}
-        <div
-          className="fixed inset-0 z-0 bg-[linear-gradient(to_right,#e2e8f080_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f080_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"
-          aria-hidden="true"
-        />
+    <main className="min-h-screen bg-slate-50 px-4 py-8 max-w-7xl mx-auto">
+      <AnimatePresence>
+        {(state.status === 'idle' || isBatchMode) && (
+          <UploadZone onFileSelect={handleFileSelect} />
+        )}
 
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12">
+        {state.status === 'processing' && (
+          <ProcessingIndicator
+            fileName={state.fileName}
+            progress={state.progress}
+            progressPercent={state.progressPercent}
+          />
+        )}
 
-          {/* Landing Page Content - Shown in idle state */}
-          {showLandingContent ? (
-            <>
-              {/* Hero with Upload Zone */}
-              <LandingHero>
-                <div className="max-w-2xl mx-auto">
-                  <div className="flex justify-end mb-3">
-                    <button
-                      onClick={toggleBatchMode}
-                      className="text-sm px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors"
-                    >
-                      Batch Mode
-                    </button>
-                  </div>
-                  <UploadZone onFileSelect={handleFileSelect} />
-                </div>
-              </LandingHero>
+        {state.status === 'done' && (
+          <ResultsDisplay
+            originalSize={state.analysis.originalSize}
+            compressedSize={state.analysis.baselineSize}
+            pageCount={state.analysis.pageCount}
+            blob={state.analysis.fullBlob}
+            originalFile={state.originalFile}
+            originalFileName={state.fileName}
+            onReset={handleReset}
+            pages={pages}
+            onToggleDeletePage={toggleDelete}
+            onRotatePage={rotatePage}
+            onReorderPages={reorderPages}
+            onMovePage={movePage}
+          />
+        )}
 
-              {/* Features Section */}
-              <FeaturesSection />
+        {state.status === 'error' && (
+          <ErrorDisplay error={state.error} onReset={handleReset} />
+        )}
+      </AnimatePresence>
 
-              {/* How It Works */}
-              <HowItWorksSection />
-
-              {/* FAQ */}
-              <FAQSection />
-
-              {/* Footer */}
-              <Footer />
-            </>
-          ) : (
-            <>
-              {/* Header - Shown during app usage */}
-              <header className="mb-8 sm:mb-12 flex flex-col items-center md:items-start md:flex-row md:justify-between gap-4 sm:gap-6">
-                <div className="text-center md:text-left">
-                  <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl flex items-center gap-2 sm:gap-3 justify-center md:justify-start">
-                    <span className="text-2xl sm:text-3xl" aria-hidden="true">🗜️</span>
-                    <span>PDF Compress</span>
-                    <span className="text-slate-400 font-normal text-lg sm:text-xl md:text-2xl">PRO</span>
-                  </h1>
-                  <p className="mt-2 text-base sm:text-lg text-slate-500 max-w-2xl">
-                    Professional client-side compression. No server uploads. 100% Secure.
-                  </p>
-                </div>
-              </header>
-
-              <div className="flex flex-col lg:flex-row gap-8 items-start">
-
-                {/* Sidebar - Controls (Visible when needed) */}
-                <AnimatePresence>
-                  {(state.status === 'idle' || state.status === 'done' || isProcessing) && (
-                    <motion.aside
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      className="w-full lg:w-80 flex-shrink-0 space-y-6 lg:sticky lg:top-8"
-                    >
-                      <div className="bg-white border rounded-lg shadow-sm p-4">
-                        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">
-                          Compression Levels
-                        </h2>
-                        <PresetSelector
-                          options={options}
-                          imageSettings={imageSettings}
-                          onSelect={handlePresetSelect}
-                          disabled={isProcessing && !isUpdating}
-                        />
-                      </div>
-
-                      <CompressionMethods
-                        options={options}
-                        onChange={setOptions}
-                        disabled={isProcessing && !isUpdating}
-                        methodResults={methodResults}
-                        imageSettings={imageSettings}
-                        onImageSettingsChange={setImageSettings}
-                        imageStats={imageStats}
-                        baselineOverhead={state.status === 'done' ? (state.analysis.baselineSize - state.analysis.originalSize) : 0}
-                        isUpdating={isUpdating}
-                      />
-
-                      {state.status === 'idle' && (
-                        <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 text-sm text-blue-700">
-                          <p><strong>Tip:</strong> Select your compression preference before or after uploading.</p>
-                        </div>
-                      )}
-                    </motion.aside>
-                  )}
-                </AnimatePresence>
-
-                {/* Main Content Area */}
-                <div className="flex-1 w-full min-w-0">
-                  <AnimatePresence mode="wait">
-
-                    {/* IDLE STATE / BATCH MODE */}
-                    {(state.status === 'idle' || isBatchMode) && !isProcessing && (
-                      <motion.div
-                        key="idle-batch"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="space-y-4"
-                      >
-                        {/* Mode Toggle */}
-                        <div className="flex justify-end">
-                          <button
-                            onClick={toggleBatchMode}
-                            disabled={isBatchProcessing}
-                            className="text-sm px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {isBatchMode ? '← Single File Mode' : 'Batch Mode →'}
-                          </button>
-                        </div>
-
-                        {/* Upload Zone - Single or Batch */}
-                        {isBatchMode ? (
-                          <>
-                            <BatchUploadZone
-                              onFilesSelect={handleBatchFilesSelect}
-                              disabled={isBatchProcessing}
-                            />
-
-                            {/* Batch Queue */}
-                            {queue.length > 0 && (
-                              <>
-                                <FileQueueList queue={queue} onRemove={removeFile} />
-
-                                {/* Batch Action Buttons */}
-                                <div className="flex gap-3">
-                                  {batchStats.queued > 0 && (
-                                    <button
-                                      onClick={handleStartBatchProcessing}
-                                      disabled={isBatchProcessing}
-                                      className="flex-1 px-4 py-3 rounded-md bg-slate-900 text-white font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                      {isBatchProcessing ? (
-                                        <>
-                                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                          Processing...
-                                        </>
-                                      ) : (
-                                        <>
-                                          Compress {batchStats.queued} File{batchStats.queued !== 1 ? 's' : ''}
-                                        </>
-                                      )}
-                                    </button>
-                                  )}
-
-                                  <button
-                                    onClick={clearQueue}
-                                    disabled={isBatchProcessing}
-                                    className="px-4 py-3 rounded-md border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                  >
-                                    Clear All
-                                  </button>
-                                </div>
-                              </>
-                            )}
-                          </>
-                        ) : (
-                          <UploadZone onFileSelect={handleFileSelect} />
-                        )}
-                      </motion.div>
-                    )}
-
-                    {/* PROCESSING STATE (Single file mode only) */}
-                    {isProcessing && !isBatchMode && (
-                      <motion.div
-                        key="processing"
-                        initial={{ opacity: 0, scale: 0.98 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.98 }}
-                        className="flex justify-center py-12"
-                      >
-                        <ProcessingIndicator
-                          fileName={state.status === 'processing' ? state.fileName : ''}
-                          progress={state.status === 'processing' ? state.progress : 'Validating file...'}
-                          progressPercent={state.status === 'processing' ? state.progressPercent : undefined}
-                        />
-                      </motion.div>
-                    )}
-
-                    {/* RESULTS STATE (Single file mode only) */}
-                    {state.status === 'done' && currentResult && !isBatchMode && (
-                      <motion.div
-                        key="results"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="space-y-6"
-                      >
-                        <ResultsDisplay
-                          originalSize={currentResult.originalSize}
-                          compressedSize={currentResult.compressedSize}
-                          pageCount={currentResult.pageCount}
-                          blob={currentResult.blob}
-                          originalFile={state.originalFile}
-                          originalFileName={state.fileName}
-                          onReset={handleReset}
-                          imageStats={currentResult.imageStats}
-                          pages={pages}
-                          onToggleDeletePage={toggleDelete}
-                          onRotatePage={rotatePage}
-                          onReorderPages={reorderPages}
-                          onMovePage={movePage}
-                        />
-                      </motion.div>
-                    )}
-
-                    {/* ERROR STATE (Single file mode only) */}
-                    {state.status === 'error' && !isBatchMode && (
-                      <motion.div
-                        key="error"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                      >
-                        <ErrorDisplay error={state.error} onReset={handleReset} />
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-
-              </div>
-
-              {/* Footer for non-landing pages */}
-              <Footer />
-            </>
-          )}
-        </div>
-      </main>
-    </ErrorBoundary>
+      <Footer />
+    </main>
   );
 }

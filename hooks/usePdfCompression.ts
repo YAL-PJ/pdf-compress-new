@@ -6,6 +6,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { validateFile } from '@/lib/utils';
 import { createPdfError, PdfError } from '@/lib/errors';
+import {
+  trackFileUpload,
+  trackCompressionComplete,
+  trackCompressionError,
+} from '@/lib/analytics';
 import type {
   CompressionAnalysis,
   WorkerResponse,
@@ -84,6 +89,9 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       }
 
       setState({ status: 'processing', progress: 'Starting...', fileName: file.name });
+
+      // Track file upload
+      trackFileUpload(file.size);
     }
 
     // We always need the filename for the worker logs/state
@@ -115,6 +123,10 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
           const s = payload as WorkerSuccessPayload;
           isBackgroundRef.current = false; // Reset background flag
 
+          // Track compression completion
+          const methodCount = s.methodResults.filter(m => m.savedBytes > 0).length;
+          trackCompressionComplete(s.originalSize, s.baselineSize, methodCount);
+
           setState({
             status: 'done',
             fileName,
@@ -135,6 +147,10 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
         case 'error': {
           isBackgroundRef.current = false;
           const e = payload as WorkerErrorPayload;
+
+          // Track compression error
+          trackCompressionError(e.code);
+
           setState({
             status: 'error',
             error: createPdfError(

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatBytes, calculateSavings, getOutputFilename } from '@/lib/utils';
+import { trackFileDownload } from '@/lib/analytics';
 import { motion } from 'framer-motion';
 import { Download, RefreshCw, FileCheck, ArrowRight, X, Loader2 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
@@ -104,6 +105,9 @@ export const ResultsDisplay = ({
   }, [blob]);
 
   const handleDownload = useCallback(() => {
+    // Track download event
+    trackFileDownload(compressedSize, savedPercent);
+
     if (blobUrlRef.current) {
       URL.revokeObjectURL(blobUrlRef.current);
     }
@@ -114,7 +118,7 @@ export const ResultsDisplay = ({
     link.href = url;
     link.download = getOutputFilename(originalFileName);
     link.click();
-  }, [blob, originalFileName]);
+  }, [blob, originalFileName, compressedSize, savedPercent]);
 
   const compressionRatio = Math.min(Math.max((compressedSize / originalSize) * 100, 5), 100);
 

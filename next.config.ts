@@ -6,71 +6,85 @@ const withBundleAnalyzer = bundleAnalyzer({
   enabled: process.env.ANALYZE === "true",
 });
 
-const nextConfig: NextConfig = {
-  experimental: {
-    serverActions: {
-      allowedOrigins: ["*"],
-    },
+/* =========================
+   SECURITY HEADERS (MERGED)
+========================= */
+const securityHeaders = [
+  { key: "X-DNS-Prefetch-Control", value: "on" },
+  {
+    key: "Strict-Transport-Security",
+    value: "max-age=63072000; includeSubDomains; preload",
   },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "X-Frame-Options", value: "SAMEORIGIN" },
+  { key: "X-XSS-Protection", value: "1; mode=block" },
+  {
+    key: "Referrer-Policy",
+    value: "strict-origin-when-cross-origin",
+  },
+  {
+    key: "Permissions-Policy",
+    value: "camera=(), microphone=(), geolocation=()",
+  },
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://plausible.io",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob:",
+      "font-src 'self'",
+      "connect-src 'self' https://plausible.io https://*.sentry.io",
+      "worker-src 'self' blob:",
+      "frame-ancestors 'self'",
+      "form-action 'self'",
+      "base-uri 'self'",
+    ].join("; "),
+  },
+];
 
-  // Sentry configuration for source maps
-  productionBrowserSourceMaps: false,
-
-  // Optimize builds
+/* =========================
+   NEXT CONFIG
+========================= */
+const nextConfig: NextConfig = {
+  // General
   poweredByHeader: false,
-
-  // Compress responses
   compress: true,
-
-  // Generate ETags for caching
   generateEtags: true,
-
-  // Strict mode for better React development
   reactStrictMode: true,
 
-  // Image optimization
+  // Sentry
+  productionBrowserSourceMaps: false,
+
+  // Image optimization (merged)
   images: {
-    formats: ['image/avif', 'image/webp'],
+    formats: ["image/avif", "image/webp"],
     deviceSizes: [640, 750, 828, 1080, 1200],
     imageSizes: [16, 32, 48, 64, 96, 128, 256],
   },
 
-  // Headers for security and caching
+  // Headers (MERGED, single implementation)
   async headers() {
     return [
       {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'X-DNS-Prefetch-Control',
-            value: 'on',
-          },
-          {
-            key: 'X-Content-Type-Options',
-            value: 'nosniff',
-          },
-          {
-            key: 'Referrer-Policy',
-            value: 'origin-when-cross-origin',
-          },
-        ],
+        source: "/:path*",
+        headers: securityHeaders,
       },
       {
-        // Static assets - long cache
-        source: '/(.*)\\.(ico|png|jpg|jpeg|gif|svg|woff|woff2)',
+        // Long-term cache for static assets
+        source: "/(.*)\\.(ico|png|jpg|jpeg|gif|svg|woff|woff2)",
         headers: [
           {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
           },
         ],
       },
     ];
   },
 
-  // Webpack configuration for web workers
+  // Webpack config for Web Workers
   webpack: (config, { isServer }) => {
-    // Handle web workers
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
@@ -82,28 +96,26 @@ const nextConfig: NextConfig = {
   },
 };
 
-// Apply bundle analyzer
+/* =========================
+   PLUGINS
+========================= */
+
+// Bundle analyzer
 const configWithAnalyzer = withBundleAnalyzer(nextConfig);
 
-// Sentry configuration options
+// Sentry plugin options
 const sentryWebpackPluginOptions = {
-  // Suppresses all Sentry logs
   silent: true,
-
-  // Organization and project for source maps (set in environment)
   org: process.env.SENTRY_ORG,
   project: process.env.SENTRY_PROJECT,
-
-  // Upload source maps only in production with valid DSN
   disableServerWebpackPlugin: !process.env.SENTRY_DSN,
   disableClientWebpackPlugin: !process.env.NEXT_PUBLIC_SENTRY_DSN,
-
-  // Hide source maps from client bundles
   hideSourceMaps: true,
-
-  // Automatically tree-shake Sentry logger statements
   disableLogger: true,
 };
 
-// Export with Sentry wrapper
-export default withSentryConfig(configWithAnalyzer, sentryWebpackPluginOptions);
+// Export final config
+export default withSentryConfig(
+  configWithAnalyzer,
+  sentryWebpackPluginOptions
+);

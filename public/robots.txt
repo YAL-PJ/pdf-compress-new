@@ -1,0 +1,9 @@
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://pdfcompress.app/sitemap.xml
+
+# Disallow internal routes
+Disallow: /api/
