@@ -7,6 +7,7 @@ type EventName =
   | 'file_upload'
   | 'compression_started'
   | 'compression_completed'
+  | 'compression_error'
   | 'download_click'
   | 'batch_started'
   | 'batch_completed'
@@ -125,4 +126,11 @@ export function trackPageOperation(operation: 'rotated' | 'deleted' | 'reordered
   } else {
     trackEvent('pages_reordered');
   }
+}
+
+/**
+ * Track compression error
+ */
+export function trackCompressionError(errorCode: string): void {
+  trackEvent('compression_error', { error_code: errorCode });
 }

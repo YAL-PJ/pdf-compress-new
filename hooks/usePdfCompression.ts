@@ -8,7 +8,7 @@ import { validateFile } from '@/lib/utils';
 import { createPdfError, PdfError } from '@/lib/errors';
 import {
   trackFileUpload,
-  trackCompressionComplete,
+  trackCompressionCompleted,
   trackCompressionError,
 } from '@/lib/analytics';
 import type {
@@ -91,7 +91,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       setState({ status: 'processing', progress: 'Starting...', fileName: file.name });
 
       // Track file upload
-      trackFileUpload(file.size);
+      trackFileUpload(file.size / 1024 / 1024);
     }
 
     // We always need the filename for the worker logs/state
@@ -124,8 +124,14 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
           isBackgroundRef.current = false; // Reset background flag
 
           // Track compression completion
-          const methodCount = s.methodResults.filter(m => m.savedBytes > 0).length;
-          trackCompressionComplete(s.originalSize, s.baselineSize, methodCount);
+          const savingsRatio = s.originalSize > 0
+            ? ((s.originalSize - s.baselineSize) / s.originalSize) * 100
+            : 0;
+          trackCompressionCompleted(
+            s.originalSize / 1024 / 1024,
+            s.baselineSize / 1024 / 1024,
+            savingsRatio
+          );
 
           setState({
             status: 'done',

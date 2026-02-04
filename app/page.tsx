@@ -26,7 +26,7 @@ import {
   FileQueueList,
 } from '@/components';
 
-import Footer from '@/components/landing/Footer';
+import { Footer } from '@/components/landing/Footer';
 
 import { useBatchCompression } from '@/hooks/useBatchCompression';
 import { usePdfCompression } from '@/hooks/usePdfCompression';
@@ -141,7 +141,7 @@ export default function Home() {
 
           <div className="mt-10">
             <button
-              onClick={() => {}}
+              onClick={() => { }}
               className="px-8 py-4 bg-slate-900 text-white rounded-lg font-bold"
             >
               Scroll to upload ↓
