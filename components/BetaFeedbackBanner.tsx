@@ -17,16 +17,15 @@ import { twMerge } from 'tailwind-merge';
 
 /* =========================
    CONFIGURATION
-   Replace these with your actual Google Form/Sheet URLs
 ========================= */
-const GOOGLE_FORM_URL = 'YOUR_GOOGLE_FORM_ACTION_URL'; // e.g., https://docs.google.com/forms/d/e/FORM_ID/formResponse
-const GOOGLE_SHEET_CSV_URL = 'YOUR_PUBLISHED_SHEET_CSV_URL'; // e.g., https://docs.google.com/spreadsheets/d/e/SHEET_ID/pub?output=csv
+const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfKz7APwz8S1jNcqApZIr-XgV7AjxbYNfi36eUD8RTgUmcctg/formResponse';
+const GOOGLE_SHEET_CSV_URL = 'YOUR_PUBLISHED_SHEET_CSV_URL'; // Publish your linked Google Sheet: File → Share → Publish to web → CSV
 
-// Google Form field names (you'll get these from your form)
+// Google Form field entry IDs
 const FORM_FIELDS = {
-  type: 'entry.XXXXXXXXX', // The field for "feedback" or "feature"
-  message: 'entry.XXXXXXXXX', // The field for the actual message
-  contact: 'entry.XXXXXXXXX', // The field for name/email (optional)
+  contact: 'entry.1428967819',    // User Name or Email
+  feedback: 'entry.590651661',    // Feedback field
+  feature: 'entry.1118737533',    // Feature Request field
 };
 
 /* =========================
@@ -103,18 +102,61 @@ export const BetaFeedbackBanner = () => {
         const csv = await response.text();
         const rows = csv.split('\n').slice(1); // Skip header row
 
+        // Parse CSV properly (handles quoted fields with commas)
+        const parseCSVRow = (row: string): string[] => {
+          const result: string[] = [];
+          let current = '';
+          let inQuotes = false;
+
+          for (let i = 0; i < row.length; i++) {
+            const char = row[i];
+            if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          result.push(current.trim());
+          return result;
+        };
+
         const parsed: Submission[] = rows
           .filter(row => row.trim())
-          .map(row => {
-            const cols = row.split(',').map(col => col.replace(/^"|"$/g, '').trim());
-            return {
-              timestamp: cols[0],
-              type: (cols[1]?.toLowerCase() === 'feature' ? 'feature' : 'feedback') as FeedbackType,
-              message: cols[2] || '',
-              contact: cols[3] || '',
-            };
+          .flatMap(row => {
+            const cols = parseCSVRow(row);
+            // Columns: Timestamp, Contact, Feedback, Feature Request
+            const timestamp = cols[0] || '';
+            const contact = cols[1] || '';
+            const feedbackMsg = cols[2] || '';
+            const featureMsg = cols[3] || '';
+
+            const submissions: Submission[] = [];
+
+            // Create submission for feedback if it exists
+            if (feedbackMsg) {
+              submissions.push({
+                timestamp,
+                type: 'feedback',
+                message: feedbackMsg,
+                contact,
+              });
+            }
+
+            // Create submission for feature request if it exists
+            if (featureMsg) {
+              submissions.push({
+                timestamp,
+                type: 'feature',
+                message: featureMsg,
+                contact,
+              });
+            }
+
+            return submissions;
           })
-          .filter(s => s.message)
           .reverse(); // Most recent first
 
         setSubmissions(parsed);
@@ -135,19 +177,22 @@ export const BetaFeedbackBanner = () => {
     setIsSubmitting(true);
 
     try {
-      if (GOOGLE_FORM_URL !== 'YOUR_GOOGLE_FORM_ACTION_URL') {
-        const formData = new FormData();
-        formData.append(FORM_FIELDS.type, activeTab);
-        formData.append(FORM_FIELDS.message, message);
-        formData.append(FORM_FIELDS.contact, contact);
+      const formData = new FormData();
+      formData.append(FORM_FIELDS.contact, contact);
 
-        // Submit to Google Form (no-cors mode since Google Forms don't return CORS headers)
-        await fetch(GOOGLE_FORM_URL, {
-          method: 'POST',
-          mode: 'no-cors',
-          body: formData,
-        });
+      // Submit to the appropriate field based on active tab
+      if (activeTab === 'feedback') {
+        formData.append(FORM_FIELDS.feedback, message);
+      } else {
+        formData.append(FORM_FIELDS.feature, message);
       }
+
+      // Submit to Google Form (no-cors mode since Google Forms don't return CORS headers)
+      await fetch(GOOGLE_FORM_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: formData,
+      });
 
       // Add to local state for immediate feedback
       setSubmissions(prev => [
