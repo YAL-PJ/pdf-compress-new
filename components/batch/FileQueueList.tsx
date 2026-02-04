@@ -51,8 +51,9 @@ export const FileQueueList = ({ queue, onRemove, showDownloads = true }: FileQue
     const completedCount = queue.filter(i => i.status === 'done').length;
     const totalSaved = queue.reduce((sum, item) => {
         if (item.status === 'done' && item.analysis) {
-            const { savedBytes } = calculateSavings(item.analysis.originalSize, item.analysis.baselineSize);
-            return sum + savedBytes;
+            // Use actual blob size for accurate savings calculation
+            const { savedBytes } = calculateSavings(item.analysis.originalSize, item.analysis.fullBlob.size);
+            return sum + Math.max(0, savedBytes); // Don't count negative savings
         }
         return sum;
     }, 0);
@@ -121,8 +122,9 @@ interface FileQueueItemProps {
 }
 
 const FileQueueItem = ({ item, onRemove, onDownload }: FileQueueItemProps) => {
+    // Use actual blob size for accurate savings calculation
     const savings = item.status === 'done' && item.analysis
-        ? calculateSavings(item.analysis.originalSize, item.analysis.baselineSize)
+        ? calculateSavings(item.analysis.originalSize, item.analysis.fullBlob.size)
         : null;
 
     return (
@@ -156,7 +158,7 @@ const FileQueueItem = ({ item, onRemove, onDownload }: FileQueueItemProps) => {
                                 <>
                                     <span className="text-slate-300">→</span>
                                     <span className="text-emerald-600 font-medium">
-                                        {formatBytes(item.analysis!.baselineSize)}
+                                        {formatBytes(item.analysis!.fullBlob.size)}
                                     </span>
                                 </>
                             )}

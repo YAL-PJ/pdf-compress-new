@@ -100,20 +100,16 @@ export default function Home() {
     const { analysis } = state;
     const hasSelectedMethods = Object.values(options).some(Boolean);
 
-    let totalSaved = 0;
-    for (const result of analysis.methodResults) {
-      if (options[result.key]) {
-        totalSaved += result.savedBytes;
-      }
-    }
-
-    const estimatedSize = hasSelectedMethods
-      ? analysis.baselineSize - totalSaved
+    // When methods are selected, use the actual compressed blob size for accurate savings display.
+    // The estimate (baselineSize - totalSaved) can be inaccurate due to baseline overhead
+    // being larger than the original file, causing false "NO SAVINGS" displays.
+    const compressedSize = hasSelectedMethods
+      ? analysis.fullBlob.size
       : analysis.originalSize;
 
     return {
       originalSize: analysis.originalSize,
-      compressedSize: estimatedSize,
+      compressedSize,
       pageCount: analysis.pageCount,
       blob: hasSelectedMethods ? analysis.fullBlob : state.originalFile,
       imageStats: analysis.imageStats,
