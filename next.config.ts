@@ -34,7 +34,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://www.google-analytics.com https://www.googletagmanager.com",
       "font-src 'self'",
-      "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://*.sentry.io",
+      "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://*.sentry.io https://docs.google.com",
       "worker-src 'self' blob:",
       "frame-ancestors 'self'",
       "form-action 'self'",
@@ -106,9 +106,9 @@ const nextConfig: NextConfig = {
       if (config.optimization?.splitChunks?.cacheGroups) {
         const cacheGroups = config.optimization.splitChunks
           .cacheGroups as Record<
-          string,
-          { chunks?: string; enforce?: boolean }
-        >;
+            string,
+            { chunks?: string; enforce?: boolean }
+          >;
         // Consolidate CSS into fewer chunks to reduce preload warnings
         if (cacheGroups.styles) {
           cacheGroups.styles.chunks = "all";
