@@ -162,8 +162,8 @@ export default function Home() {
             {features.map(f => (
               <div key={f.title} className="p-6 rounded-xl border">
                 <f.icon className="w-8 h-8 mb-3" />
-                <h3 className="font-bold">{f.title}</h3>
-                <p className="text-slate-600">{f.description}</p>
+                <h3 className="font-bold text-slate-900">{f.title}</h3>
+                <p className="text-slate-700">{f.description}</p>
               </div>
             ))}
           </div>

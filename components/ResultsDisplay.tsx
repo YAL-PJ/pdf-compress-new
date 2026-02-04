@@ -186,14 +186,14 @@ export const ResultsDisplay = ({
 
             {/* Labels overlaid on bars - High Contrast Text Shadow */}
             <div className="absolute inset-0 flex justify-between items-center px-4 pointer-events-none">
-              <span className="z-10 text-xs font-bold text-slate-600 mix-blend-multiply">
+              <span className="z-10 text-xs font-bold text-slate-700 drop-shadow-sm bg-white/50 px-1 rounded backdrop-blur-[2px]">
                 ORIGINAL: {formatBytes(originalSize)}
               </span>
               <motion.span
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.6 }}
-                className="z-10 text-xs font-bold text-white drop-shadow-md"
+                className="z-10 text-xs font-bold text-white drop-shadow-md bg-black/20 px-1 rounded"
               >
                 {formatBytes(compressedSize)}
               </motion.span>
@@ -204,7 +204,7 @@ export const ResultsDisplay = ({
 
         {/* Visual Difference Tool */}
         <div className="space-y-3">
-          <h3 className="text-sm font-semibold text-slate-700">Visual Quality Comparison</h3>
+          <h3 className="text-sm font-bold text-slate-800">Visual Quality Comparison</h3>
           {diffLoading && (
             <div className="flex items-center justify-center h-48 bg-slate-50 rounded-lg border border-slate-200">
               <div className="flex items-center gap-2 text-slate-500">

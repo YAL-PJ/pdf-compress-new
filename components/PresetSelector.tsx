@@ -61,7 +61,7 @@ export const PresetSelector = ({
                         </div>
                         <div className={twMerge(
                             "text-xs truncate",
-                            isActive ? "text-slate-300" : "text-slate-500"
+                            isActive ? "text-slate-300" : "text-slate-600"
                         )}>
                             {preset.description}
                         </div>

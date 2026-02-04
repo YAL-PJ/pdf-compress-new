@@ -368,8 +368,8 @@ export const CompressionMethods = ({
             "w-full flex items-center gap-2 p-2 rounded text-left transition-all duration-200",
             "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1",
             isEnabled
-              ? "bg-slate-800 text-white"
-              : "bg-white hover:bg-slate-50 text-slate-600",
+              ? "bg-slate-900 text-white"
+              : "bg-white hover:bg-slate-50 text-slate-700",
             disabled && "opacity-50 cursor-not-allowed"
           )}
         >
@@ -391,7 +391,7 @@ export const CompressionMethods = ({
             </div>
             <div className={twMerge(
               "text-[10px] mt-0.5 truncate",
-              isEnabled ? "text-slate-400" : "text-slate-500"
+              isEnabled ? "text-slate-300" : "text-slate-600"
             )}>
               {method.description}
             </div>
@@ -401,7 +401,7 @@ export const CompressionMethods = ({
             "w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0",
             isEnabled
               ? "bg-white border-white text-slate-900"
-              : "bg-transparent border-slate-300 text-transparent"
+              : "bg-transparent border-slate-400 text-transparent"
           )}>
             <Check className="w-3 h-3 stroke-[3]" />
           </div>
@@ -419,7 +419,7 @@ export const CompressionMethods = ({
               <div className="px-2 pb-2 pt-1">
                 <div className="bg-slate-50 border rounded p-2 space-y-2">
                   {imageStats && (
-                    <div className="text-[9px] text-slate-500 bg-white p-1.5 rounded border grid grid-cols-2 gap-1">
+                    <div className="text-[9px] text-slate-600 bg-white p-1.5 rounded border grid grid-cols-2 gap-1">
                       <div>
                         <div className="font-bold text-slate-700">{imageStats.totalImages}</div>
                         <div>Images</div>
@@ -431,9 +431,9 @@ export const CompressionMethods = ({
                     </div>
                   )}
 
-                  <div className="flex justify-between items-center text-[10px] font-medium text-slate-700">
+                  <div className="flex justify-between items-center text-[10px] font-bold text-slate-800">
                     <span>Quality</span>
-                    <span className="font-mono bg-white px-1 py-0.5 rounded border text-slate-900">
+                    <span className="font-mono bg-white px-1 py-0.5 rounded border border-slate-300 text-slate-900">
                       {imageSettings.quality}%
                     </span>
                   </div>
@@ -536,8 +536,8 @@ export const CompressionMethods = ({
                   ) : (
                     <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
                   )}
-                  <span className="text-xs font-semibold text-slate-700">{category.name}</span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-xs font-bold text-slate-800">{category.name}</span>
+                  <span className="text-[10px] text-slate-500">
                     {stats.enabled}/{stats.total}
                   </span>
                 </div>
