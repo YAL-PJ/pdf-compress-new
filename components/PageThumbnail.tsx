@@ -27,10 +27,15 @@ export const PageThumbnail = ({
     const [isLoading, setIsLoading] = useState(true);
     const isMounted = useRef(true);
 
+    const containerRef = useRef<HTMLDivElement>(null);
+    const observerRef = useRef<IntersectionObserver | null>(null);
+
     useEffect(() => {
         isMounted.current = true;
 
         const loadThumbnail = async () => {
+            if (!file) return;
+
             try {
                 // Use lower scale for thumbnails to save memory
                 const url = await renderPageToImage(file, pageIndex, 0.5);
@@ -44,12 +49,37 @@ export const PageThumbnail = ({
             }
         };
 
-        // Simple Intersection Observer to lazy load?
-        // For now, simpler: just load. Optimizations can be added if performance lags.
-        loadThumbnail();
+        const handleIntersect: IntersectionObserverCallback = (entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    loadThumbnail();
+                    // Stop observing once loaded
+                    if (containerRef.current && observerRef.current) {
+                        observerRef.current.unobserve(containerRef.current);
+                    }
+                }
+            });
+        };
+
+        // Initialize Intersection Observer
+        if (window.IntersectionObserver) {
+            observerRef.current = new IntersectionObserver(handleIntersect, {
+                root: null, // viewport
+                rootMargin: '100px', // start loading before it comes into view
+                threshold: 0.1
+            });
+
+            if (containerRef.current) {
+                observerRef.current.observe(containerRef.current);
+            }
+        } else {
+            // Fallback for older browsers
+            loadThumbnail();
+        }
 
         return () => {
             isMounted.current = false;
+            if (observerRef.current) observerRef.current.disconnect();
             if (imageUrl) URL.revokeObjectURL(imageUrl);
         };
     }, [file, pageIndex]);
@@ -57,6 +87,7 @@ export const PageThumbnail = ({
     return (
         <motion.div
             layout
+            ref={containerRef}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className={twMerge(
