@@ -85,11 +85,16 @@ export const convertInlineImagesToXObjects = async (
         continue;
       }
 
-      let contentBytes: Uint8Array;
+      let contentBytes: Uint8Array | undefined;
       try {
         contentBytes = contentObj instanceof PDFRawStream
           ? contentObj.contents
           : contentObj.getContents();
+
+        // Skip if bytes are undefined (can happen with corrupted or non-PDF streams)
+        if (!contentBytes) {
+          continue;
+        }
 
         // Check if stream is compressed
         const filter = contentObj.dict.get(PDFName.of('Filter'));

@@ -359,11 +359,16 @@ export const extractImages = async (
     if (hasAlphaChannel(dict)) stats.alphaCount++;
 
     // Get raw bytes (for PDFRawStream this is the encoded data)
-    let bytes: Uint8Array;
+    let bytes: Uint8Array | undefined;
     if (stream instanceof PDFRawStream) {
       bytes = stream.contents;
     } else {
       bytes = stream.getContents();
+    }
+
+    // Skip if bytes are undefined (can happen with corrupted or non-PDF streams)
+    if (!bytes) {
+      continue;
     }
 
     const originalSize = bytes.length;
@@ -1030,7 +1035,9 @@ export const removeAlphaChannels = (pdfDoc: PDFDocument): AlphaRemovalResult => 
         const smaskObj = context.lookup(smask);
         if (smaskObj instanceof PDFRawStream || smaskObj instanceof PDFStream) {
           const bytes = smaskObj instanceof PDFRawStream ? smaskObj.contents : smaskObj.getContents();
-          result.savedBytes += bytes.length;
+          if (bytes) {
+            result.savedBytes += bytes.length;
+          }
         }
       }
 
@@ -1083,7 +1090,9 @@ export const removeIccProfiles = (pdfDoc: PDFDocument): IccRemovalResult => {
           const profileObj = context.lookup(profileRef);
           if (profileObj instanceof PDFRawStream || profileObj instanceof PDFStream) {
             const bytes = profileObj instanceof PDFRawStream ? profileObj.contents : profileObj.getContents();
-            result.savedBytes += bytes.length;
+            if (bytes) {
+              result.savedBytes += bytes.length;
+            }
           }
 
           // Determine replacement colorspace based on component count
@@ -1174,11 +1183,16 @@ export const convertCmykToRgb = async (
       }
 
       // Get image bytes
-      let bytes: Uint8Array;
+      let bytes: Uint8Array | undefined;
       if (stream instanceof PDFRawStream) {
         bytes = stream.contents;
       } else {
         bytes = stream.getContents();
+      }
+
+      // Skip if bytes are undefined (can happen with corrupted or non-PDF streams)
+      if (!bytes) {
+        continue;
       }
 
       const originalSize = bytes.length;
