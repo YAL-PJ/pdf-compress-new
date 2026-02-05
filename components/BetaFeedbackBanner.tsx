@@ -159,7 +159,7 @@ export const BetaFeedbackBanner = () => {
                 BETA
               </span>
               <span className="text-sm text-slate-300 hidden sm:inline">
-                Building this with you! Please help us improve 🚀
+                Building this with our users community! Please help us improve 🚀
               </span>
               <span className="text-sm text-slate-300 sm:hidden">
                 Help us improve 🚀
