@@ -10,7 +10,7 @@ import type {
     CompressionOptions,
 } from '@/lib/types';
 import { DEFAULT_IMAGE_SETTINGS, DEFAULT_COMPRESSION_OPTIONS } from '@/lib/types';
-import { validateFile } from '@/lib/utils';
+import { validateFile, validatePdfSignature } from '@/lib/utils';
 import { createPdfError } from '@/lib/errors';
 
 interface BatchCompressionSettings {
@@ -164,6 +164,21 @@ export const useBatchCompression = () => {
 
             // Start processing
             item.originalFile.arrayBuffer().then((arrayBuffer) => {
+                // Validate PDF signature (magic bytes) to catch renamed non-PDF files
+                const signatureValidation = validatePdfSignature(arrayBuffer);
+                if (!signatureValidation.valid) {
+                    setQueue(prev => prev.map(i =>
+                        i.id === item.id ? {
+                            ...i,
+                            status: 'error' as const,
+                            progress: 0,
+                            error: createPdfError('INVALID_FILE_TYPE', signatureValidation.error),
+                        } : i
+                    ));
+                    resolve();
+                    return;
+                }
+
                 workerRef.current?.postMessage(
                     {
                         type: 'start',

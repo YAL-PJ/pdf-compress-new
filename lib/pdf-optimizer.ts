@@ -84,7 +84,9 @@ export const removeOrphanObjects = async (
       // Estimate size of orphan
       if (obj instanceof PDFRawStream || obj instanceof PDFStream) {
         const bytes = obj instanceof PDFRawStream ? obj.contents : obj.getContents();
-        result.savedBytes += bytes.length + 50; // +50 for dictionary overhead
+        if (bytes) {
+          result.savedBytes += bytes.length + 50; // +50 for dictionary overhead
+        }
       } else if (obj instanceof PDFDict) {
         result.savedBytes += estimateDictSize(obj);
       } else {

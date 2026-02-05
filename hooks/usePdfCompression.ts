@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { validateFile } from '@/lib/utils';
+import { validateFile, validatePdfSignature } from '@/lib/utils';
 import { createPdfError, PdfError } from '@/lib/errors';
 import {
   trackFileUpload,
@@ -178,6 +178,16 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
     };
 
     file.arrayBuffer().then((arrayBuffer) => {
+      // Validate PDF signature (magic bytes) to catch renamed non-PDF files
+      const signatureValidation = validatePdfSignature(arrayBuffer);
+      if (!signatureValidation.valid) {
+        setState({
+          status: 'error',
+          error: createPdfError('INVALID_FILE_TYPE', signatureValidation.error),
+        });
+        return;
+      }
+
       workerRef.current?.postMessage(
         {
           type: 'start',
