@@ -198,7 +198,7 @@ export const BetaFeedbackBanner = () => {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="bg-slate-50 border-b border-slate-200 shadow-lg overflow-hidden relative z-10"
+            className="bg-slate-50/80 backdrop-blur-md border-b border-slate-200 shadow-lg overflow-hidden relative z-10"
           >
             <div className="max-w-2xl mx-auto px-4 py-4">
               {/* Success State */}
