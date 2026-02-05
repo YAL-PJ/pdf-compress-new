@@ -48,6 +48,15 @@ export interface ValidationResult {
   error?: string;
 }
 
+/**
+ * PDF magic bytes - all PDFs start with "%PDF"
+ */
+const PDF_MAGIC_BYTES = [0x25, 0x50, 0x44, 0x46]; // %PDF
+
+/**
+ * Basic file validation (size and extension)
+ * This is a quick check before reading file contents
+ */
 export const validateFile = (file: File): ValidationResult => {
   // Check file size
   if (file.size > FILE_CONSTRAINTS.MAX_SIZE_BYTES) {
@@ -57,16 +66,36 @@ export const validateFile = (file: File): ValidationResult => {
     };
   }
 
-  // Check file type
-  const isValidType = FILE_CONSTRAINTS.ACCEPTED_TYPES.includes(file.type as typeof FILE_CONSTRAINTS.ACCEPTED_TYPES[number]);
+  // Check file extension
   const hasValidExtension = FILE_CONSTRAINTS.ACCEPTED_EXTENSIONS.some(ext =>
     file.name.toLowerCase().endsWith(ext)
   );
 
-  if (!isValidType && !hasValidExtension) {
+  if (!hasValidExtension) {
     return {
       valid: false,
       error: 'Please select a valid PDF file.',
+    };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Validate PDF signature (magic bytes)
+ * Checks that the file content actually starts with %PDF
+ * This catches renamed non-PDF files (like ODF documents renamed to .pdf)
+ */
+export const validatePdfSignature = (arrayBuffer: ArrayBuffer): ValidationResult => {
+  const bytes = new Uint8Array(arrayBuffer, 0, Math.min(4, arrayBuffer.byteLength));
+
+  // Check for PDF magic bytes
+  const isPdf = PDF_MAGIC_BYTES.every((byte, index) => bytes[index] === byte);
+
+  if (!isPdf) {
+    return {
+      valid: false,
+      error: 'This file is not a valid PDF. It may have been renamed or corrupted.',
     };
   }
 
