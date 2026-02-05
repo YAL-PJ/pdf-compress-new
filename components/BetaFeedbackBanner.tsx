@@ -235,7 +235,7 @@ export const BetaFeedbackBanner = () => {
                             'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
                             activeTab === 'feedback'
                               ? 'bg-slate-900 text-white'
-                              : 'bg-transparent border border-slate-300 text-slate-600 hover:border-slate-500'
+                              : 'bg-white border border-slate-300 text-slate-600 hover:border-slate-500'
                           )}
                         >
                           <MessageSquare className="w-3 h-3" />
@@ -247,7 +247,7 @@ export const BetaFeedbackBanner = () => {
                             'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
                             activeTab === 'feature'
                               ? 'bg-slate-900 text-white'
-                              : 'bg-transparent border border-slate-300 text-slate-600 hover:border-slate-500'
+                              : 'bg-white border border-slate-300 text-slate-600 hover:border-slate-500'
                           )}
                         >
                           <Lightbulb className="w-3 h-3" />
@@ -262,7 +262,7 @@ export const BetaFeedbackBanner = () => {
                           value={contact}
                           onChange={(e) => setContact(e.target.value)}
                           placeholder="Name/Email (optional)"
-                          className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-300 bg-transparent text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
+                          className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
                         />
                         <input
                           type="text"
@@ -278,7 +278,7 @@ export const BetaFeedbackBanner = () => {
                               ? 'I wish this app could...'
                               : 'Something is not working...'
                           }
-                          className="flex-1 px-3 py-2 text-sm rounded border border-slate-300 bg-transparent text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
+                          className="flex-1 px-3 py-2 text-sm rounded border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
                         />
                         <button
                           onClick={handleSubmit}
@@ -317,7 +317,7 @@ export const BetaFeedbackBanner = () => {
                           {recentFeedback
                             .slice(0, showAllFeedback ? undefined : 2)
                             .map((item, i) => (
-                              <div key={i} className="bg-transparent p-3 rounded border border-slate-300 text-xs">
+                              <div key={i} className="bg-white p-3 rounded border border-slate-300 text-xs">
                                 <div className="flex items-center gap-1.5 mb-1.5 text-slate-400">
                                   {item.type === 'feature' ? (
                                     <Lightbulb className="w-3 h-3 text-amber-500" />
