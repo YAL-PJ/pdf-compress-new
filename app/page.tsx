@@ -209,7 +209,7 @@ export default function Home() {
             <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8 px-4">
               {features.map(f => (
                 <div key={f.title} className="p-6 rounded-xl border">
-                  <f.icon className="w-8 h-8 mb-3" />
+                  <f.icon className="w-8 h-8 mb-3 text-blue-600" />
                   <h3 className="font-bold text-slate-900">{f.title}</h3>
                   <p className="text-slate-700">{f.description}</p>
                 </div>
@@ -218,17 +218,22 @@ export default function Home() {
           </section>
 
           {/* HOW IT WORKS */}
-          <section className="py-24 bg-slate-50">
-            <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8 px-4 text-center">
-              {steps.map(s => (
-                <div key={s.number}>
-                  <div className="w-12 h-12 rounded-full bg-slate-900 text-white mx-auto mb-4 flex items-center justify-center font-bold">
-                    {s.number}
+          <section className="py-24 bg-white border-t border-slate-200">
+            <div className="max-w-6xl mx-auto px-4">
+              <h2 className="text-3xl font-bold text-slate-900 text-center mb-12">
+                How It Works
+              </h2>
+              <div className="grid md:grid-cols-3 gap-8 text-center">
+                {steps.map(s => (
+                  <div key={s.number}>
+                    <div className="w-12 h-12 rounded-full bg-slate-900 text-white mx-auto mb-4 flex items-center justify-center font-bold text-lg">
+                      {s.number}
+                    </div>
+                    <h3 className="font-bold text-slate-900 text-lg mb-2">{s.title}</h3>
+                    <p className="text-slate-600">{s.description}</p>
                   </div>
-                  <h3 className="font-bold text-slate-900">{s.title}</h3>
-                  <p className="text-slate-600">{s.description}</p>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </section>
 
