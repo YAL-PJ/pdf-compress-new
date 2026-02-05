@@ -149,7 +149,7 @@ export const BetaFeedbackBanner = () => {
       <motion.div
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="bg-slate-900 text-white shadow-md relative z-20"
+        className="bg-slate-900/70 backdrop-blur-md text-white border-b border-slate-700/50 relative z-20"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-10">
@@ -198,7 +198,7 @@ export const BetaFeedbackBanner = () => {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="bg-slate-50/80 backdrop-blur-md border-b border-slate-200 shadow-lg overflow-hidden relative z-10"
+            className="bg-white/40 backdrop-blur-xl border-b border-slate-300/50 shadow-lg overflow-hidden relative z-10"
           >
             <div className="max-w-2xl mx-auto px-4 py-4">
               {/* Success State */}
@@ -235,7 +235,7 @@ export const BetaFeedbackBanner = () => {
                             'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
                             activeTab === 'feedback'
                               ? 'bg-slate-900 text-white'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                              : 'bg-white/60 backdrop-blur-sm border border-slate-300/70 text-slate-600 hover:border-slate-400'
                           )}
                         >
                           <MessageSquare className="w-3 h-3" />
@@ -247,7 +247,7 @@ export const BetaFeedbackBanner = () => {
                             'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
                             activeTab === 'feature'
                               ? 'bg-slate-900 text-white'
-                              : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                              : 'bg-white/60 backdrop-blur-sm border border-slate-300/70 text-slate-600 hover:border-slate-400'
                           )}
                         >
                           <Lightbulb className="w-3 h-3" />
@@ -262,7 +262,7 @@ export const BetaFeedbackBanner = () => {
                           value={contact}
                           onChange={(e) => setContact(e.target.value)}
                           placeholder="Name/Email (optional)"
-                          className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
+                          className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-300/70 bg-white/70 backdrop-blur-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
                         />
                         <input
                           type="text"
@@ -278,7 +278,7 @@ export const BetaFeedbackBanner = () => {
                               ? 'I wish this app could...'
                               : 'Something is not working...'
                           }
-                          className="flex-1 px-3 py-2 text-sm rounded border border-slate-200 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
+                          className="flex-1 px-3 py-2 text-sm rounded border border-slate-300/70 bg-white/70 backdrop-blur-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1"
                         />
                         <button
                           onClick={handleSubmit}
@@ -299,7 +299,7 @@ export const BetaFeedbackBanner = () => {
 
                     {/* Community Feedback Ticker */}
                     {recentFeedback.length > 0 && (
-                      <div className="pt-4 border-t border-slate-200">
+                      <div className="pt-4 border-t border-slate-300/50">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
                             Recent Community Input
@@ -317,7 +317,7 @@ export const BetaFeedbackBanner = () => {
                           {recentFeedback
                             .slice(0, showAllFeedback ? undefined : 2)
                             .map((item, i) => (
-                              <div key={i} className="bg-white p-3 rounded border border-slate-100 shadow-sm text-xs">
+                              <div key={i} className="bg-white/50 backdrop-blur-sm p-3 rounded border border-slate-200/70 shadow-sm text-xs">
                                 <div className="flex items-center gap-1.5 mb-1.5 text-slate-400">
                                   {item.type === 'feature' ? (
                                     <Lightbulb className="w-3 h-3 text-amber-500" />
