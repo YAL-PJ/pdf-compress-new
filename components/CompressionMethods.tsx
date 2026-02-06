@@ -37,7 +37,7 @@ import {
   ScanEye,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 
 interface CompressionMethodsProps {
   options: CompressionOptions;
@@ -72,6 +72,245 @@ interface MethodCategory {
   defaultExpanded?: boolean;
 }
 
+// Static config - defined at module level to avoid recreating on every render
+const BASIC_METHOD_KEYS: ReadonlySet<keyof CompressionOptions> = new Set([
+  'useObjectStreams',
+  'stripMetadata',
+  'recompressImages',
+  'downsampleImages',
+  'pngToJpeg',
+  'removeThumbnails',
+  'removeDuplicateResources',
+  'removeJavaScript',
+  'compressContentStreams',
+  'removeOrphanObjects',
+]);
+
+const CATEGORIES: MethodCategory[] = [
+  {
+    name: 'Structure',
+    defaultExpanded: true,
+    methods: [
+      {
+        key: 'useObjectStreams',
+        label: 'Object Streams',
+        description: 'Optimize PDF internal structure',
+        icon: Package,
+      },
+      {
+        key: 'stripMetadata',
+        label: 'Strip Metadata',
+        description: 'Remove basic document info',
+        icon: Eraser,
+      },
+      {
+        key: 'deepCleanMetadata',
+        label: 'Deep Clean Metadata',
+        description: 'Remove XMP, tags, hidden data',
+        icon: Trash2,
+      },
+    ],
+  },
+  {
+    name: 'Images',
+    defaultExpanded: true,
+    methods: [
+      {
+        key: 'recompressImages',
+        label: 'Compress Images',
+        description: 'Re-encode at lower quality',
+        icon: ImageIcon,
+        hasSettings: true,
+      },
+      {
+        key: 'downsampleImages',
+        label: 'Downsample',
+        description: 'Reduce image resolution',
+        icon: Minimize2,
+        hasSettings: true,
+      },
+      {
+        key: 'convertToGrayscale',
+        label: 'Grayscale',
+        description: 'Convert to black & white',
+        icon: Palette,
+        warning: 'Removes color information',
+      },
+      {
+        key: 'convertToMonochrome',
+        label: 'Monochrome',
+        description: '1-bit black & white',
+        icon: Square,
+        warning: 'Best for text/line art only',
+      },
+      {
+        key: 'pngToJpeg',
+        label: 'PNG to JPEG',
+        description: 'Convert photos to JPEG',
+        icon: FileImage,
+      },
+      {
+        key: 'removeAlphaChannels',
+        label: 'Remove Alpha',
+        description: 'Flatten transparency',
+        icon: Layers,
+      },
+      {
+        key: 'removeColorProfiles',
+        label: 'Remove ICC Profiles',
+        description: 'Strip color profiles',
+        icon: Palette,
+      },
+      {
+        key: 'cmykToRgb',
+        label: 'CMYK to RGB',
+        description: 'Convert print colors',
+        icon: Palette,
+        warning: 'Not for print use',
+      },
+    ],
+  },
+  {
+    name: 'Resources',
+    methods: [
+      {
+        key: 'removeThumbnails',
+        label: 'Remove Thumbnails',
+        description: 'Delete page previews',
+        icon: FileImage,
+      },
+      {
+        key: 'removeDuplicateResources',
+        label: 'Deduplicate',
+        description: 'Merge duplicate images',
+        icon: Copy,
+      },
+      {
+        key: 'removeUnusedFonts',
+        label: 'Remove Unused Fonts',
+        description: 'Delete unreferenced fonts',
+        icon: Type,
+      },
+      {
+        key: 'removeAttachments',
+        label: 'Remove Attachments',
+        description: 'Delete embedded files',
+        icon: Paperclip,
+      },
+    ],
+  },
+  {
+    name: 'Interactive',
+    methods: [
+      {
+        key: 'flattenForms',
+        label: 'Flatten Forms',
+        description: 'Convert forms to static',
+        icon: FileText,
+        warning: 'Makes forms non-editable',
+      },
+      {
+        key: 'flattenAnnotations',
+        label: 'Flatten Annotations',
+        description: 'Merge comments into pages',
+        icon: MessageSquare,
+        warning: 'Cannot undo',
+      },
+    ],
+  },
+  {
+    name: 'Cleanup',
+    methods: [
+      {
+        key: 'removeJavaScript',
+        label: 'Remove JavaScript',
+        description: 'Strip scripts (security)',
+        icon: Code,
+      },
+      {
+        key: 'removeBookmarks',
+        label: 'Remove Bookmarks',
+        description: 'Delete navigation',
+        icon: Bookmark,
+      },
+      {
+        key: 'removeNamedDestinations',
+        label: 'Remove Destinations',
+        description: 'Delete internal links',
+        icon: Link2,
+      },
+      {
+        key: 'removeArticleThreads',
+        label: 'Remove Article Threads',
+        description: 'Delete reading order',
+        icon: Newspaper,
+      },
+      {
+        key: 'removeWebCaptureInfo',
+        label: 'Remove Web Capture',
+        description: 'Delete web source info',
+        icon: Globe,
+      },
+      {
+        key: 'removeHiddenLayers',
+        label: 'Remove Hidden Layers',
+        description: 'Delete hidden content',
+        icon: EyeOff,
+      },
+      {
+        key: 'removePageLabels',
+        label: 'Remove Page Labels',
+        description: 'Delete custom numbering',
+        icon: Hash,
+      },
+    ],
+  },
+  {
+    name: 'Advanced',
+    methods: [
+      {
+        key: 'compressContentStreams',
+        label: 'Compress Streams',
+        description: 'Optimize content encoding',
+        icon: Archive,
+      },
+      {
+        key: 'removeOrphanObjects',
+        label: 'Remove Orphans',
+        description: 'Clean dead objects',
+        icon: Recycle,
+      },
+      {
+        key: 'inlineToXObject',
+        label: 'Inline to XObject',
+        description: 'Convert inline images',
+        icon: Boxes,
+      },
+      {
+        key: 'removeAlternateContent',
+        label: 'Remove Alternates',
+        description: 'Remove print/screen-only',
+        icon: SplitSquareHorizontal,
+      },
+      {
+        key: 'removeInvisibleText',
+        label: 'Remove Invisible Text',
+        description: 'Strip hidden OCR text',
+        icon: ScanEye,
+        warning: 'May affect searchability',
+      },
+    ],
+  },
+];
+
+// Pre-compute the basic filtered view since both inputs are static
+const BASIC_CATEGORIES = CATEGORIES
+  .map(cat => ({
+    ...cat,
+    methods: cat.methods.filter(m => BASIC_METHOD_KEYS.has(m.key)),
+  }))
+  .filter(cat => cat.methods.length > 0);
+
 export const CompressionMethods = ({
   options,
   onChange,
@@ -95,20 +334,6 @@ export const CompressionMethods = ({
     'Advanced': false,
   });
 
-  // Basic tab shows only high-impact, safe methods
-  const BASIC_METHOD_KEYS: Set<keyof CompressionOptions> = useMemo(() => new Set([
-    'useObjectStreams',
-    'stripMetadata',
-    'recompressImages',
-    'downsampleImages',
-    'pngToJpeg',
-    'removeThumbnails',
-    'removeDuplicateResources',
-    'removeJavaScript',
-    'compressContentStreams',
-    'removeOrphanObjects',
-  ]), []);
-
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => ({
       ...prev,
@@ -124,223 +349,6 @@ export const CompressionMethods = ({
   const getMethodResult = (key: keyof CompressionOptions) => {
     return methodResults?.find(r => r.key === key);
   };
-
-  const categories: MethodCategory[] = [
-    {
-      name: 'Structure',
-      defaultExpanded: true,
-      methods: [
-        {
-          key: 'useObjectStreams',
-          label: 'Object Streams',
-          description: 'Optimize PDF internal structure',
-          icon: Package,
-        },
-        {
-          key: 'stripMetadata',
-          label: 'Strip Metadata',
-          description: 'Remove basic document info',
-          icon: Eraser,
-        },
-        {
-          key: 'deepCleanMetadata',
-          label: 'Deep Clean Metadata',
-          description: 'Remove XMP, tags, hidden data',
-          icon: Trash2,
-        },
-      ],
-    },
-    {
-      name: 'Images',
-      defaultExpanded: true,
-      methods: [
-        {
-          key: 'recompressImages',
-          label: 'Compress Images',
-          description: 'Re-encode at lower quality',
-          icon: ImageIcon,
-          hasSettings: true,
-        },
-        {
-          key: 'downsampleImages',
-          label: 'Downsample',
-          description: 'Reduce image resolution',
-          icon: Minimize2,
-          hasSettings: true,
-        },
-        {
-          key: 'convertToGrayscale',
-          label: 'Grayscale',
-          description: 'Convert to black & white',
-          icon: Palette,
-          warning: 'Removes color information',
-        },
-        {
-          key: 'convertToMonochrome',
-          label: 'Monochrome',
-          description: '1-bit black & white',
-          icon: Square,
-          warning: 'Best for text/line art only',
-        },
-        {
-          key: 'pngToJpeg',
-          label: 'PNG to JPEG',
-          description: 'Convert photos to JPEG',
-          icon: FileImage,
-        },
-        {
-          key: 'removeAlphaChannels',
-          label: 'Remove Alpha',
-          description: 'Flatten transparency',
-          icon: Layers,
-        },
-        {
-          key: 'removeColorProfiles',
-          label: 'Remove ICC Profiles',
-          description: 'Strip color profiles',
-          icon: Palette,
-        },
-        {
-          key: 'cmykToRgb',
-          label: 'CMYK to RGB',
-          description: 'Convert print colors',
-          icon: Palette,
-          warning: 'Not for print use',
-        },
-      ],
-    },
-    {
-      name: 'Resources',
-      methods: [
-        {
-          key: 'removeThumbnails',
-          label: 'Remove Thumbnails',
-          description: 'Delete page previews',
-          icon: FileImage,
-        },
-        {
-          key: 'removeDuplicateResources',
-          label: 'Deduplicate',
-          description: 'Merge duplicate images',
-          icon: Copy,
-        },
-        {
-          key: 'removeUnusedFonts',
-          label: 'Remove Unused Fonts',
-          description: 'Delete unreferenced fonts',
-          icon: Type,
-        },
-        {
-          key: 'removeAttachments',
-          label: 'Remove Attachments',
-          description: 'Delete embedded files',
-          icon: Paperclip,
-        },
-      ],
-    },
-    {
-      name: 'Interactive',
-      methods: [
-        {
-          key: 'flattenForms',
-          label: 'Flatten Forms',
-          description: 'Convert forms to static',
-          icon: FileText,
-          warning: 'Makes forms non-editable',
-        },
-        {
-          key: 'flattenAnnotations',
-          label: 'Flatten Annotations',
-          description: 'Merge comments into pages',
-          icon: MessageSquare,
-          warning: 'Cannot undo',
-        },
-      ],
-    },
-    {
-      name: 'Cleanup',
-      methods: [
-        {
-          key: 'removeJavaScript',
-          label: 'Remove JavaScript',
-          description: 'Strip scripts (security)',
-          icon: Code,
-        },
-        {
-          key: 'removeBookmarks',
-          label: 'Remove Bookmarks',
-          description: 'Delete navigation',
-          icon: Bookmark,
-        },
-        {
-          key: 'removeNamedDestinations',
-          label: 'Remove Destinations',
-          description: 'Delete internal links',
-          icon: Link2,
-        },
-        {
-          key: 'removeArticleThreads',
-          label: 'Remove Article Threads',
-          description: 'Delete reading order',
-          icon: Newspaper,
-        },
-        {
-          key: 'removeWebCaptureInfo',
-          label: 'Remove Web Capture',
-          description: 'Delete web source info',
-          icon: Globe,
-        },
-        {
-          key: 'removeHiddenLayers',
-          label: 'Remove Hidden Layers',
-          description: 'Delete hidden content',
-          icon: EyeOff,
-        },
-        {
-          key: 'removePageLabels',
-          label: 'Remove Page Labels',
-          description: 'Delete custom numbering',
-          icon: Hash,
-        },
-      ],
-    },
-    {
-      name: 'Advanced',
-      methods: [
-        {
-          key: 'compressContentStreams',
-          label: 'Compress Streams',
-          description: 'Optimize content encoding',
-          icon: Archive,
-        },
-        {
-          key: 'removeOrphanObjects',
-          label: 'Remove Orphans',
-          description: 'Clean dead objects',
-          icon: Recycle,
-        },
-        {
-          key: 'inlineToXObject',
-          label: 'Inline to XObject',
-          description: 'Convert inline images',
-          icon: Boxes,
-        },
-        {
-          key: 'removeAlternateContent',
-          label: 'Remove Alternates',
-          description: 'Remove print/screen-only',
-          icon: SplitSquareHorizontal,
-        },
-        {
-          key: 'removeInvisibleText',
-          label: 'Remove Invisible Text',
-          description: 'Strip hidden OCR text',
-          icon: ScanEye,
-          warning: 'May affect searchability',
-        },
-      ],
-    },
-  ];
 
   const handleQualityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const quality = parseInt(e.target.value, 10);
@@ -526,16 +534,7 @@ export const CompressionMethods = ({
     return { enabled, total, savings };
   };
 
-  // Filter categories for basic tab - only show methods in the basic set
-  const filteredCategories = useMemo(() => {
-    if (activeTab === 'advanced') return categories;
-    return categories
-      .map(cat => ({
-        ...cat,
-        methods: cat.methods.filter(m => BASIC_METHOD_KEYS.has(m.key)),
-      }))
-      .filter(cat => cat.methods.length > 0);
-  }, [activeTab, categories, BASIC_METHOD_KEYS]);
+  const displayCategories = activeTab === 'basic' ? BASIC_CATEGORIES : CATEGORIES;
 
   return (
     <div className="bg-white border rounded-lg shadow-sm w-full lg:max-w-xs h-fit self-start sticky top-8">
@@ -588,11 +587,11 @@ export const CompressionMethods = ({
         {activeTab === 'basic' ? (
           // Basic: flat list, no collapsible categories
           <div className="space-y-0.5 p-1">
-            {filteredCategories.flatMap(cat => cat.methods).map(renderMethod)}
+            {displayCategories.flatMap(cat => cat.methods).map(renderMethod)}
           </div>
         ) : (
           // Advanced: full categorized collapsible view
-          filteredCategories.map((category) => {
+          displayCategories.map((category) => {
             const stats = getCategoryStats(category);
             const isExpanded = expandedCategories[category.name];
 
