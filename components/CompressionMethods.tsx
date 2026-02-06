@@ -369,8 +369,22 @@ export const CompressionMethods = ({
         : { ...options, [key]: newEnabled };
       onChange(newOptions);
       onImageSettingsChange({ ...imageSettings, enableDownsampling: newEnabled });
+    } else if (key === 'convertToGrayscale' || key === 'convertToMonochrome') {
+      // Grayscale/monochrome require recompressImages to be on
+      const newEnabled = !options[key];
+      const newOptions = newEnabled
+        ? { ...options, [key]: newEnabled, recompressImages: true }
+        : { ...options, [key]: newEnabled };
+      onChange(newOptions);
     } else if (key === 'recompressImages' && options[key]) {
-      onChange({ ...options, [key]: false, downsampleImages: false });
+      // Disabling recompressImages also disables downsample, grayscale, monochrome
+      onChange({
+        ...options,
+        [key]: false,
+        downsampleImages: false,
+        convertToGrayscale: false,
+        convertToMonochrome: false,
+      });
       onImageSettingsChange({ ...imageSettings, enableDownsampling: false });
     } else {
       toggleMethod(key);
