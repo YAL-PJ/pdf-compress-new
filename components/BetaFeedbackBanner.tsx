@@ -36,7 +36,7 @@ type FeedbackType = 'feedback' | 'feature';
    COMPONENT
 ========================= */
 export const BetaFeedbackBanner = () => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<FeedbackType>('feedback');
   const [message, setMessage] = useState('');
   const [contact, setContact] = useState('');
