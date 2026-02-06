@@ -37,7 +37,7 @@ import {
   ScanEye,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 
 interface CompressionMethodsProps {
   options: CompressionOptions;
@@ -84,6 +84,8 @@ export const CompressionMethods = ({
   isUpdating = false,
 }: CompressionMethodsProps) => {
 
+  const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
+
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     'Structure': true,
     'Images': true,
@@ -92,6 +94,20 @@ export const CompressionMethods = ({
     'Cleanup': false,
     'Advanced': false,
   });
+
+  // Basic tab shows only high-impact, safe methods
+  const BASIC_METHOD_KEYS: Set<keyof CompressionOptions> = useMemo(() => new Set([
+    'useObjectStreams',
+    'stripMetadata',
+    'recompressImages',
+    'downsampleImages',
+    'pngToJpeg',
+    'removeThumbnails',
+    'removeDuplicateResources',
+    'removeJavaScript',
+    'compressContentStreams',
+    'removeOrphanObjects',
+  ]), []);
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => ({
@@ -510,6 +526,17 @@ export const CompressionMethods = ({
     return { enabled, total, savings };
   };
 
+  // Filter categories for basic tab - only show methods in the basic set
+  const filteredCategories = useMemo(() => {
+    if (activeTab === 'advanced') return categories;
+    return categories
+      .map(cat => ({
+        ...cat,
+        methods: cat.methods.filter(m => BASIC_METHOD_KEYS.has(m.key)),
+      }))
+      .filter(cat => cat.methods.length > 0);
+  }, [activeTab, categories, BASIC_METHOD_KEYS]);
+
   return (
     <div className="bg-white border rounded-lg shadow-sm w-full lg:max-w-xs h-fit self-start sticky top-8">
       <div className="p-3 border-b bg-slate-50/50">
@@ -519,52 +546,98 @@ export const CompressionMethods = ({
         </h2>
       </div>
 
+      {/* Basic / Advanced tabs */}
+      <div className="flex border-b">
+        <button
+          onClick={() => setActiveTab('basic')}
+          className={twMerge(
+            "flex-1 px-3 py-2 text-xs font-semibold transition-colors relative",
+            activeTab === 'basic'
+              ? "text-slate-900"
+              : "text-slate-400 hover:text-slate-600"
+          )}
+        >
+          Basic
+          {activeTab === 'basic' && (
+            <motion.div
+              layoutId="settings-tab-indicator"
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900"
+            />
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('advanced')}
+          className={twMerge(
+            "flex-1 px-3 py-2 text-xs font-semibold transition-colors relative",
+            activeTab === 'advanced'
+              ? "text-slate-900"
+              : "text-slate-400 hover:text-slate-600"
+          )}
+        >
+          Advanced
+          {activeTab === 'advanced' && (
+            <motion.div
+              layoutId="settings-tab-indicator"
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900"
+            />
+          )}
+        </button>
+      </div>
+
       <div className="p-1.5 space-y-1 max-h-[70vh] overflow-y-auto">
-        {categories.map((category) => {
-          const stats = getCategoryStats(category);
-          const isExpanded = expandedCategories[category.name];
+        {activeTab === 'basic' ? (
+          // Basic: flat list, no collapsible categories
+          <div className="space-y-0.5 p-1">
+            {filteredCategories.flatMap(cat => cat.methods).map(renderMethod)}
+          </div>
+        ) : (
+          // Advanced: full categorized collapsible view
+          filteredCategories.map((category) => {
+            const stats = getCategoryStats(category);
+            const isExpanded = expandedCategories[category.name];
 
-          return (
-            <div key={category.name} className="border rounded">
-              <button
-                onClick={() => toggleCategory(category.name)}
-                className="w-full flex items-center justify-between p-2 text-left hover:bg-slate-50 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  {isExpanded ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+            return (
+              <div key={category.name} className="border rounded">
+                <button
+                  onClick={() => toggleCategory(category.name)}
+                  className="w-full flex items-center justify-between p-2 text-left hover:bg-slate-50 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    {isExpanded ? (
+                      <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
+                    ) : (
+                      <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
+                    )}
+                    <span className="text-xs font-bold text-slate-800">{category.name}</span>
+                    <span className="text-[10px] text-slate-600">
+                      {stats.enabled}/{stats.total}
+                    </span>
+                  </div>
+                  {stats.savings > 0 && (
+                    <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
+                      -{formatBytes(stats.savings)}
+                    </span>
                   )}
-                  <span className="text-xs font-bold text-slate-800">{category.name}</span>
-                  <span className="text-[10px] text-slate-600">
-                    {stats.enabled}/{stats.total}
-                  </span>
-                </div>
-                {stats.savings > 0 && (
-                  <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
-                    -{formatBytes(stats.savings)}
-                  </span>
-                )}
-              </button>
+                </button>
 
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="overflow-hidden"
-                  >
-                    <div className="p-1.5 pt-0 space-y-0.5">
-                      {category.methods.map(renderMethod)}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-1.5 pt-0 space-y-0.5">
+                        {category.methods.map(renderMethod)}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {isUpdating && (
