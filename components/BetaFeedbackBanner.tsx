@@ -149,7 +149,7 @@ export const BetaFeedbackBanner = () => {
       <motion.div
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="bg-white/30 text-slate-900 border-b border-slate-300 relative z-20"
+        className="bg-white/30 backdrop-blur-sm text-slate-900 border-b border-slate-300 relative z-20"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-10">
@@ -197,7 +197,7 @@ export const BetaFeedbackBanner = () => {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="bg-white/30 border-b border-slate-300 overflow-hidden relative z-10"
+            className="bg-white/30 backdrop-blur-sm border-b border-slate-300 overflow-hidden relative z-10"
           >
             <div className="max-w-2xl mx-auto px-4 py-4">
               {/* Success State */}
