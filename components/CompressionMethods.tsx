@@ -370,11 +370,12 @@ export const CompressionMethods = ({
       onChange(newOptions);
       onImageSettingsChange({ ...imageSettings, enableDownsampling: newEnabled });
     } else if (key === 'convertToGrayscale' || key === 'convertToMonochrome') {
-      // Grayscale/monochrome require recompressImages to be on
+      // Grayscale/monochrome require recompressImages and are mutually exclusive
       const newEnabled = !options[key];
+      const otherKey = key === 'convertToGrayscale' ? 'convertToMonochrome' : 'convertToGrayscale';
       const newOptions = newEnabled
-        ? { ...options, [key]: newEnabled, recompressImages: true }
-        : { ...options, [key]: newEnabled };
+        ? { ...options, [key]: true, [otherKey]: false, recompressImages: true }
+        : { ...options, [key]: false };
       onChange(newOptions);
     } else if (key === 'recompressImages' && options[key]) {
       // Disabling recompressImages also disables downsample, grayscale, monochrome

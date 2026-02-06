@@ -19,7 +19,6 @@ import {
   type ExtendedImageSettings,
 } from './image-processor';
 import {
-  applyStructureCleanup,
   removeJavaScript as removeJS,
   removeBookmarks as removeBM,
   removeNamedDestinations as removeND,
@@ -319,12 +318,14 @@ export const analyzePdf = async (
   onProgress?.('Applying structure cleanup...');
 
   // Measure each structure cleanup method individually for accurate per-method savings
+  // Uses a cached size to avoid redundant save() calls (1 save per method instead of 2)
   const structSavings: Record<string, number> = {};
   let structAttachmentsRemoved = 0;
 
   const { pdfDoc: structDoc } = await loadPdf(workingBuffer);
+  let lastStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
 
-  // Helper: measure a single structure method's incremental savings
+  // Helper: measure a single method's incremental savings, reusing the previous size
   const measureStructMethod = async (
     key: string,
     enabled: boolean,
@@ -334,54 +335,46 @@ export const analyzePdf = async (
       structSavings[key] = 0;
       return;
     }
-    const before = (await structDoc.save({ useObjectStreams: false })).byteLength;
+    const before = lastStructSize;
     const result = apply(structDoc);
-    const after = (await structDoc.save({ useObjectStreams: false })).byteLength;
-    structSavings[key] = Math.max(0, before - after);
+    lastStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
+    structSavings[key] = Math.max(0, before - lastStructSize);
     return result;
   };
 
   // Apply each method incrementally, measuring the delta
-  await measureStructMethod('removeJavaScript', options.removeJavaScript, (doc) => removeJS(doc));
-  await measureStructMethod('removeBookmarks', options.removeBookmarks, (doc) => removeBM(doc));
-  await measureStructMethod('removeNamedDestinations', options.removeNamedDestinations, (doc) => removeND(doc));
-  await measureStructMethod('removeArticleThreads', options.removeArticleThreads, (doc) => removeAT(doc));
-  await measureStructMethod('removeWebCaptureInfo', options.removeWebCaptureInfo, (doc) => removeWC(doc));
-  await measureStructMethod('removeHiddenLayers', options.removeHiddenLayers, (doc) => removeHL(doc));
-  await measureStructMethod('removePageLabels', options.removePageLabels, (doc) => removePL(doc));
-  await measureStructMethod('deepCleanMetadata', options.deepCleanMetadata, (doc) => deepCleanMD(doc));
-  await measureStructMethod('removeThumbnails', options.removeThumbnails, (doc) => removeTN(doc));
-  const attResult = await measureStructMethod('removeAttachments', options.removeAttachments, (doc) => removeATT(doc));
+  await measureStructMethod('removeJavaScript', options.removeJavaScript, removeJS);
+  await measureStructMethod('removeBookmarks', options.removeBookmarks, removeBM);
+  await measureStructMethod('removeNamedDestinations', options.removeNamedDestinations, removeND);
+  await measureStructMethod('removeArticleThreads', options.removeArticleThreads, removeAT);
+  await measureStructMethod('removeWebCaptureInfo', options.removeWebCaptureInfo, removeWC);
+  await measureStructMethod('removeHiddenLayers', options.removeHiddenLayers, removeHL);
+  await measureStructMethod('removePageLabels', options.removePageLabels, removePL);
+  await measureStructMethod('deepCleanMetadata', options.deepCleanMetadata, deepCleanMD);
+  await measureStructMethod('removeThumbnails', options.removeThumbnails, removeTN);
+  const attResult = await measureStructMethod('removeAttachments', options.removeAttachments, removeATT);
   if (typeof attResult === 'number') structAttachmentsRemoved = attResult;
-  await measureStructMethod('flattenForms', options.flattenForms, (doc) => flattenFM(doc));
-  await measureStructMethod('flattenAnnotations', options.flattenAnnotations, (doc) => flattenAN(doc));
-
-  // Save struct doc state as the working buffer for final save
-  const structBytes = await structDoc.save({ useObjectStreams: false });
-  workingBuffer = structBytes.buffer as ArrayBuffer;
+  await measureStructMethod('flattenForms', options.flattenForms, flattenFM);
+  await measureStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
 
   onProgress?.('Creating final compressed file...');
 
-  // Build final compressed PDF and measure metadata + object streams savings
-  const { pdfDoc: fullDoc } = await loadPdf(workingBuffer);
-
-  // Measure metadata savings on the fully processed document
+  // Measure metadata savings and build final PDF on the same document
+  // (avoids an extra load+save round-trip by reusing structDoc)
   let metaSaved = 0;
   if (options.stripMetadata) {
-    const preMetaSize = (await fullDoc.save({ useObjectStreams: false })).byteLength;
-    stripMetadata(fullDoc);
-    const postMetaSize = (await fullDoc.save({ useObjectStreams: false })).byteLength;
-    metaSaved = Math.max(0, preMetaSize - postMetaSize);
+    const preMetaSize = lastStructSize;
+    stripMetadata(structDoc);
+    lastStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
+    metaSaved = Math.max(0, preMetaSize - lastStructSize);
   }
 
-  // Save without object streams to measure OS savings accurately
-  const withoutOsSize = (await fullDoc.save({ useObjectStreams: false })).byteLength;
-
-  const fullCompressedBytes = await fullDoc.save({
+  // Final save — measure object streams savings by comparing with/without
+  const withoutOsSize = lastStructSize;
+  const fullCompressedBytes = await structDoc.save({
     useObjectStreams: options.useObjectStreams,
   });
 
-  // Measure object streams savings on the fully processed document
   const osSaved = options.useObjectStreams
     ? Math.max(0, withoutOsSize - fullCompressedBytes.byteLength)
     : 0;
