@@ -132,7 +132,7 @@ const CATEGORIES: MethodCategory[] = [
       {
         key: 'convertToGrayscale',
         label: 'Grayscale',
-        description: 'Convert to black & white',
+        description: 'Convert colors to gray tones',
         icon: Palette,
         warning: 'Removes color information',
       },
