@@ -124,11 +124,11 @@ export default function Home() {
     }
   }, [isBatchMode, clearQueue, handleReset]);
 
-  // Handle preset selection with analytics
+  // Handle preset selection
   const handlePresetSelect = useCallback((newOptions: CompressionOptions, newSettings: ImageCompressionSettings) => {
     setOptions(newOptions);
     setImageSettings(newSettings);
-    trackPresetSelected(newSettings.quality <= 60 ? 'maximum' : 'recommended');
+    // Tracking is handled inside PresetSelector
   }, []);
 
   // Auto-recompression when settings change (debounced)

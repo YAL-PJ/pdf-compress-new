@@ -1220,22 +1220,25 @@ export const convertCmykToRgb = async (
       const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: quality / 100 });
       const newBytes = new Uint8Array(await blob.arrayBuffer());
 
-      // Replace in PDF
-      const newDict = dict.clone(context);
-      newDict.set(PDFName.of('Length'), context.obj(newBytes.length));
-      newDict.set(PDFName.of('Width'), context.obj(width));
-      newDict.set(PDFName.of('Height'), context.obj(height));
-      newDict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
-      newDict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
-      newDict.set(PDFName.of('BitsPerComponent'), context.obj(8));
-      newDict.delete(PDFName.of('DecodeParms'));
-      newDict.delete(PDFName.of('Decode'));
+      // Only replace if we actually save space
+      if (newBytes.length < originalSize) {
+        // Replace in PDF
+        const newDict = dict.clone(context);
+        newDict.set(PDFName.of('Length'), context.obj(newBytes.length));
+        newDict.set(PDFName.of('Width'), context.obj(width));
+        newDict.set(PDFName.of('Height'), context.obj(height));
+        newDict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+        newDict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
+        newDict.set(PDFName.of('BitsPerComponent'), context.obj(8));
+        newDict.delete(PDFName.of('DecodeParms'));
+        newDict.delete(PDFName.of('Decode'));
 
-      const newStream = PDFRawStream.of(newDict, newBytes);
-      context.assign(ref, newStream);
+        const newStream = PDFRawStream.of(newDict, newBytes);
+        context.assign(ref, newStream);
 
-      result.converted++;
-      result.savedBytes += Math.max(0, originalSize - newBytes.length);
+        result.converted++;
+        result.savedBytes += originalSize - newBytes.length;
+      }
     } catch (err) {
       console.warn('Failed to convert CMYK image:', err);
     }

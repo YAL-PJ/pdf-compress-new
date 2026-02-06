@@ -9,7 +9,7 @@ import { twMerge } from 'tailwind-merge';
 interface PresetSelectorProps {
     options: CompressionOptions;
     imageSettings: ImageCompressionSettings;
-    onSelect: (options: CompressionOptions, imageSettings: ImageCompressionSettings) => void;
+    onSelect: (options: CompressionOptions, imageSettings: ImageCompressionSettings, presetId: PresetId) => void;
     disabled?: boolean;
 }
 
@@ -28,13 +28,13 @@ export const PresetSelector = ({
         trackPresetSelected(presetId);
 
         const preset = PRESETS[presetId];
-        onSelect(preset.options, preset.imageSettings);
+        onSelect(preset.options, preset.imageSettings, presetId);
     };
 
-    const presetKeys: PresetId[] = ['recommended', 'maximum'];
+    const presetKeys: PresetId[] = ['minimal', 'balanced', 'aggressive'];
 
     return (
-        <div className="grid grid-cols-2 gap-3 mb-6">
+        <div className="grid grid-cols-1 gap-2 mb-6">
             {presetKeys.map((key) => {
                 const preset = PRESETS[key];
                 const isActive = currentPresetId === key;
@@ -55,22 +55,24 @@ export const PresetSelector = ({
                         )}
                         title={preset.description}
                     >
-                        <div className="flex items-center gap-2 mb-1">
-                            <Icon className={twMerge("w-4 h-4", isActive ? "text-emerald-400" : "text-slate-600")} />
-                            <span className="text-sm font-bold">{preset.label}</span>
-                        </div>
-                        <div className={twMerge(
-                            "text-xs truncate",
-                            isActive ? "text-slate-300" : "text-slate-600"
-                        )}>
-                            {preset.description}
+                        <div className="flex items-center gap-3">
+                            <Icon className={twMerge("w-5 h-5 flex-shrink-0", isActive ? "text-emerald-400" : "text-slate-500")} />
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-bold truncate">{preset.label}</div>
+                                <div className={twMerge(
+                                    "text-xs truncate",
+                                    isActive ? "text-slate-300" : "text-slate-500"
+                                )}>
+                                    {preset.description}
+                                </div>
+                            </div>
                         </div>
 
                         {/* Active Checkmark */}
                         {isActive && (
                             <motion.div
                                 layoutId="active-preset"
-                                className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400"
+                                className="absolute top-1/2 -translate-y-1/2 right-3 w-1.5 h-1.5 rounded-full bg-emerald-400"
                             />
                         )}
                     </button>

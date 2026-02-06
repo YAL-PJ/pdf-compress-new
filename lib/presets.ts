@@ -1,8 +1,8 @@
 
 import { CompressionOptions, ImageCompressionSettings, DEFAULT_COMPRESSION_OPTIONS, DEFAULT_IMAGE_SETTINGS } from './types';
-import { Package, Zap, ShieldCheck } from 'lucide-react';
+import { Package, Zap, ShieldCheck, Scale } from 'lucide-react';
 
-export type PresetId = 'recommended' | 'maximum' | 'custom';
+export type PresetId = 'aggressive' | 'balanced' | 'minimal' | 'custom';
 
 export interface CompressionPreset {
     id: PresetId;
@@ -14,28 +14,10 @@ export interface CompressionPreset {
 }
 
 export const PRESETS: Record<PresetId, CompressionPreset> = {
-    recommended: {
-        id: 'recommended',
-        label: 'Recommended',
-        description: 'Balanced compression & quality',
-        icon: ShieldCheck,
-        options: {
-            ...DEFAULT_COMPRESSION_OPTIONS,
-            useObjectStreams: true,
-            stripMetadata: true,
-            recompressImages: true,
-            downsampleImages: false, // Don't aggressively reduce resolution by default
-        },
-        imageSettings: {
-            ...DEFAULT_IMAGE_SETTINGS,
-            quality: 75, // Good balance
-            targetDpi: 150,
-        },
-    },
-    maximum: {
-        id: 'maximum',
-        label: 'Maximum',
-        description: 'Smallest file size',
+    aggressive: {
+        id: 'aggressive',
+        label: 'Aggressive',
+        description: 'Max compression, lower quality',
         icon: Zap,
         options: {
             ...DEFAULT_COMPRESSION_OPTIONS,
@@ -46,8 +28,47 @@ export const PRESETS: Record<PresetId, CompressionPreset> = {
         },
         imageSettings: {
             ...DEFAULT_IMAGE_SETTINGS,
-            quality: 50, // More aggressive
-            targetDpi: 96, // Screen resolution
+            quality: 40,
+            targetDpi: 72,
+            enableDownsampling: true,
+        },
+    },
+    balanced: {
+        id: 'balanced',
+        label: 'Balanced',
+        description: 'Good compression & quality',
+        icon: Scale,
+        options: {
+            ...DEFAULT_COMPRESSION_OPTIONS,
+            useObjectStreams: true,
+            stripMetadata: true,
+            recompressImages: true,
+            downsampleImages: false,
+        },
+        imageSettings: {
+            ...DEFAULT_IMAGE_SETTINGS,
+            quality: 75,
+            targetDpi: 150,
+            enableDownsampling: false,
+        },
+    },
+    minimal: {
+        id: 'minimal',
+        label: 'Minimal',
+        description: 'Highest quality preservation',
+        icon: ShieldCheck,
+        options: {
+            ...DEFAULT_COMPRESSION_OPTIONS,
+            useObjectStreams: true,
+            stripMetadata: true,
+            recompressImages: true,
+            downsampleImages: false,
+        },
+        imageSettings: {
+            ...DEFAULT_IMAGE_SETTINGS,
+            quality: 90,
+            targetDpi: 300,
+            enableDownsampling: false,
         },
     },
     custom: {
@@ -64,20 +85,28 @@ export const getPresetForCurrentSettings = (
     currentOptions: CompressionOptions,
     currentImageSettings: ImageCompressionSettings
 ): PresetId => {
-    // Check Recommended
+    // Check Aggressive
     if (
-        JSON.stringify(currentOptions) === JSON.stringify(PRESETS.recommended.options) &&
-        JSON.stringify(currentImageSettings) === JSON.stringify(PRESETS.recommended.imageSettings)
+        JSON.stringify(currentOptions) === JSON.stringify(PRESETS.aggressive.options) &&
+        JSON.stringify(currentImageSettings) === JSON.stringify(PRESETS.aggressive.imageSettings)
     ) {
-        return 'recommended';
+        return 'aggressive';
     }
 
-    // Check Maximum
+    // Check Balanced
     if (
-        JSON.stringify(currentOptions) === JSON.stringify(PRESETS.maximum.options) &&
-        JSON.stringify(currentImageSettings) === JSON.stringify(PRESETS.maximum.imageSettings)
+        JSON.stringify(currentOptions) === JSON.stringify(PRESETS.balanced.options) &&
+        JSON.stringify(currentImageSettings) === JSON.stringify(PRESETS.balanced.imageSettings)
     ) {
-        return 'maximum';
+        return 'balanced';
+    }
+
+    // Check Minimal
+    if (
+        JSON.stringify(currentOptions) === JSON.stringify(PRESETS.minimal.options) &&
+        JSON.stringify(currentImageSettings) === JSON.stringify(PRESETS.minimal.imageSettings)
+    ) {
+        return 'minimal';
     }
 
     return 'custom';
