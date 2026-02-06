@@ -179,8 +179,8 @@ export const BetaFeedbackBanner = () => {
                   </>
                 ) : (
                   <>
-                    <ChevronDown className="w-3 h-3" />
-                    <span>Expand</span>
+                    <MessageSquare className="w-3 h-3" />
+                    <span>Feedback</span>
                   </>
                 )}
               </button>
