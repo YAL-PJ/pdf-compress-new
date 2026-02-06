@@ -87,10 +87,12 @@ export default function Home() {
   const { pages, toggleDelete, rotatePage, reorderPages, movePage } = usePageManager(pageCount);
 
   const prevSettingsRef = useRef<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
+  const prevOptionsRef = useRef<CompressionOptions>(DEFAULT_COMPRESSION_OPTIONS);
 
   const handleFileSelect = useCallback((file: File) => {
     trackFileUpload(file.size / 1024 / 1024, false);
     prevSettingsRef.current = imageSettings;
+    prevOptionsRef.current = options;
     processFile(file, { imageSettings, options });
   }, [processFile, imageSettings, options]);
 
@@ -99,6 +101,7 @@ export default function Home() {
     setOptions(DEFAULT_COMPRESSION_OPTIONS);
     setImageSettings(DEFAULT_IMAGE_SETTINGS);
     prevSettingsRef.current = DEFAULT_IMAGE_SETTINGS;
+    prevOptionsRef.current = DEFAULT_COMPRESSION_OPTIONS;
   }, [reset]);
 
   // Handle batch file selection
@@ -132,13 +135,17 @@ export default function Home() {
   useEffect(() => {
     if (state.status !== 'done') return;
 
-    if (JSON.stringify(imageSettings) === JSON.stringify(prevSettingsRef.current)) {
+    const imageSettingsChanged = JSON.stringify(imageSettings) !== JSON.stringify(prevSettingsRef.current);
+    const optionsChanged = JSON.stringify(options) !== JSON.stringify(prevOptionsRef.current);
+
+    if (!imageSettingsChanged && !optionsChanged) {
       return;
     }
 
     const fileToProcess = state.originalFile;
     const timer = setTimeout(() => {
       prevSettingsRef.current = imageSettings;
+      prevOptionsRef.current = options;
       processFile(fileToProcess, { imageSettings, options }, true);
     }, 500);
 

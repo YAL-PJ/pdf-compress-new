@@ -132,7 +132,7 @@ const CATEGORIES: MethodCategory[] = [
       {
         key: 'convertToGrayscale',
         label: 'Grayscale',
-        description: 'Convert to black & white',
+        description: 'Convert colors to gray tones',
         icon: Palette,
         warning: 'Removes color information',
       },
@@ -369,8 +369,23 @@ export const CompressionMethods = ({
         : { ...options, [key]: newEnabled };
       onChange(newOptions);
       onImageSettingsChange({ ...imageSettings, enableDownsampling: newEnabled });
+    } else if (key === 'convertToGrayscale' || key === 'convertToMonochrome') {
+      // Grayscale/monochrome require recompressImages and are mutually exclusive
+      const newEnabled = !options[key];
+      const otherKey = key === 'convertToGrayscale' ? 'convertToMonochrome' : 'convertToGrayscale';
+      const newOptions = newEnabled
+        ? { ...options, [key]: true, [otherKey]: false, recompressImages: true }
+        : { ...options, [key]: false };
+      onChange(newOptions);
     } else if (key === 'recompressImages' && options[key]) {
-      onChange({ ...options, [key]: false, downsampleImages: false });
+      // Disabling recompressImages also disables downsample, grayscale, monochrome
+      onChange({
+        ...options,
+        [key]: false,
+        downsampleImages: false,
+        convertToGrayscale: false,
+        convertToMonochrome: false,
+      });
       onImageSettingsChange({ ...imageSettings, enableDownsampling: false });
     } else {
       toggleMethod(key);

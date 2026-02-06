@@ -19,7 +19,18 @@ import {
   type ExtendedImageSettings,
 } from './image-processor';
 import {
-  applyStructureCleanup,
+  removeJavaScript as removeJS,
+  removeBookmarks as removeBM,
+  removeNamedDestinations as removeND,
+  removeArticleThreads as removeAT,
+  removeWebCaptureInfo as removeWC,
+  removeHiddenLayers as removeHL,
+  removePageLabels as removePL,
+  deepCleanMetadata as deepCleanMD,
+  removeThumbnails as removeTN,
+  removeAttachments as removeATT,
+  flattenForms as flattenFM,
+  flattenAnnotations as flattenAN,
 } from './structure-processor';
 import {
   removeDuplicateResources,
@@ -89,22 +100,10 @@ export const analyzePdf = async (
 
   onProgress?.('Reading PDF...');
 
-  // Load PDF once for info
+  // Load PDF once for info and baseline
   const { pdfDoc: baseDoc, info } = await loadPdf(arrayBuffer);
   const baselineBytes = await baseDoc.save({ useObjectStreams: false });
   const baselineSize = baselineBytes.byteLength;
-
-  // Calculate Object Streams savings
-  onProgress?.('Analyzing Object Streams...');
-  const osBytes = await baseDoc.save({ useObjectStreams: true });
-  const osSaved = baselineSize - osBytes.byteLength;
-
-  // Calculate Metadata savings
-  onProgress?.('Analyzing Metadata...');
-  const { pdfDoc: metaDoc } = await loadPdf(arrayBuffer);
-  stripMetadata(metaDoc);
-  const metaBytes = await metaDoc.save({ useObjectStreams: false });
-  const metaSaved = baselineSize - metaBytes.byteLength;
 
   // Image processing - extract both JPEG and PNG if needed
   onProgress?.('Analyzing images...');
@@ -318,69 +317,79 @@ export const analyzePdf = async (
 
   onProgress?.('Applying structure cleanup...');
 
-  // Calculate structure cleanup savings by measuring actual difference
+  // Measure each structure cleanup method individually for accurate per-method savings
+  // Uses a cached size to avoid redundant save() calls (1 save per method instead of 2)
+  const structSavings: Record<string, number> = {};
+  let structAttachmentsRemoved = 0;
+
   const { pdfDoc: structDoc } = await loadPdf(workingBuffer);
-  const beforeStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
+  let lastStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
 
-  const structResult = applyStructureCleanup(structDoc, {
-    removeJavaScript: options.removeJavaScript,
-    removeBookmarks: options.removeBookmarks,
-    removeNamedDestinations: options.removeNamedDestinations,
-    removeArticleThreads: options.removeArticleThreads,
-    removeWebCaptureInfo: options.removeWebCaptureInfo,
-    removeHiddenLayers: options.removeHiddenLayers,
-    removePageLabels: options.removePageLabels,
-    deepCleanMetadata: options.deepCleanMetadata,
-    removeThumbnails: options.removeThumbnails,
-    removeAttachments: options.removeAttachments,
-    flattenForms: options.flattenForms,
-    flattenAnnotations: options.flattenAnnotations,
-  });
+  // Helper: measure a single method's incremental savings, reusing the previous size
+  const measureStructMethod = async (
+    key: string,
+    enabled: boolean,
+    apply: (doc: PDFDocument) => void | number
+  ) => {
+    if (!enabled) {
+      structSavings[key] = 0;
+      return;
+    }
+    const before = lastStructSize;
+    const result = apply(structDoc);
+    lastStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
+    structSavings[key] = Math.max(0, before - lastStructSize);
+    return result;
+  };
 
-  const afterStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
-  const totalStructSaved = Math.max(0, beforeStructSize - afterStructSize);
+  // Apply each method incrementally, measuring the delta
+  await measureStructMethod('removeJavaScript', options.removeJavaScript, removeJS);
+  await measureStructMethod('removeBookmarks', options.removeBookmarks, removeBM);
+  await measureStructMethod('removeNamedDestinations', options.removeNamedDestinations, removeND);
+  await measureStructMethod('removeArticleThreads', options.removeArticleThreads, removeAT);
+  await measureStructMethod('removeWebCaptureInfo', options.removeWebCaptureInfo, removeWC);
+  await measureStructMethod('removeHiddenLayers', options.removeHiddenLayers, removeHL);
+  await measureStructMethod('removePageLabels', options.removePageLabels, removePL);
+  await measureStructMethod('deepCleanMetadata', options.deepCleanMetadata, deepCleanMD);
+  await measureStructMethod('removeThumbnails', options.removeThumbnails, removeTN);
+  const attResult = await measureStructMethod('removeAttachments', options.removeAttachments, removeATT);
+  if (typeof attResult === 'number') structAttachmentsRemoved = attResult;
+  await measureStructMethod('flattenForms', options.flattenForms, flattenFM);
+  await measureStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
 
   onProgress?.('Creating final compressed file...');
 
-  // Build final compressed PDF
-  const { pdfDoc: fullDoc } = await loadPdf(workingBuffer);
-
-  // Apply all cleanup to final document
+  // Measure metadata savings and build final PDF on the same document
+  // (avoids an extra load+save round-trip by reusing structDoc)
+  let metaSaved = 0;
   if (options.stripMetadata) {
-    stripMetadata(fullDoc);
+    const preMetaSize = lastStructSize;
+    stripMetadata(structDoc);
+    lastStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
+    metaSaved = Math.max(0, preMetaSize - lastStructSize);
   }
 
-  applyStructureCleanup(fullDoc, {
-    removeJavaScript: options.removeJavaScript,
-    removeBookmarks: options.removeBookmarks,
-    removeNamedDestinations: options.removeNamedDestinations,
-    removeArticleThreads: options.removeArticleThreads,
-    removeWebCaptureInfo: options.removeWebCaptureInfo,
-    removeHiddenLayers: options.removeHiddenLayers,
-    removePageLabels: options.removePageLabels,
-    deepCleanMetadata: options.deepCleanMetadata,
-    removeThumbnails: options.removeThumbnails,
-    removeAttachments: options.removeAttachments,
-    flattenForms: options.flattenForms,
-    flattenAnnotations: options.flattenAnnotations,
-  });
-
-  const fullCompressedBytes = await fullDoc.save({
+  // Final save — measure object streams savings by comparing with/without
+  const withoutOsSize = lastStructSize;
+  const fullCompressedBytes = await structDoc.save({
     useObjectStreams: options.useObjectStreams,
   });
 
-  // Build method results with actual savings
+  const osSaved = options.useObjectStreams
+    ? Math.max(0, withoutOsSize - fullCompressedBytes.byteLength)
+    : 0;
+
+  // Build method results with actual measured savings
   const methodResults: MethodResult[] = [
     {
       key: 'useObjectStreams',
       savedBytes: osSaved,
-      compressedSize: osBytes.byteLength,
-      displaySavedBytes: osSaved - (baselineSize - originalSize),
+      compressedSize: originalSize - osSaved,
     },
     {
       key: 'stripMetadata',
       savedBytes: metaSaved,
-      compressedSize: metaBytes.byteLength,
+      compressedSize: originalSize - metaSaved,
     },
     {
       key: 'recompressImages',
@@ -394,7 +403,6 @@ export const analyzePdf = async (
       compressedSize: baselineSize - downsampleSaved,
       details: { imagesProcessed: imagesDownsampled, imagesSkipped: imagesProcessed - imagesDownsampled },
     },
-    // Image conversion methods with actual savings
     { key: 'convertToGrayscale', savedBytes: 0, compressedSize: baselineSize }, // Savings included in recompressImages
     {
       key: 'pngToJpeg',
@@ -418,11 +426,11 @@ export const analyzePdf = async (
       savedBytes: cmykSaved,
       compressedSize: baselineSize - cmykSaved,
     },
-    // Structure cleanup with measured savings
+    // Structure cleanup with individually measured savings
     {
       key: 'removeThumbnails',
-      savedBytes: totalStructSaved > 0 && options.removeThumbnails ? Math.floor(totalStructSaved / 10) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['removeThumbnails'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removeThumbnails'] ?? 0),
     },
     {
       key: 'removeDuplicateResources',
@@ -436,61 +444,61 @@ export const analyzePdf = async (
     },
     {
       key: 'removeAttachments',
-      savedBytes: totalStructSaved > 0 && options.removeAttachments ? Math.floor(totalStructSaved / 5) : 0,
-      compressedSize: baselineSize,
-      details: { imagesProcessed: structResult.attachmentsRemoved },
+      savedBytes: structSavings['removeAttachments'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removeAttachments'] ?? 0),
+      details: { imagesProcessed: structAttachmentsRemoved },
     },
     {
       key: 'flattenForms',
-      savedBytes: totalStructSaved > 0 && options.flattenForms ? Math.floor(totalStructSaved / 8) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['flattenForms'] ?? 0,
+      compressedSize: baselineSize - (structSavings['flattenForms'] ?? 0),
     },
     {
       key: 'flattenAnnotations',
-      savedBytes: totalStructSaved > 0 && options.flattenAnnotations ? Math.floor(totalStructSaved / 10) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['flattenAnnotations'] ?? 0,
+      compressedSize: baselineSize - (structSavings['flattenAnnotations'] ?? 0),
     },
     {
       key: 'removeJavaScript',
-      savedBytes: totalStructSaved > 0 && options.removeJavaScript ? Math.floor(totalStructSaved / 15) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['removeJavaScript'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removeJavaScript'] ?? 0),
     },
     {
       key: 'removeBookmarks',
-      savedBytes: totalStructSaved > 0 && options.removeBookmarks ? Math.floor(totalStructSaved / 12) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['removeBookmarks'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removeBookmarks'] ?? 0),
     },
     {
       key: 'removeNamedDestinations',
-      savedBytes: totalStructSaved > 0 && options.removeNamedDestinations ? Math.floor(totalStructSaved / 20) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['removeNamedDestinations'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removeNamedDestinations'] ?? 0),
     },
     {
       key: 'removeArticleThreads',
-      savedBytes: totalStructSaved > 0 && options.removeArticleThreads ? Math.floor(totalStructSaved / 25) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['removeArticleThreads'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removeArticleThreads'] ?? 0),
     },
     {
       key: 'removeWebCaptureInfo',
-      savedBytes: totalStructSaved > 0 && options.removeWebCaptureInfo ? Math.floor(totalStructSaved / 25) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['removeWebCaptureInfo'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removeWebCaptureInfo'] ?? 0),
     },
     {
       key: 'removeHiddenLayers',
-      savedBytes: totalStructSaved > 0 && options.removeHiddenLayers ? Math.floor(totalStructSaved / 15) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['removeHiddenLayers'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removeHiddenLayers'] ?? 0),
     },
     {
       key: 'removePageLabels',
-      savedBytes: totalStructSaved > 0 && options.removePageLabels ? Math.floor(totalStructSaved / 30) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['removePageLabels'] ?? 0,
+      compressedSize: baselineSize - (structSavings['removePageLabels'] ?? 0),
     },
     {
       key: 'deepCleanMetadata',
-      savedBytes: totalStructSaved > 0 && options.deepCleanMetadata ? Math.floor(totalStructSaved / 3) : 0,
-      compressedSize: baselineSize,
+      savedBytes: structSavings['deepCleanMetadata'] ?? 0,
+      compressedSize: baselineSize - (structSavings['deepCleanMetadata'] ?? 0),
     },
-    // Advanced optimization methods (Phase 2 - New)
+    // Advanced optimization methods
     {
       key: 'inlineToXObject',
       savedBytes: inlineToXObjectSaved,
