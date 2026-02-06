@@ -149,7 +149,7 @@ export const BetaFeedbackBanner = () => {
       <motion.div
         initial={{ y: -100 }}
         animate={{ y: 0 }}
-        className="bg-transparent text-slate-900 border-b border-slate-300 relative z-20"
+        className="bg-white/30 text-slate-900 border-b border-slate-300 relative z-20"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-10">
@@ -175,13 +175,12 @@ export const BetaFeedbackBanner = () => {
                 {isExpanded ? (
                   <>
                     <ChevronUp className="w-3 h-3" />
-                    <span className="hidden sm:inline">Collapse</span>
+                    <span>Collapse</span>
                   </>
                 ) : (
                   <>
-                    <MessageSquare className="w-3 h-3" />
-                    <span className="hidden sm:inline">Give Feedback</span>
-                    <span className="sm:hidden">Feedback</span>
+                    <ChevronDown className="w-3 h-3" />
+                    <span>Expand</span>
                   </>
                 )}
               </button>
@@ -198,7 +197,7 @@ export const BetaFeedbackBanner = () => {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="bg-transparent border-b border-slate-300 overflow-hidden relative z-10"
+            className="bg-white/30 border-b border-slate-300 overflow-hidden relative z-10"
           >
             <div className="max-w-2xl mx-auto px-4 py-4">
               {/* Success State */}
@@ -235,7 +234,7 @@ export const BetaFeedbackBanner = () => {
                             'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
                             activeTab === 'feedback'
                               ? 'bg-slate-900 text-white'
-                              : 'bg-white border border-slate-300 text-slate-600 hover:border-slate-500'
+                              : 'bg-white/90 border border-slate-300 text-slate-600 hover:border-slate-500'
                           )}
                         >
                           <MessageSquare className="w-3 h-3" />
@@ -247,7 +246,7 @@ export const BetaFeedbackBanner = () => {
                             'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
                             activeTab === 'feature'
                               ? 'bg-slate-900 text-white'
-                              : 'bg-white border border-slate-300 text-slate-600 hover:border-slate-500'
+                              : 'bg-white/90 border border-slate-300 text-slate-600 hover:border-slate-500'
                           )}
                         >
                           <Lightbulb className="w-3 h-3" />
@@ -262,7 +261,7 @@ export const BetaFeedbackBanner = () => {
                           value={contact}
                           onChange={(e) => setContact(e.target.value)}
                           placeholder="Name/Email (optional)"
-                          className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
+                          className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-300 bg-white/90 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
                         />
                         <input
                           type="text"
@@ -278,7 +277,7 @@ export const BetaFeedbackBanner = () => {
                               ? 'I wish this app could...'
                               : 'Something is not working...'
                           }
-                          className="flex-1 px-3 py-2 text-sm rounded border border-slate-300 bg-white text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
+                          className="flex-1 px-3 py-2 text-sm rounded border border-slate-300 bg-white/90 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
                         />
                         <button
                           onClick={handleSubmit}
@@ -301,13 +300,13 @@ export const BetaFeedbackBanner = () => {
                     {recentFeedback.length > 0 && (
                       <div className="pt-4 border-t border-slate-300">
                         <div className="flex items-center justify-between mb-3">
-                          <h4 className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                          <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider bg-white/90 px-2 py-1 rounded">
                             Recent Community Input
                           </h4>
                           {recentFeedback.length > 2 && (
                             <button
                               onClick={() => setShowAllFeedback(!showAllFeedback)}
-                              className="text-[10px] font-medium text-slate-400 hover:text-slate-600 transition-colors"
+                              className="text-[10px] font-medium text-slate-600 hover:text-slate-800 transition-colors bg-white/90 px-2 py-1 rounded"
                             >
                               {showAllFeedback ? 'Show Less' : `See All (${recentFeedback.length})`}
                             </button>
@@ -317,7 +316,7 @@ export const BetaFeedbackBanner = () => {
                           {recentFeedback
                             .slice(0, showAllFeedback ? undefined : 2)
                             .map((item, i) => (
-                              <div key={i} className="bg-white p-3 rounded border border-slate-300 text-xs">
+                              <div key={i} className="bg-white/90 p-3 rounded border border-slate-300 text-xs">
                                 <div className="flex items-center gap-1.5 mb-1.5 text-slate-400">
                                   {item.type === 'feature' ? (
                                     <Lightbulb className="w-3 h-3 text-amber-500" />
