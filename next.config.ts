@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
-import { withSentryConfig } from "@sentry/nextjs";
+
 import bundleAnalyzer from "@next/bundle-analyzer";
 
 const withBundleAnalyzer = bundleAnalyzer({
-  enabled: process.env.ANALYZE === "true",
+  enabled: false, // process.env.ANALYZE === "true",
 });
 
 /* =========================
@@ -34,7 +34,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob: https://www.google-analytics.com https://www.googletagmanager.com",
       "font-src 'self'",
-      "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://*.sentry.io https://docs.google.com",
+      "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://docs.google.com",
       "worker-src 'self' blob:",
       "frame-ancestors 'self'",
       "form-action 'self'",
@@ -49,12 +49,12 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // General
   output: "export",
+  trailingSlash: true,
   poweredByHeader: false,
   compress: true,
   generateEtags: true,
   reactStrictMode: true,
 
-  // Sentry
   productionBrowserSourceMaps: false,
 
   // Image optimization (static export compatible)
@@ -63,16 +63,22 @@ const nextConfig: NextConfig = {
   },
 
   // Experimental features
-  experimental: {
-    // Optimize CSS bundling to reduce unused preload warnings
-    optimizeCss: true,
-    // Use strict CSS chunking to bundle CSS with its JavaScript
-    // This prevents preload warnings by ensuring CSS is loaded
-    // only when its associated JS chunk is needed
-    cssChunking: "strict",
-  },
+  /*
+   experimental: {
+     // Optimize CSS bundling to reduce unused preload warnings
+     optimizeCss: false, // temporarily disabled
+     // Use strict CSS chunking to bundle CSS with its JavaScript
+     // This prevents preload warnings by ensuring CSS is loaded
+     // only when its associated JS chunk is needed
+     cssChunking: "strict",
+   },
+   */
 
   // Headers (MERGED, single implementation)
+  // Headers (MERGED, single implementation)
+  // Note: Headers are not supported in 'output: export' mode within next.config.js
+  // They must be configured in your hosting platform (e.g., netlify.toml, vercel.json)
+  /*
   async headers() {
     return [
       {
@@ -91,8 +97,10 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  */
 
-  // Webpack config for Web Workers and CSS optimization
+  // Webpack config (Commented out to support Turbopack)
+  /*
   webpack: (config, { isServer }) => {
     if (!isServer) {
       config.resolve.fallback = {
@@ -118,6 +126,7 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
+  */
 };
 
 /* =========================
@@ -127,19 +136,5 @@ const nextConfig: NextConfig = {
 // Bundle analyzer
 const configWithAnalyzer = withBundleAnalyzer(nextConfig);
 
-// Sentry plugin options
-const sentryWebpackPluginOptions = {
-  silent: true,
-  org: process.env.SENTRY_ORG,
-  project: process.env.SENTRY_PROJECT,
-  disableServerWebpackPlugin: !process.env.SENTRY_DSN,
-  disableClientWebpackPlugin: !process.env.NEXT_PUBLIC_SENTRY_DSN,
-  hideSourceMaps: true,
-  disableLogger: true,
-};
-
 // Export final config
-export default withSentryConfig(
-  configWithAnalyzer,
-  sentryWebpackPluginOptions
-);
+export default configWithAnalyzer;

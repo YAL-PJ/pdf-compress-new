@@ -1,6 +1,5 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
@@ -16,8 +15,8 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Report error to Sentry
-    Sentry.captureException(error);
+    // Report error to console (Sentry removed)
+    console.error('Global Error caught:', error);
   }, [error]);
 
   return (

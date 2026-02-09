@@ -4,8 +4,9 @@
  */
 
 import { PDFDocument } from 'pdf-lib';
-import type { PdfInfo, MethodResult, ImageCompressionSettings, CompressionOptions, RecompressedImage } from './types';
+import type { PdfInfo, MethodResult, ImageCompressionSettings, CompressionOptions, RecompressedImage, CompressionReport, ProcessingLog } from './types';
 import { DEFAULT_IMAGE_SETTINGS, DEFAULT_COMPRESSION_OPTIONS } from './types';
+import { formatBytes } from './utils';
 import {
   extractImages,
   recompressImages,
@@ -94,6 +95,7 @@ export const analyzePdf = async (
   fullCompressedBytes: Uint8Array;
   methodResults: MethodResult[];
   imageStats?: ImageStats;
+  report: CompressionReport;
 }> => {
   const originalSize = arrayBuffer.byteLength;
   const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
@@ -102,14 +104,46 @@ export const analyzePdf = async (
 
   // Load PDF once for info and baseline
   const { pdfDoc: baseDoc, info } = await loadPdf(arrayBuffer);
+  // Establish baseline size
   const baselineBytes = await baseDoc.save({ useObjectStreams: false });
   const baselineSize = baselineBytes.byteLength;
 
+  // Tracking Report
+  const report: CompressionReport = {
+    timestamp: Date.now(),
+    originalSize,
+    compressedSize: 0, // Set at end
+    pageCount: info.pageCount,
+    methodsUsed: [],
+    methodsSuccessful: [],
+    errors: [],
+    logs: [],
+  };
+
+  const log = (level: ProcessingLog['level'], message: string, details?: string | object) => {
+    report.logs.push({
+      timestamp: Date.now(),
+      level,
+      message,
+      details,
+    });
+  };
+
+  log('info', `Started analysis of ${info.title || 'PDF'}`, {
+    originalSize: formatBytes(originalSize),
+    pageCount: info.pageCount,
+    settings: options
+  });
+
   // Image processing - extract both JPEG and PNG if needed
   onProgress?.('Analyzing images...');
+  log('info', 'Analyzing document images...');
+
   const { pdfDoc: imgDoc } = await loadPdf(arrayBuffer);
   const extractPng = options.pngToJpeg;
   const { images, stats: imageStats } = await extractImages(imgDoc, onProgress, settings.targetDpi, extractPng);
+
+  log('info', `Found ${images.length} images`, imageStats);
 
   // Track savings for each method
   let imageSaved = 0;
@@ -138,7 +172,9 @@ export const analyzePdf = async (
   // Process JPEG images
   const jpegImages = images.filter(img => img.format === 'jpeg');
   if (jpegImages.length > 0 && options.recompressImages) {
+    report.methodsUsed.push('recompressImages');
     onProgress?.(`Processing ${jpegImages.length} JPEG images...`);
+    log('info', `Recompressing ${jpegImages.length} JPEG images...`);
 
     const extendedSettings: ExtendedImageSettings = {
       ...settings,
@@ -160,13 +196,22 @@ export const analyzePdf = async (
     downsampleSaved = downsampleSavings;
     imageSaved = totalSavings - downsampleSavings;
 
+    if (totalSavings > 0) {
+      report.methodsSuccessful.push('recompressImages');
+      log('success', `Recompressed ${imagesProcessed} JPEGs`, { savedBytes: totalSavings, downsampled: imagesDownsampled });
+    } else {
+      log('info', 'No savings from JPEG recompression');
+    }
+
     allRecompressedImages.push(...recompressedImages);
   }
 
   // Convert PNG to JPEG
   const pngImages = images.filter(img => img.format === 'png');
   if (pngImages.length > 0 && options.pngToJpeg) {
+    report.methodsUsed.push('pngToJpeg');
     onProgress?.(`Converting ${pngImages.length} PNG images to JPEG...`);
+    log('info', `Converting ${pngImages.length} PNGs to JPEG...`);
 
     const { results: convertedPngs, savings } = await convertPngsToJpeg(
       pngImages,
@@ -177,6 +222,11 @@ export const analyzePdf = async (
     pngsConverted = convertedPngs.length;
     pngToJpegSaved = savings;
     allRecompressedImages.push(...convertedPngs);
+
+    if (savings > 0) {
+      report.methodsSuccessful.push('pngToJpeg');
+      log('success', `Converted ${pngsConverted} PNGs`, { savedBytes: savings });
+    }
   }
 
   // Embed all processed images
@@ -196,11 +246,12 @@ export const analyzePdf = async (
 
   // Remove alpha channels
   if (options.removeAlphaChannels) {
-    onProgress?.('Removing alpha channels...');
+    report.methodsUsed.push('removeAlphaChannels');
     const { pdfDoc: alphaDoc } = await loadPdf(workingBuffer);
     const alphaResult = removeAlphaChannels(alphaDoc);
     alphaSaved = alphaResult.savedBytes;
     if (alphaResult.processed > 0) {
+      log('success', `Removed alpha channels from ${alphaResult.processed} images`);
       const alphaBytes = await alphaDoc.save({ useObjectStreams: false });
       workingBuffer = alphaBytes.buffer as ArrayBuffer;
     }
@@ -208,11 +259,12 @@ export const analyzePdf = async (
 
   // Remove ICC profiles
   if (options.removeColorProfiles) {
-    onProgress?.('Removing ICC color profiles...');
+    report.methodsUsed.push('removeColorProfiles');
     const { pdfDoc: iccDoc } = await loadPdf(workingBuffer);
     const iccResult = removeIccProfiles(iccDoc);
     iccSaved = iccResult.savedBytes;
     if (iccResult.removed > 0) {
+      log('success', `Removed ${iccResult.removed} ICC profiles`);
       const iccBytes = await iccDoc.save({ useObjectStreams: false });
       workingBuffer = iccBytes.buffer as ArrayBuffer;
     }
@@ -220,11 +272,12 @@ export const analyzePdf = async (
 
   // Convert CMYK to RGB
   if (options.cmykToRgb) {
-    onProgress?.('Converting CMYK images to RGB...');
+    report.methodsUsed.push('cmykToRgb');
     const { pdfDoc: cmykDoc } = await loadPdf(workingBuffer);
     const cmykResult = await convertCmykToRgb(cmykDoc, settings.quality, onProgress);
     cmykSaved = cmykResult.savedBytes;
     if (cmykResult.converted > 0) {
+      log('success', `Converted ${cmykResult.converted} CMYK images to RGB`);
       const cmykBytes = await cmykDoc.save({ useObjectStreams: false });
       workingBuffer = cmykBytes.buffer as ArrayBuffer;
     }
@@ -232,36 +285,47 @@ export const analyzePdf = async (
 
   // Remove duplicate resources
   if (options.removeDuplicateResources) {
+    report.methodsUsed.push('removeDuplicateResources');
     onProgress?.('Removing duplicate resources...');
     const { pdfDoc: dedupDoc } = await loadPdf(workingBuffer);
     const dedupResult = removeDuplicateResources(dedupDoc);
     duplicateSaved = dedupResult.bytesEstimatedSaved;
     if (dedupResult.duplicatesFound > 0) {
+      report.methodsSuccessful.push('removeDuplicateResources');
+      log('success', `Removed ${dedupResult.duplicatesFound} duplicate resources`, { saved: duplicateSaved });
       const dedupBytes = await dedupDoc.save({ useObjectStreams: false });
       workingBuffer = dedupBytes.buffer as ArrayBuffer;
+    } else {
+      log('info', 'No duplicate resources found');
     }
   }
 
   // Remove unused fonts
   if (options.removeUnusedFonts) {
+    report.methodsUsed.push('removeUnusedFonts');
     onProgress?.('Removing unused fonts...');
     const { pdfDoc: fontDoc } = await loadPdf(workingBuffer);
     const sizeBefore = (await fontDoc.save({ useObjectStreams: false })).byteLength;
     const fontResult = removeUnusedFonts(fontDoc);
     if (fontResult.fontsRemoved > 0) {
+      report.methodsSuccessful.push('removeUnusedFonts');
+      log('success', `Removed ${fontResult.fontsRemoved} unused fonts`, { fonts: fontResult.fontNames });
       const fontBytes = await fontDoc.save({ useObjectStreams: false });
       fontSaved = Math.max(0, sizeBefore - fontBytes.byteLength);
       workingBuffer = fontBytes.buffer as ArrayBuffer;
+    } else {
+      log('info', 'No unused fonts found');
     }
   }
 
   // Convert inline images to XObjects (2.2)
   if (options.inlineToXObject) {
-    onProgress?.('Converting inline images to XObjects...');
+    report.methodsUsed.push('inlineToXObject');
     const { pdfDoc: inlineDoc } = await loadPdf(workingBuffer);
     const inlineResult = await convertInlineImagesToXObjects(inlineDoc, onProgress);
     inlineToXObjectSaved = inlineResult.savedBytes;
     if (inlineResult.converted > 0) {
+      log('success', `Converted ${inlineResult.converted} inline images to XObjects`);
       const inlineBytes = await inlineDoc.save({ useObjectStreams: false });
       workingBuffer = inlineBytes.buffer as ArrayBuffer;
     }
@@ -269,11 +333,12 @@ export const analyzePdf = async (
 
   // Compress content streams (2.3)
   if (options.compressContentStreams) {
-    onProgress?.('Compressing content streams...');
+    report.methodsUsed.push('compressContentStreams');
     const { pdfDoc: streamDoc } = await loadPdf(workingBuffer);
     const streamResult = await compressContentStreams(streamDoc, onProgress);
     contentStreamSaved = streamResult.savedBytes;
     if (streamResult.streamsCompressed > 0) {
+      log('success', `Compressed ${streamResult.streamsCompressed} content streams`);
       const streamBytes = await streamDoc.save({ useObjectStreams: false });
       workingBuffer = streamBytes.buffer as ArrayBuffer;
     }
@@ -281,11 +346,13 @@ export const analyzePdf = async (
 
   // Remove orphan objects (2.4)
   if (options.removeOrphanObjects) {
-    onProgress?.('Removing orphan objects...');
+    report.methodsUsed.push('removeOrphanObjects');
     const { pdfDoc: orphanDoc } = await loadPdf(workingBuffer);
     const orphanResult = await removeOrphanObjects(orphanDoc, onProgress);
     orphansSaved = orphanResult.savedBytes;
     if (orphanResult.orphansRemoved > 0) {
+      report.methodsSuccessful.push('removeOrphanObjects');
+      log('success', `Removed ${orphanResult.orphansRemoved} orphan objects`);
       const orphanBytes = await orphanDoc.save({ useObjectStreams: false });
       workingBuffer = orphanBytes.buffer as ArrayBuffer;
     }
@@ -293,11 +360,12 @@ export const analyzePdf = async (
 
   // Remove alternate content (2.5)
   if (options.removeAlternateContent) {
-    onProgress?.('Removing alternate content...');
+    report.methodsUsed.push('removeAlternateContent');
     const { pdfDoc: altDoc } = await loadPdf(workingBuffer);
     const altResult = await removeAlternateContent(altDoc, onProgress);
     alternateSaved = altResult.savedBytes;
     if (altResult.alternatesRemoved > 0 || altResult.printOnlyRemoved > 0 || altResult.screenOnlyRemoved > 0) {
+      log('success', `Removed alternate content objects`);
       const altBytes = await altDoc.save({ useObjectStreams: false });
       workingBuffer = altBytes.buffer as ArrayBuffer;
     }
@@ -305,11 +373,12 @@ export const analyzePdf = async (
 
   // Remove invisible text (2.6)
   if (options.removeInvisibleText) {
-    onProgress?.('Removing invisible text...');
+    report.methodsUsed.push('removeInvisibleText');
     const { pdfDoc: invisDoc } = await loadPdf(workingBuffer);
     const invisResult = await removeInvisibleText(invisDoc, onProgress);
     invisibleTextSaved = invisResult.savedBytes;
     if (invisResult.pagesProcessed > 0) {
+      log('success', `Removed invisible text from ${invisResult.pagesProcessed} pages`);
       const invisBytes = await invisDoc.save({ useObjectStreams: false });
       workingBuffer = invisBytes.buffer as ArrayBuffer;
     }
@@ -335,15 +404,23 @@ export const analyzePdf = async (
       structSavings[key] = 0;
       return;
     }
+    report.methodsUsed.push(key);
     const before = lastStructSize;
     const result = apply(structDoc);
     lastStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
-    structSavings[key] = Math.max(0, before - lastStructSize);
+    const saved = Math.max(0, before - lastStructSize);
+    structSavings[key] = saved;
+    if (saved > 0) {
+      report.methodsSuccessful.push(key);
+      // Clean key for display (camelCase to words approx)
+      log('success', `Applied cleanup: ${key}`, { saved });
+    }
     return result;
   };
 
   // Apply each method incrementally, measuring the delta
   await measureStructMethod('removeJavaScript', options.removeJavaScript, removeJS);
+  // ... rest of calls follow original order
   await measureStructMethod('removeBookmarks', options.removeBookmarks, removeBM);
   await measureStructMethod('removeNamedDestinations', options.removeNamedDestinations, removeND);
   await measureStructMethod('removeArticleThreads', options.removeArticleThreads, removeAT);
@@ -363,10 +440,12 @@ export const analyzePdf = async (
   // (avoids an extra load+save round-trip by reusing structDoc)
   let metaSaved = 0;
   if (options.stripMetadata) {
+    report.methodsUsed.push('stripMetadata');
     const preMetaSize = lastStructSize;
     stripMetadata(structDoc);
     lastStructSize = (await structDoc.save({ useObjectStreams: false })).byteLength;
     metaSaved = Math.max(0, preMetaSize - lastStructSize);
+    if (metaSaved > 0) log('success', 'Stripped standard metadata');
   }
 
   // Final save — measure object streams savings by comparing with/without
@@ -378,6 +457,12 @@ export const analyzePdf = async (
   const osSaved = options.useObjectStreams
     ? Math.max(0, withoutOsSize - fullCompressedBytes.byteLength)
     : 0;
+
+  if (options.useObjectStreams && osSaved > 0) {
+    report.methodsUsed.push('useObjectStreams');
+    report.methodsSuccessful.push('useObjectStreams');
+    log('success', 'Applied Object Streams compression', { saved: osSaved });
+  }
 
   // Build method results with actual measured savings
   const methodResults: MethodResult[] = [
@@ -528,6 +613,18 @@ export const analyzePdf = async (
 
   onProgress?.('Done!');
 
+  report.compressedSize = fullCompressedBytes.byteLength;
+  report.logs.push({
+    timestamp: Date.now(),
+    level: 'success',
+    message: 'Compression completed successfully',
+    details: {
+      methodCount: report.methodsUsed.length,
+      original: formatBytes(report.originalSize),
+      compressed: formatBytes(report.compressedSize)
+    }
+  });
+
   return {
     originalSize,
     pageCount: info.pageCount,
@@ -535,5 +632,6 @@ export const analyzePdf = async (
     fullCompressedBytes,
     methodResults,
     imageStats,
+    report,
   };
 };

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, memo } from 'react';
 import { renderPageToImage } from '@/lib/pdf-renderer';
 import { Loader2, Trash2, RotateCw } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -15,7 +15,7 @@ interface PageThumbnailProps {
     rotation?: number; // 0, 90, 180, 270
 }
 
-export const PageThumbnail = ({
+export const PageThumbnail = memo(({
     file,
     pageIndex,
     onToggleDelete,
@@ -52,7 +52,13 @@ export const PageThumbnail = ({
         const handleIntersect: IntersectionObserverCallback = (entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    loadThumbnail();
+                    // Schedule rendering when browser is idle to prevent INP spikes
+                    if ('requestIdleCallback' in window) {
+                        (window as any).requestIdleCallback(() => loadThumbnail());
+                    } else {
+                        setTimeout(() => loadThumbnail(), 100);
+                    }
+
                     // Stop observing once loaded
                     if (containerRef.current && observerRef.current) {
                         observerRef.current.unobserve(containerRef.current);
@@ -160,4 +166,6 @@ export const PageThumbnail = ({
             </div>
         </motion.div>
     );
-};
+});
+
+PageThumbnail.displayName = 'PageThumbnail';

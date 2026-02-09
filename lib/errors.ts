@@ -20,7 +20,8 @@ export type PdfErrorCode =
   | 'ENCRYPTED_PDF'
   | 'CORRUPTED_PDF'
   | 'PROCESSING_FAILED'
-  | 'WORKER_ERROR';
+  | 'WORKER_ERROR'
+  | 'STALE_WORKER';
 
 export const createPdfError = (code: PdfErrorCode, details?: string): PdfError => {
   const errors: Record<PdfErrorCode, { message: string; userMessage: string }> = {
@@ -47,6 +48,10 @@ export const createPdfError = (code: PdfErrorCode, details?: string): PdfError =
     WORKER_ERROR: {
       message: `Worker error${details ? `: ${details}` : ''}`,
       userMessage: 'An unexpected error occurred. Please try again.',
+    },
+    STALE_WORKER: {
+      message: `Stale worker script${details ? `: ${details}` : ''}`,
+      userMessage: 'The app was updated. Please refresh the page.',
     },
   };
 

@@ -1,34 +1,48 @@
 'use client';
 
-import { CompressionOptions, ImageCompressionSettings } from '@/lib/types';
 import { PRESETS, PresetId, getPresetForCurrentSettings } from '@/lib/presets';
 import { trackPresetSelected } from '@/lib/analytics';
 import { motion } from 'framer-motion';
 import { twMerge } from 'tailwind-merge';
+import { memo, useState, useEffect } from 'react';
+import { usePdf } from '@/context/PdfContext';
 
-interface PresetSelectorProps {
-    options: CompressionOptions;
-    imageSettings: ImageCompressionSettings;
-    onSelect: (options: CompressionOptions, imageSettings: ImageCompressionSettings, presetId: PresetId) => void;
-    disabled?: boolean;
-}
+// No props needed! Fully autonomous component
+export const PresetSelector = memo(() => {
+    const { options, imageSettings, setOptions, setImageSettings, isProcessing, isUpdating } = usePdf();
 
-export const PresetSelector = ({
-    options,
-    imageSettings,
-    onSelect,
-    disabled = false,
-}: PresetSelectorProps) => {
-    const currentPresetId = getPresetForCurrentSettings(options, imageSettings);
+    // Check disabled state
+    const disabled = isProcessing && !isUpdating;
+
+    // Optimistic local state for immediate feedback
+    const realPresetId = getPresetForCurrentSettings(options, imageSettings);
+    const [optimisticPresetId, setOptimisticPresetId] = useState<PresetId | null>(null);
+
+    // Sync optimistic state when real state updates
+    useEffect(() => {
+        setOptimisticPresetId(null);
+    }, [realPresetId]);
+
+    const activePresetId = optimisticPresetId ?? realPresetId;
 
     const handlePresetClick = (presetId: PresetId) => {
         if (disabled || presetId === 'custom') return;
 
-        // Track preset selection
-        trackPresetSelected(presetId);
+        // Immediate visual feedback
+        setOptimisticPresetId(presetId);
+
+        // Defer tracking slightly to prioritize UI update
+        setTimeout(() => trackPresetSelected(presetId), 0);
 
         const preset = PRESETS[presetId];
-        onSelect(preset.options, preset.imageSettings, presetId);
+
+        // Use React transition for smooth updates if available, or just direct update
+        import('react').then(({ startTransition }) => {
+            startTransition(() => {
+                setOptions(preset.options);
+                setImageSettings(preset.imageSettings);
+            });
+        });
     };
 
     const presetKeys: PresetId[] = ['minimal', 'balanced', 'aggressive'];
@@ -37,7 +51,7 @@ export const PresetSelector = ({
         <div className="grid grid-cols-1 gap-2 mb-6">
             {presetKeys.map((key) => {
                 const preset = PRESETS[key];
-                const isActive = currentPresetId === key;
+                const isActive = activePresetId === key;
                 const Icon = preset.icon;
 
                 return (
@@ -47,9 +61,9 @@ export const PresetSelector = ({
                         disabled={disabled}
                         className={twMerge(
                             "relative group p-3 rounded-lg border text-left transition-all duration-200",
-                            "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1",
+                            "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1 select-none",
                             isActive
-                                ? "bg-slate-900 border-slate-900 text-white shadow-md"
+                                ? "bg-slate-900 border-slate-900 text-white shadow-md transform scale-[1.02]"
                                 : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50",
                             disabled && "opacity-50 cursor-not-allowed"
                         )}
@@ -72,6 +86,7 @@ export const PresetSelector = ({
                         {isActive && (
                             <motion.div
                                 layoutId="active-preset"
+                                transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
                                 className="absolute top-1/2 -translate-y-1/2 right-3 w-1.5 h-1.5 rounded-full bg-emerald-400"
                             />
                         )}
@@ -80,4 +95,6 @@ export const PresetSelector = ({
             })}
         </div>
     );
-};
+});
+
+PresetSelector.displayName = 'PresetSelector';

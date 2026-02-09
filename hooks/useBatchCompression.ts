@@ -9,9 +9,22 @@ import type {
     ImageCompressionSettings,
     CompressionOptions,
 } from '@/lib/types';
-import { DEFAULT_IMAGE_SETTINGS, DEFAULT_COMPRESSION_OPTIONS } from '@/lib/types';
 import { validateFile, validatePdfSignature } from '@/lib/utils';
 import { createPdfError } from '@/lib/errors';
+
+const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
+    useObjectStreams: true, stripMetadata: true, recompressImages: true, downsampleImages: false,
+    convertToGrayscale: false, pngToJpeg: false, convertToMonochrome: false, removeAlphaChannels: false,
+    removeColorProfiles: false, cmykToRgb: false, removeThumbnails: true, removeDuplicateResources: false,
+    removeUnusedFonts: false, removeAttachments: false, flattenForms: false, flattenAnnotations: false,
+    removeJavaScript: true, removeBookmarks: false, removeNamedDestinations: false, removeArticleThreads: true,
+    removeWebCaptureInfo: true, removeHiddenLayers: false, removePageLabels: false, deepCleanMetadata: false,
+    inlineToXObject: false, compressContentStreams: true, removeOrphanObjects: true, removeAlternateContent: false,
+    removeInvisibleText: false,
+};
+const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
+    quality: 75, minSizeThreshold: 10 * 1024, targetDpi: 150, enableDownsampling: false,
+};
 
 interface BatchCompressionSettings {
     imageSettings: ImageCompressionSettings;
@@ -92,7 +105,7 @@ export const useBatchCompression = () => {
             // Create worker
             workerRef.current?.terminate();
             workerRef.current = new Worker(
-                new URL('../workers/pdf.worker.ts', import.meta.url)
+                new URL('../workers/compression.worker.ts', import.meta.url)
             );
 
             workerRef.current.onmessage = (event: MessageEvent<WorkerResponse>) => {

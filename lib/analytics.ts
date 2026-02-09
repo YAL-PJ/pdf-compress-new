@@ -139,3 +139,44 @@ export function trackPageOperation(operation: 'rotated' | 'deleted' | 'reordered
 export function trackCompressionError(errorCode: string): void {
   trackEvent('compression_error', { error_code: errorCode });
 }
+
+/**
+ * Send admin telemetry report (Fire and Forget)
+ */
+import { CompressionReport } from './types';
+
+export function trackTelemetry(report: CompressionReport): void {
+  // Use requestIdleCallback if available to avoid blocking main thread
+  const sendTelemetry = () => {
+    try {
+      // Create a lightweight version of the report to avoid massive JSON stringify
+      const lightweightReport = {
+        ...report,
+        // Keep only important logs (errors/warnings) + last 20 info logs to save space/time
+        logs: [
+          ...report.logs.filter(l => l.level === 'error' || l.level === 'warning'),
+          ...report.logs.filter(l => l.level !== 'error' && l.level !== 'warning').slice(-20)
+        ]
+      };
+
+      fetch('/api/telemetry', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ report: lightweightReport }),
+        keepalive: true,
+      }).catch(err => {
+        // Ignore network errors in client
+        if (process.env.NODE_ENV === 'development') console.error('Telemetry failed:', err);
+      });
+    } catch {
+      // Safety
+    }
+  };
+
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(sendTelemetry);
+  } else {
+    // Fallback for browsers without requestIdleCallback or Node env
+    setTimeout(sendTelemetry, 1000);
+  }
+}

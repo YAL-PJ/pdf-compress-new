@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect } from 'react';
-import * as Sentry from '@sentry/nextjs';
 import { AlertTriangle, RefreshCw, Bug } from 'lucide-react';
 
 /**
@@ -16,15 +15,13 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Report error to Sentry
-    Sentry.captureException(error);
+    // Report error to console (Sentry removed)
+    console.error('Route Segment Error:', error);
   }, [error]);
 
   const handleReportIssue = () => {
-    // Open Sentry feedback dialog if available
-    if (typeof window !== 'undefined' && error.digest) {
-      Sentry.showReportDialog({ eventId: error.digest });
-    }
+    // Console log reporting (Sentry removed)
+    console.log('User reported issue:', error);
   };
 
   return (

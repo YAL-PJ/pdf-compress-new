@@ -19,8 +19,26 @@ import type {
   WorkerProgressPayload,
   ImageCompressionSettings,
   CompressionOptions,
+  ProcessingSettings,
 } from '@/lib/types';
-import { DEFAULT_IMAGE_SETTINGS, DEFAULT_COMPRESSION_OPTIONS } from '@/lib/types';
+
+// Inline defaults to avoid import issues
+const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
+  useObjectStreams: true, stripMetadata: true, recompressImages: true, downsampleImages: false,
+  convertToGrayscale: false, pngToJpeg: false, convertToMonochrome: false, removeAlphaChannels: false,
+  removeColorProfiles: false, cmykToRgb: false, removeThumbnails: true, removeDuplicateResources: false,
+  removeUnusedFonts: false, removeAttachments: false, flattenForms: false, flattenAnnotations: false,
+  removeJavaScript: true, removeBookmarks: false, removeNamedDestinations: false, removeArticleThreads: true,
+  removeWebCaptureInfo: true, removeHiddenLayers: false, removePageLabels: false, deepCleanMetadata: false,
+  inlineToXObject: false, compressContentStreams: true, removeOrphanObjects: true, removeAlternateContent: false,
+  removeInvisibleText: false,
+};
+const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
+  quality: 75, minSizeThreshold: 10 * 1024, targetDpi: 150, enableDownsampling: false,
+};
+
+// Simple ID generator for job tracking
+const generateJobId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
 export type CompressionState =
   | { status: 'idle' }
@@ -28,11 +46,6 @@ export type CompressionState =
   | { status: 'processing'; progress: string; progressPercent?: number; fileName: string }
   | { status: 'done'; analysis: CompressionAnalysis; fileName: string; originalFile: File; isUpdating?: boolean }
   | { status: 'error'; error: PdfError };
-
-export interface ProcessingSettings {
-  imageSettings?: ImageCompressionSettings;
-  options?: CompressionOptions;
-}
 
 interface UsePdfCompressionReturn {
   state: CompressionState;
@@ -44,78 +57,53 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
   const [state, setState] = useState<CompressionState>({ status: 'idle' });
   const workerRef = useRef<Worker | null>(null);
   const isBackgroundRef = useRef<boolean>(false);
+  const currentJobIdRef = useRef<string | null>(null);
 
+  // Initialize worker immediately on mount
   useEffect(() => {
+    try {
+      if (!workerRef.current) {
+        initWorker();
+      }
+    } catch (err) {
+      console.error("Failed to init worker on mount:", err);
+    }
+
     return () => {
       workerRef.current?.terminate();
+      workerRef.current = null;
     };
   }, []);
 
-  const reset = useCallback(() => {
+  const initWorker = (retryCount = 0) => {
+    // Terminate existing if any
     workerRef.current?.terminate();
-    workerRef.current = null;
-    isBackgroundRef.current = false;
-    setState({ status: 'idle' });
-  }, []);
 
-  const processFile = useCallback((
-    file: File,
-    settings: ProcessingSettings = {},
-    isBackground: boolean = false
-  ) => {
-    const imageSettings = settings.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
-    const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
-
-    isBackgroundRef.current = isBackground;
-
-    if (isBackground) {
-      setState(prev => {
-        // Only set isUpdating if we are already done, otherwise fallback to normal processing
-        if (prev.status === 'done') {
-          return { ...prev, isUpdating: true };
-        }
-        return prev;
-      });
-    } else {
-      setState({ status: 'validating' });
-
-      const validation = validateFile(file);
-      if (!validation.valid) {
-        setState({
-          status: 'error',
-          error: createPdfError('INVALID_FILE_TYPE', validation.error),
-        });
-        return;
-      }
-
-      setState({ status: 'processing', progress: 'Starting...', fileName: file.name });
-
-      // Track file upload
-      trackFileUpload(file.size / 1024 / 1024);
-    }
-
-    // We always need the filename for the worker logs/state
-    const fileName = file.name;
-
-    workerRef.current?.terminate();
     workerRef.current = new Worker(
-      new URL('../workers/pdf.worker.ts', import.meta.url)
+      new URL('../workers/compression.worker.ts', import.meta.url)
     );
 
     workerRef.current.onmessage = (event: MessageEvent<WorkerResponse>) => {
-      const { type, payload } = event.data;
+      const { type, payload, jobId } = event.data;
+
+      // Ignore messages from old jobs (cancellation)
+      if (jobId !== currentJobIdRef.current) {
+        return;
+      }
 
       switch (type) {
         case 'progress': {
           if (isBackgroundRef.current) return; // Suppress progress in background mode
 
           const p = payload as WorkerProgressPayload;
-          setState({
+          setState(prev => ({
+            ...prev,
             status: 'processing',
             progress: p.message,
             progressPercent: p.percent,
-            fileName
-          });
+            // Keep existing fileName if available, or empty string
+            fileName: 'fileName' in prev && prev.fileName ? prev.fileName : ''
+          }));
           break;
         }
 
@@ -133,10 +121,10 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
             savingsRatio
           );
 
-          setState({
+          setState(prev => ({
             status: 'done',
-            fileName,
-            originalFile: file,
+            fileName: 'fileName' in prev ? prev.fileName : 'document.pdf', // Fallback
+            originalFile: 'originalFile' in prev ? prev.originalFile as File : new File([], 'error'), // Fallback
             isUpdating: false,
             analysis: {
               originalSize: s.originalSize,
@@ -145,8 +133,8 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
               fullBlob: new Blob([s.fullCompressedBuffer], { type: 'application/pdf' }),
               methodResults: s.methodResults,
               imageStats: s.imageStats,
-            },
-          });
+            }
+          }));
           break;
         }
 
@@ -154,7 +142,6 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
           isBackgroundRef.current = false;
           const e = payload as WorkerErrorPayload;
 
-          // Track compression error
           trackCompressionError(e.code);
 
           setState({
@@ -170,15 +157,88 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
     };
 
     workerRef.current.onerror = (error) => {
+      const msg = error.message || '';
+
+      const isStale = msg.includes('importScripts') || msg.includes('NetworkError') || msg.includes('Failed to fetch') || msg.includes('404');
+
+      if (isStale && retryCount < 3) {
+        console.warn(`Worker start failed (attempt ${retryCount + 1}), retrying...`, msg);
+        setTimeout(() => initWorker(retryCount + 1), 500 * (retryCount + 1));
+        return;
+      }
+
       isBackgroundRef.current = false;
       setState({
         status: 'error',
-        error: createPdfError('WORKER_ERROR', error.message),
+        error: createPdfError(
+          isStale ? 'STALE_WORKER' : 'WORKER_ERROR',
+          msg
+        ),
       });
+
+      // If the worker crashed, we should probably kill it so it resets next time
+      workerRef.current?.terminate();
+      workerRef.current = null;
     };
+  };
+
+  const reset = useCallback(() => {
+    // Do NOT terminate worker, keep it warm.
+    // Just reset job ID so we ignore any trailing messages
+    currentJobIdRef.current = null;
+    isBackgroundRef.current = false;
+    setState({ status: 'idle' });
+  }, []);
+
+  const processFile = useCallback((
+    file: File,
+    settings: ProcessingSettings = {},
+    isBackground: boolean = false
+  ) => {
+    const imageSettings = settings.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
+    const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
+
+    // Generate new Job ID
+    const jobId = generateJobId();
+    currentJobIdRef.current = jobId;
+    isBackgroundRef.current = isBackground;
+
+    // Initialize state
+    if (isBackground) {
+      setState(prev => {
+        if (prev.status === 'done') {
+          return { ...prev, isUpdating: true, originalFile: file }; // Ensure we keep file ref
+        }
+        return prev;
+      });
+    } else {
+      setState({ status: 'validating' });
+      const validation = validateFile(file);
+      if (!validation.valid) {
+        setState({
+          status: 'error',
+          error: createPdfError('INVALID_FILE_TYPE', validation.error),
+        });
+        return;
+      }
+      setState({ status: 'processing', progress: 'Starting...', fileName: file.name, originalFile: file } as any);
+      trackFileUpload(file.size / 1024 / 1024);
+    }
+
+    const fileName = file.name;
+
+    // Ensure worker is alive
+    if (!workerRef.current) {
+      try {
+        initWorker();
+      } catch (err) {
+        setState({ status: 'error', error: createPdfError('WORKER_ERROR', "Failed to start worker") });
+        return;
+      }
+    }
 
     file.arrayBuffer().then((arrayBuffer) => {
-      // Validate PDF signature (magic bytes) to catch renamed non-PDF files
+      // Validate PDF signature
       const signatureValidation = validatePdfSignature(arrayBuffer);
       if (!signatureValidation.valid) {
         setState({
@@ -191,7 +251,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       workerRef.current?.postMessage(
         {
           type: 'start',
-          payload: { arrayBuffer, fileName, imageSettings, options }
+          payload: { arrayBuffer, fileName, imageSettings, options, jobId }
         },
         [arrayBuffer]
       );

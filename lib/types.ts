@@ -106,6 +106,12 @@ export const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
   enableDownsampling: false,
 };
 
+
+export interface ProcessingSettings {
+  options?: CompressionOptions;
+  imageSettings?: ImageCompressionSettings;
+}
+
 /** Result for a single compression method */
 export interface MethodResult {
   key: keyof CompressionOptions;
@@ -135,6 +141,7 @@ export interface CompressionAnalysis {
     iccCount: number;
     alphaCount: number;
   };
+  report?: CompressionReport;
 }
 
 export interface PdfInfo {
@@ -180,13 +187,15 @@ export interface WorkerMessage {
     arrayBuffer: ArrayBuffer;
     fileName: string;
     imageSettings?: ImageCompressionSettings;
-    options?: CompressionOptions;  // All compression options
+    options?: CompressionOptions;
+    jobId: string;
   };
 }
 
 export interface WorkerResponse {
   type: 'success' | 'error' | 'progress';
   payload: WorkerSuccessPayload | WorkerErrorPayload | WorkerProgressPayload;
+  jobId: string;
 }
 
 export interface WorkerSuccessPayload {
@@ -205,6 +214,7 @@ export interface WorkerSuccessPayload {
     iccCount: number;
     alphaCount: number;
   };
+  report?: CompressionReport;
 }
 
 export interface WorkerErrorPayload {
@@ -216,4 +226,23 @@ export interface WorkerProgressPayload {
   stage: string;
   message: string;
   percent?: number;  // NEW - for progress bar
+}
+
+export interface ProcessingLog {
+  timestamp: number;
+  level: 'info' | 'success' | 'warning' | 'error';
+  message: string;
+  details?: string | object;
+}
+
+export interface CompressionReport {
+  timestamp: number;
+  originalSize: number;
+  compressedSize: number;
+  pageCount: number;
+  methodsUsed: string[];
+  methodsSuccessful: string[];
+  errors: string[];
+  logs: ProcessingLog[];
+  userAgent?: string;
 }

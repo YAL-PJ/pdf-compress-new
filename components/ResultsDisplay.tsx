@@ -2,15 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatBytes, calculateSavings, getOutputFilename } from '@/lib/utils';
-import { trackDownload } from '@/lib/analytics';
+import { trackDownload, trackTelemetry } from '@/lib/analytics';
 import { motion } from 'framer-motion';
 import { Download, RefreshCw, FileCheck, ArrowRight, X, Loader2 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { PageGrid } from './PageGrid';
 import { VisualDiff } from './VisualDiff';
+import { ActivityLog } from './ActivityLog';
 import { renderPageToImage } from '@/lib/pdf-renderer';
 
 import type { PageState } from '@/hooks/usePageManager';
+import type { CompressionReport } from '@/lib/types';
 
 interface ResultsDisplayProps {
   originalSize: number;
@@ -32,9 +34,12 @@ interface ResultsDisplayProps {
   onRotatePage?: (pageIndex: number) => void;
   onReorderPages?: (fromPosition: number, toPosition: number) => void;
   onMovePage?: (pageIndex: number, direction: 'up' | 'down') => void;
+  report?: CompressionReport;
 }
 
-export const ResultsDisplay = ({
+import { memo } from 'react';
+
+export const ResultsDisplay = memo(({
   originalSize,
   compressedSize,
   pageCount,
@@ -48,6 +53,7 @@ export const ResultsDisplay = ({
   onRotatePage,
   onReorderPages,
   onMovePage,
+  report,
 }: ResultsDisplayProps) => {
   const blobUrlRef = useRef<string | null>(null);
   const { savedBytes, savedPercent, isSmaller } = calculateSavings(originalSize, compressedSize);
@@ -88,10 +94,14 @@ export const ResultsDisplay = ({
       }
     };
 
-    generatePreviews();
+    // Delay generation to avoid blocking the main thread during initial render (INP optimization)
+    const timeoutId = setTimeout(() => {
+      generatePreviews();
+    }, 800);
 
     return () => {
       cancelled = true;
+      clearTimeout(timeoutId);
     };
   }, [originalFile, blob]);
 
@@ -103,6 +113,14 @@ export const ResultsDisplay = ({
       }
     };
   }, [blob]);
+
+  // Track Telemetry
+  // Track Telemetry
+  useEffect(() => {
+    if (report) {
+      trackTelemetry(report);
+    }
+  }, [report]);
 
   const handleDownload = useCallback(() => {
     // Track download event
@@ -239,6 +257,13 @@ export const ResultsDisplay = ({
           />
         </div>
 
+        {/* Activity Log */}
+        {report && (
+          <div className="pt-4 border-t border-slate-100">
+            <ActivityLog logs={report.logs} />
+          </div>
+        )}
+
         {/* Action Buttons - Solid Blocks */}
         <div className="flex flex-col sm:flex-row gap-3 pt-2">
           <button
@@ -260,4 +285,6 @@ export const ResultsDisplay = ({
       </div>
     </motion.div>
   );
-};
+});
+
+ResultsDisplay.displayName = 'ResultsDisplay';

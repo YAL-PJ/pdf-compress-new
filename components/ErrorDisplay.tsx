@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import type { PdfError } from '@/lib/errors';
 import { AlertCircle, RefreshCw, Bug, Copy, Check } from 'lucide-react';
-import * as Sentry from '@sentry/nextjs';
 
 interface ErrorDisplayProps {
   error: PdfError;
@@ -27,24 +26,32 @@ export const ErrorDisplay = ({ error, onReset }: ErrorDisplayProps) => {
   };
 
   const handleReportIssue = () => {
-    // Report to Sentry
-    const eventId = Sentry.captureException(error, {
-      extra: {
-        errorCode: error.code,
-        userMessage: error.userMessage,
-      },
-    });
-
-    // Show Sentry report dialog if available
-    if (eventId) {
-      Sentry.showReportDialog({
-        eventId,
-        title: 'Report an Issue',
-        subtitle: 'Help us fix this problem',
-        subtitle2: 'Your feedback is valuable to us.',
-        labelSubmit: 'Submit Report',
+    // Send error report to telemetry system
+    import('@/lib/analytics').then(({ trackTelemetry }) => {
+      trackTelemetry({
+        timestamp: Date.now(),
+        // We don't have file stats here, so use defaults/placeholders
+        originalSize: 0,
+        compressedSize: 0,
+        pageCount: 0,
+        methodsUsed: [],
+        methodsSuccessful: [],
+        errors: [error.code],
+        logs: [
+          {
+            timestamp: Date.now(),
+            level: 'error',
+            message: `User Reported Issue: ${error.userMessage}`,
+            details: {
+              code: error.code,
+              message: error.message,
+              stack: error.stack
+            }
+          }
+        ],
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
       });
-    }
+    });
 
     setReportSubmitted(true);
     setTimeout(() => setReportSubmitted(false), 3000);

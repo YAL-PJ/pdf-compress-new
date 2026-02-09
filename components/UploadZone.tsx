@@ -4,23 +4,31 @@ import { useCallback, useState, useId } from 'react';
 import { motion } from 'framer-motion';
 import { FileUp, File, ArrowUp } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { useFile } from '@/context/FileContext';
 
 interface UploadZoneProps {
-  onFileSelect: (file: File) => void;
+  onFileSelect?: (file: File) => void;
   disabled?: boolean;
 }
 
-export const UploadZone = ({ onFileSelect, disabled = false }: UploadZoneProps) => {
+export const UploadZone = ({ onFileSelect: propOnFileSelect, disabled = false }: UploadZoneProps) => {
+  const { setFile } = useFile(); // Hook into the context
   const [isDragOver, setIsDragOver] = useState(false);
   const inputId = useId();
 
   const handleFile = useCallback(
     (file: File | undefined) => {
       if (file && !disabled) {
-        onFileSelect(file);
+        // Update global context to trigger app load
+        setFile(file);
+
+        // Also call prop if provided (for legacy or specific use cases)
+        if (propOnFileSelect) {
+          propOnFileSelect(file);
+        }
       }
     },
-    [disabled, onFileSelect]
+    [disabled, setFile, propOnFileSelect]
   );
 
   const handleDragOver = useCallback(
@@ -72,12 +80,12 @@ export const UploadZone = ({ onFileSelect, disabled = false }: UploadZoneProps) 
         whileTap={{ scale: disabled ? 1 : 0.99 }}
         className={twMerge(
           "relative group cursor-pointer flex flex-col items-center justify-center",
-          "w-full aspect-[2/1] min-h-[350px] rounded-lg", // Sharper radius (lg = 0.5rem or 0.375 from globals)
+          "w-full aspect-[2/1] min-h-[350px] rounded-lg",
           "border-2 border-dashed transition-all duration-200",
           disabled
             ? "border-slate-200 bg-slate-50 cursor-not-allowed opacity-60"
             : isDragOver
-              ? "border-slate-900 bg-slate-50 scale-[1.01]" // High contrast active state
+              ? "border-slate-900 bg-slate-50 scale-[1.01]"
               : "border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50/50"
         )}
       >
@@ -122,7 +130,7 @@ export const UploadZone = ({ onFileSelect, disabled = false }: UploadZoneProps) 
           </div>
         </div>
 
-        {/* Technical Corner Markers - Replacing soft accents */}
+        {/* Technical Corner Markers */}
         <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-slate-200 m-2 transition-colors group-hover:border-slate-400" />
         <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-slate-200 m-2 transition-colors group-hover:border-slate-400" />
         <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-slate-200 m-2 transition-colors group-hover:border-slate-400" />

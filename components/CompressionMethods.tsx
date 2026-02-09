@@ -1,63 +1,21 @@
 'use client';
 
-import type { CompressionOptions, MethodResult, ImageCompressionSettings } from '@/lib/types';
+import { MethodItem } from './MethodItem';
+import type { CompressionOptions, ImageCompressionSettings } from '@/lib/types';
 import { formatBytes } from '@/lib/utils';
-import { IMAGE_COMPRESSION, DPI_OPTIONS } from '@/lib/constants';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Package,
-  Eraser,
-  Image as ImageIcon,
-  Check,
-  Settings2,
-  Minimize2,
-  Palette,
-  FileImage,
-  Square,
-  Layers,
-  Bookmark,
-  Link2,
-  Newspaper,
-  Globe,
-  EyeOff,
-  Hash,
-  Trash2,
-  FileText,
-  MessageSquare,
-  Code,
-  Copy,
-  Type,
-  Paperclip,
-  ChevronDown,
-  ChevronRight,
-  Boxes,
-  Archive,
-  Recycle,
-  SplitSquareHorizontal,
-  ScanEye,
+  Package, Eraser, Image as ImageIcon, Check, Settings2, Minimize2, Palette, FileImage, Square, Layers,
+  Bookmark, Link2, Newspaper, Globe, EyeOff, Hash, Trash2, FileText, MessageSquare, Code, Copy, Type,
+  Paperclip, ChevronDown, ChevronRight, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useState } from 'react';
+import { usePdf } from '@/context/PdfContext';
 
-interface CompressionMethodsProps {
-  options: CompressionOptions;
-  onChange: (options: CompressionOptions) => void;
-  disabled?: boolean;
-  methodResults?: MethodResult[];
-  imageSettings: ImageCompressionSettings;
-  onImageSettingsChange: (settings: ImageCompressionSettings) => void;
-  imageStats?: {
-    totalImages: number;
-    jpegCount: number;
-    pngCount: number;
-    otherCount: number;
-    highDpiCount: number;
-  };
-  baselineOverhead?: number; // Reserved for future use
-  isUpdating?: boolean;
-}
-
-interface MethodConfig {
+// ... (Keep existing Type Definitions and Static Config - they are perfect)
+// ... (Lines 61-314 from original file)
+export interface MethodConfig {
   key: keyof CompressionOptions;
   label: string;
   description: string;
@@ -311,17 +269,21 @@ const BASIC_CATEGORIES = CATEGORIES
   }))
   .filter(cat => cat.methods.length > 0);
 
-export const CompressionMethods = ({
-  options,
-  onChange,
-  disabled = false,
-  methodResults,
-  imageSettings,
-  onImageSettingsChange,
-  imageStats,
-  baselineOverhead: _baselineOverhead,
-  isUpdating = false,
-}: CompressionMethodsProps) => {
+
+export const CompressionMethods = () => {
+  const {
+    options,
+    setOptions,
+    imageSettings,
+    setImageSettings,
+    analysis,
+    isProcessing,
+    isUpdating
+  } = usePdf();
+
+  const disabled = isProcessing && !isUpdating;
+  const methodResults = analysis?.methodResults;
+  const imageStats = analysis?.imageStats;
 
   const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
 
@@ -343,21 +305,11 @@ export const CompressionMethods = ({
 
   const toggleMethod = (key: keyof CompressionOptions) => {
     if (disabled) return;
-    onChange({ ...options, [key]: !options[key] });
+    setOptions({ ...options, [key]: !options[key] });
   };
 
   const getMethodResult = (key: keyof CompressionOptions) => {
     return methodResults?.find(r => r.key === key);
-  };
-
-  const handleQualityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const quality = parseInt(e.target.value, 10);
-    onImageSettingsChange({ ...imageSettings, quality });
-  };
-
-  const handleDpiChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const targetDpi = parseInt(e.target.value, 10);
-    onImageSettingsChange({ ...imageSettings, targetDpi });
   };
 
   // Handle special toggles
@@ -367,8 +319,8 @@ export const CompressionMethods = ({
       const newOptions = newEnabled
         ? { ...options, [key]: newEnabled, recompressImages: true }
         : { ...options, [key]: newEnabled };
-      onChange(newOptions);
-      onImageSettingsChange({ ...imageSettings, enableDownsampling: newEnabled });
+      setOptions(newOptions);
+      setImageSettings({ ...imageSettings, enableDownsampling: newEnabled });
     } else if (key === 'convertToGrayscale' || key === 'convertToMonochrome') {
       // Grayscale/monochrome require recompressImages and are mutually exclusive
       const newEnabled = !options[key];
@@ -376,169 +328,22 @@ export const CompressionMethods = ({
       const newOptions = newEnabled
         ? { ...options, [key]: true, [otherKey]: false, recompressImages: true }
         : { ...options, [key]: false };
-      onChange(newOptions);
+      setOptions(newOptions);
     } else if (key === 'recompressImages' && options[key]) {
       // Disabling recompressImages also disables downsample, grayscale, monochrome
-      onChange({
+      setOptions({
         ...options,
         [key]: false,
         downsampleImages: false,
         convertToGrayscale: false,
         convertToMonochrome: false,
       });
-      onImageSettingsChange({ ...imageSettings, enableDownsampling: false });
+      setImageSettings({ ...imageSettings, enableDownsampling: false });
     } else {
       toggleMethod(key);
     }
   };
 
-  const renderMethod = (method: MethodConfig) => {
-    const isEnabled = options[method.key];
-    const result = getMethodResult(method.key);
-    const Icon = method.icon;
-    const displayBytes = result?.savedBytes ?? 0;
-
-    return (
-      <div key={method.key}>
-        <button
-          onClick={() => handleMethodToggle(method.key)}
-          disabled={disabled}
-          className={twMerge(
-            "w-full flex items-center gap-2 p-2 rounded text-left transition-all duration-200",
-            "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1",
-            isEnabled
-              ? "bg-slate-900 text-white"
-              : "bg-white hover:bg-slate-50 text-slate-700",
-            disabled && "opacity-50 cursor-not-allowed"
-          )}
-        >
-          <div className={twMerge(
-            "flex items-center justify-center",
-            isEnabled ? "text-white" : "text-slate-600"
-          )}>
-            <Icon className="w-4 h-4" />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="font-medium text-xs leading-none flex justify-between items-center">
-              <span className="truncate">{method.label}</span>
-              {isEnabled && displayBytes > 0 && (
-                <span className="text-[9px] bg-emerald-500/20 text-emerald-200 px-1 py-0.5 rounded ml-1 flex-shrink-0">
-                  -{formatBytes(displayBytes)}
-                </span>
-              )}
-            </div>
-            <div className={twMerge(
-              "text-[10px] mt-0.5 truncate",
-              isEnabled ? "text-slate-300" : "text-slate-600"
-            )}>
-              {method.description}
-            </div>
-          </div>
-
-          <div className={twMerge(
-            "w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0",
-            isEnabled
-              ? "bg-white border-white text-slate-900"
-              : "bg-transparent border-slate-400 text-transparent"
-          )}>
-            <Check className="w-3 h-3 stroke-[3]" />
-          </div>
-        </button>
-
-        {/* Settings panel for image compression */}
-        <AnimatePresence>
-          {method.key === 'recompressImages' && method.hasSettings && isEnabled && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="px-2 pb-2 pt-1">
-                <div className="bg-slate-50 border rounded p-2 space-y-2">
-                  {imageStats && (
-                    <div className="text-[9px] text-slate-600 bg-white p-1.5 rounded border grid grid-cols-2 gap-1">
-                      <div>
-                        <div className="font-bold text-slate-800">{imageStats.totalImages}</div>
-                        <div>Images</div>
-                      </div>
-                      <div>
-                        <div className="font-bold text-slate-800">{imageStats.jpegCount}</div>
-                        <div>JPEG</div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-between items-center text-[10px] font-bold text-slate-800">
-                    <span>Quality</span>
-                    <span className="font-mono bg-white px-1 py-0.5 rounded border border-slate-300 text-slate-900">
-                      {imageSettings.quality}%
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={IMAGE_COMPRESSION.MIN_QUALITY}
-                    max={IMAGE_COMPRESSION.MAX_QUALITY}
-                    step={5}
-                    value={imageSettings.quality}
-                    onChange={handleQualityChange}
-                    disabled={disabled}
-                    className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
-                  />
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Settings panel for downsampling */}
-        <AnimatePresence>
-          {method.key === 'downsampleImages' && method.hasSettings && isEnabled && (
-            <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="overflow-hidden"
-            >
-              <div className="px-2 pb-2 pt-1">
-                <div className="bg-slate-50 border rounded p-2 space-y-2">
-                  {imageStats && (
-                    <div className="text-[9px] text-slate-600 bg-white p-1.5 rounded border grid grid-cols-2 gap-1">
-                      <div>
-                        <div className="font-bold text-slate-800">{imageStats.jpegCount}</div>
-                        <div>JPEG</div>
-                      </div>
-                      <div>
-                        <div className="font-bold text-amber-700">{imageStats.highDpiCount}</div>
-                        <div>High-DPI</div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="text-[10px] font-medium text-slate-700">Target DPI</div>
-                  <select
-                    value={imageSettings.targetDpi}
-                    onChange={handleDpiChange}
-                    disabled={disabled}
-                    className="w-full text-xs bg-white border rounded px-1.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  >
-                    {DPI_OPTIONS.PRESETS.map((preset) => (
-                      <option key={preset.value} value={preset.value}>
-                        {preset.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
-    );
-  };
-
-  // Count enabled methods per category
   const getCategoryStats = (category: MethodCategory) => {
     const enabled = category.methods.filter(m => options[m.key]).length;
     const total = category.methods.length;
@@ -602,7 +407,19 @@ export const CompressionMethods = ({
         {activeTab === 'basic' ? (
           // Basic: flat list, no collapsible categories
           <div className="space-y-0.5 p-1">
-            {displayCategories.flatMap(cat => cat.methods).map(renderMethod)}
+            {displayCategories.flatMap(cat => cat.methods).map(method => (
+              <MethodItem
+                key={method.key}
+                method={method}
+                isEnabled={options[method.key]}
+                disabled={disabled}
+                result={getMethodResult(method.key)}
+                onToggle={handleMethodToggle}
+                imageSettings={imageSettings}
+                onImageSettingsChange={setImageSettings}
+                imageStats={imageStats}
+              />
+            ))}
           </div>
         ) : (
           // Advanced: full categorized collapsible view
@@ -643,7 +460,19 @@ export const CompressionMethods = ({
                       className="overflow-hidden"
                     >
                       <div className="p-1.5 pt-0 space-y-0.5">
-                        {category.methods.map(renderMethod)}
+                        {category.methods.map(method => (
+                          <MethodItem
+                            key={method.key}
+                            method={method}
+                            isEnabled={options[method.key]}
+                            disabled={disabled}
+                            result={getMethodResult(method.key)}
+                            onToggle={handleMethodToggle}
+                            imageSettings={imageSettings}
+                            onImageSettingsChange={setImageSettings}
+                            imageStats={imageStats}
+                          />
+                        ))}
                       </div>
                     </motion.div>
                   )}
