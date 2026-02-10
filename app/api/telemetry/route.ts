@@ -4,13 +4,15 @@ import { NextRequest, NextResponse } from 'next/server';
 export const runtime = 'edge';
 
 /**
- * Telemetry API - receives structured compression reports
+ * Telemetry API - receives structured compression reports and stores in Supabase
  *
- * Logs are written to stdout in structured JSON format so they can be
- * captured by Vercel Log Drains, Datadog, or any log aggregation service.
- *
- * Each log line is a self-contained JSON object for easy parsing.
+ * Requires env vars:
+ *   SUPABASE_URL        - e.g. https://xxx.supabase.co
+ *   SUPABASE_SERVICE_KEY - secret/service_role key (NOT the publishable key)
  */
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_KEY;
 
 interface TelemetryReport {
   sessionId?: string;
@@ -39,17 +41,47 @@ interface TelemetryReport {
   warnings?: Array<{ message: string; details?: unknown }>;
 }
 
-function formatStructuredLog(
-  level: 'INFO' | 'WARN' | 'ERROR',
-  event: string,
-  data: Record<string, unknown>
-): string {
-  return JSON.stringify({
-    level,
-    event,
-    ts: new Date().toISOString(),
-    ...data,
+async function insertToSupabase(report: TelemetryReport, geo: string): Promise<boolean> {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    console.warn('[Telemetry] Supabase not configured — SUPABASE_URL or SUPABASE_SERVICE_KEY missing');
+    return false;
+  }
+
+  const row = {
+    session_id: report.sessionId || null,
+    geo,
+    original_size: report.originalSize || 0,
+    compressed_size: report.compressedSize || 0,
+    savings_percent: report.savingsPercent || 0,
+    page_count: report.pageCount || 0,
+    methods_used: report.methodsUsed || [],
+    methods_successful: report.methodsSuccessful || [],
+    top_method: report.topMethod?.method || null,
+    error_count: report.errorCount || 0,
+    warning_count: report.warningCount || 0,
+    errors: report.errors || [],
+    method_breakdown: report.methodBreakdown || [],
+    user_agent: report.userAgent || null,
+  };
+
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/compression_events`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify(row),
   });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[Telemetry] Supabase insert failed (${res.status}):`, errText);
+    return false;
+  }
+
+  return true;
 }
 
 export async function POST(req: NextRequest) {
@@ -61,66 +93,18 @@ export async function POST(req: NextRequest) {
     }
 
     const report = body.report as TelemetryReport;
-    const geo = req.headers.get('x-vercel-ip-country') || 'unknown';
-    const region = req.headers.get('x-vercel-ip-country-region') || 'unknown';
 
-    // Main compression event log
-    console.log(formatStructuredLog('INFO', 'compression_completed', {
-      sessionId: report.sessionId,
-      geo: `${geo}-${region}`,
-      originalSize: report.originalSize,
-      originalSizeFormatted: report.originalSizeFormatted,
-      compressedSize: report.compressedSize,
-      compressedSizeFormatted: report.compressedSizeFormatted,
-      savingsPercent: report.savingsPercent,
-      pageCount: report.pageCount,
-      methodCount: report.methodCount,
-      successfulMethodCount: report.successfulMethodCount,
-      topMethod: report.topMethod?.method || 'none',
-      topMethodSavings: report.topMethod?.savedFormatted || '0 B',
-    }));
+    // Netlify provides geo headers too
+    const geo = req.headers.get('x-nf-client-connection-ip')
+      ? `${req.headers.get('x-country') || 'unknown'}`
+      : req.headers.get('x-vercel-ip-country') || 'unknown';
 
-    // Per-method breakdown log (for analyzing which methods are most effective)
-    if (report.methodBreakdown && report.methodBreakdown.length > 0) {
-      console.log(formatStructuredLog('INFO', 'method_breakdown', {
-        sessionId: report.sessionId,
-        methods: report.methodBreakdown.map(m => ({
-          method: m.method,
-          saved: m.savedFormatted,
-          pct: m.percentOfTotal,
-        })),
-      }));
-    }
+    // Insert into Supabase
+    const stored = await insertToSupabase(report, geo);
 
-    // Log errors separately for easy filtering
-    if (report.errorCount && report.errorCount > 0 && report.errors) {
-      for (const err of report.errors) {
-        console.log(formatStructuredLog('ERROR', 'compression_error', {
-          sessionId: report.sessionId,
-          geo: `${geo}-${region}`,
-          message: err.message,
-          details: err.details,
-          userAgent: report.userAgent,
-        }));
-      }
-    }
-
-    // Log warnings
-    if (report.warningCount && report.warningCount > 0 && report.warnings) {
-      for (const warn of report.warnings) {
-        console.log(formatStructuredLog('WARN', 'compression_warning', {
-          sessionId: report.sessionId,
-          message: warn.message,
-          details: warn.details,
-        }));
-      }
-    }
-
-    return NextResponse.json({ status: 'logged' });
+    return NextResponse.json({ status: stored ? 'stored' : 'logged' });
   } catch (err) {
-    console.log(formatStructuredLog('ERROR', 'telemetry_parse_error', {
-      error: String(err),
-    }));
+    console.error('[Telemetry] Parse error:', String(err));
     return NextResponse.json({ status: 'error' }, { status: 200 });
   }
 }
