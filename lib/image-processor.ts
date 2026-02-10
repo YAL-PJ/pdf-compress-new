@@ -607,7 +607,7 @@ export const embedRecompressedImages = async (
 ): Promise<Uint8Array> => {
   if (recompressedImages.length === 0) {
     const pdfDoc = await PDFDocument.load(originalBuffer);
-    return pdfDoc.save({ useObjectStreams: true });
+    return pdfDoc.save({ useObjectStreams: false });
   }
 
   onProgress?.('Embedding recompressed images...');
@@ -657,7 +657,7 @@ export const embedRecompressedImages = async (
     context.assign(ref, newStream);
   }
 
-  return pdfDoc.save({ useObjectStreams: true });
+  return pdfDoc.save({ useObjectStreams: false });
 };
 
 /**
