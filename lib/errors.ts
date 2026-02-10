@@ -3,6 +3,8 @@
  * Enables specific error handling and user-friendly messages
  */
 
+export const MAX_FILE_SIZE_MB = 50;
+
 export class PdfError extends Error {
   constructor(
     message: string,
@@ -11,6 +13,7 @@ export class PdfError extends Error {
   ) {
     super(message);
     this.name = 'PdfError';
+    Object.setPrototypeOf(this, PdfError.prototype);
   }
 }
 
@@ -20,13 +23,14 @@ export type PdfErrorCode =
   | 'ENCRYPTED_PDF'
   | 'CORRUPTED_PDF'
   | 'PROCESSING_FAILED'
-  | 'WORKER_ERROR';
+  | 'WORKER_ERROR'
+  | 'STALE_WORKER';
 
 export const createPdfError = (code: PdfErrorCode, details?: string): PdfError => {
   const errors: Record<PdfErrorCode, { message: string; userMessage: string }> = {
     FILE_TOO_LARGE: {
       message: `File exceeds size limit${details ? `: ${details}` : ''}`,
-      userMessage: 'File is too large. Maximum size is 100MB.',
+      userMessage: `File is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`,
     },
     INVALID_FILE_TYPE: {
       message: `Invalid file type${details ? `: ${details}` : ''}`,
@@ -47,6 +51,10 @@ export const createPdfError = (code: PdfErrorCode, details?: string): PdfError =
     WORKER_ERROR: {
       message: `Worker error${details ? `: ${details}` : ''}`,
       userMessage: 'An unexpected error occurred. Please try again.',
+    },
+    STALE_WORKER: {
+      message: `Stale worker script${details ? `: ${details}` : ''}`,
+      userMessage: 'The app was updated. Please refresh the page.',
     },
   };
 

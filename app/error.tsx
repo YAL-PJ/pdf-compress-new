@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import * as Sentry from '@sentry/nextjs';
-import { AlertTriangle, RefreshCw, Bug } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 /**
  * Error handler for route segments.
@@ -16,16 +15,8 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Report error to Sentry
-    Sentry.captureException(error);
+    console.error('Route Segment Error:', error);
   }, [error]);
-
-  const handleReportIssue = () => {
-    // Open Sentry feedback dialog if available
-    if (typeof window !== 'undefined' && error.digest) {
-      Sentry.showReportDialog({ eventId: error.digest });
-    }
-  };
 
   return (
     <div className="min-h-[600px] flex items-center justify-center p-8">
@@ -39,7 +30,7 @@ export default function Error({
         </h2>
 
         <p className="text-slate-500 mb-6">
-          An error occurred while processing your request. Our team has been notified.
+          An error occurred while processing your request. Please try again.
         </p>
 
         {process.env.NODE_ENV === 'development' && (
@@ -54,23 +45,13 @@ export default function Error({
           </p>
         )}
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={reset}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-          >
-            <RefreshCw className="w-4 h-4" aria-hidden="true" />
-            Try Again
-          </button>
-
-          <button
-            onClick={handleReportIssue}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-          >
-            <Bug className="w-4 h-4" aria-hidden="true" />
-            Report Issue
-          </button>
-        </div>
+        <button
+          onClick={reset}
+          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+        >
+          <RefreshCw className="w-4 h-4" aria-hidden="true" />
+          Try Again
+        </button>
       </div>
     </div>
   );

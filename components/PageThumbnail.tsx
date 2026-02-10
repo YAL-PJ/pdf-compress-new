@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import { renderPageToImage } from '@/lib/pdf-renderer';
 import { Loader2, Trash2, RotateCw } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -15,7 +15,7 @@ interface PageThumbnailProps {
     rotation?: number; // 0, 90, 180, 270
 }
 
-export const PageThumbnail = ({
+export const PageThumbnail = memo(({
     file,
     pageIndex,
     onToggleDelete,
@@ -26,6 +26,7 @@ export const PageThumbnail = ({
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const isMounted = useRef(true);
+    const imageUrlRef = useRef<string | null>(null);
 
     const containerRef = useRef<HTMLDivElement>(null);
     const observerRef = useRef<IntersectionObserver | null>(null);
@@ -37,9 +38,13 @@ export const PageThumbnail = ({
             if (!file) return;
 
             try {
-                // Use lower scale for thumbnails to save memory
                 const url = await renderPageToImage(file, pageIndex, 0.5);
                 if (isMounted.current) {
+                    // Revoke previous URL before setting new one
+                    if (imageUrlRef.current) {
+                        URL.revokeObjectURL(imageUrlRef.current);
+                    }
+                    imageUrlRef.current = url;
                     setImageUrl(url);
                     setIsLoading(false);
                 }
@@ -52,8 +57,12 @@ export const PageThumbnail = ({
         const handleIntersect: IntersectionObserverCallback = (entries) => {
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
-                    loadThumbnail();
-                    // Stop observing once loaded
+                    if ('requestIdleCallback' in window) {
+                        (window as Window).requestIdleCallback(() => loadThumbnail(), { timeout: 2000 });
+                    } else {
+                        setTimeout(() => loadThumbnail(), 100);
+                    }
+
                     if (containerRef.current && observerRef.current) {
                         observerRef.current.unobserve(containerRef.current);
                     }
@@ -61,11 +70,10 @@ export const PageThumbnail = ({
             });
         };
 
-        // Initialize Intersection Observer
         if (window.IntersectionObserver) {
             observerRef.current = new IntersectionObserver(handleIntersect, {
-                root: null, // viewport
-                rootMargin: '100px', // start loading before it comes into view
+                root: null,
+                rootMargin: '100px',
                 threshold: 0.1
             });
 
@@ -73,16 +81,22 @@ export const PageThumbnail = ({
                 observerRef.current.observe(containerRef.current);
             }
         } else {
-            // Fallback for older browsers
             loadThumbnail();
         }
 
         return () => {
             isMounted.current = false;
             if (observerRef.current) observerRef.current.disconnect();
-            if (imageUrl) URL.revokeObjectURL(imageUrl);
+            // Use ref for cleanup — closure over state would capture stale null
+            if (imageUrlRef.current) {
+                URL.revokeObjectURL(imageUrlRef.current);
+                imageUrlRef.current = null;
+            }
         };
     }, [file, pageIndex]);
+
+    const handleToggleDelete = useCallback(() => onToggleDelete(pageIndex), [onToggleDelete, pageIndex]);
+    const handleRotate = useCallback(() => onRotate?.(pageIndex), [onRotate, pageIndex]);
 
     return (
         <motion.div
@@ -100,7 +114,7 @@ export const PageThumbnail = ({
             {/* Loading State */}
             {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center">
-                    <Loader2 className="w-6 h-6 text-slate-500 animate-spin" />
+                    <Loader2 className="w-6 h-6 text-slate-500 animate-spin" aria-hidden="true" />
                 </div>
             )}
 
@@ -109,11 +123,8 @@ export const PageThumbnail = ({
                 <img
                     src={imageUrl}
                     alt={`Page ${pageIndex}`}
-                    className={twMerge(
-                        "w-full h-full object-contain transition-transform duration-300",
-                        rotation > 0 && `rotate-${rotation}` // Tailwind needs safelist or inline style for dynamic values
-                    )}
-                    style={{ transform: `rotate(${rotation}deg)` }}
+                    className="w-full h-full object-contain transition-transform duration-300"
+                    style={rotation > 0 ? { transform: `rotate(${rotation}deg)` } : undefined}
                 />
             )}
 
@@ -126,7 +137,7 @@ export const PageThumbnail = ({
             {isDeleted && (
                 <div className="absolute inset-0 flex items-center justify-center bg-red-50/50 backdrop-blur-[1px]">
                     <div className="bg-red-100 text-red-600 rounded-full p-2 border border-red-200">
-                        <Trash2 className="w-5 h-5" />
+                        <Trash2 className="w-5 h-5" aria-hidden="true" />
                     </div>
                 </div>
             )}
@@ -135,29 +146,33 @@ export const PageThumbnail = ({
             <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
                 <div className="flex flex-col gap-2">
                     <button
-                        onClick={() => onToggleDelete(pageIndex)}
+                        onClick={handleToggleDelete}
                         className={twMerge(
                             "p-1.5 rounded-full shadow-sm transition-all hover:scale-110 active:scale-95",
                             isDeleted
-                                ? "bg-slate-700 text-white hover:bg-slate-600" // Restore button
-                                : "bg-white text-red-500 hover:text-red-600"   // Delete button
+                                ? "bg-slate-700 text-white hover:bg-slate-600"
+                                : "bg-white text-red-500 hover:text-red-600"
                         )}
                         title={isDeleted ? "Restore page" : "Delete page"}
+                        aria-label={isDeleted ? `Restore page ${pageIndex}` : `Delete page ${pageIndex}`}
                     >
-                        {isDeleted ? <RotateCw className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
+                        {isDeleted ? <RotateCw className="w-4 h-4" aria-hidden="true" /> : <Trash2 className="w-4 h-4" aria-hidden="true" />}
                     </button>
 
                     {onRotate && !isDeleted && (
                         <button
-                            onClick={() => onRotate(pageIndex)}
+                            onClick={handleRotate}
                             className="p-1.5 bg-white text-slate-700 rounded-full shadow-sm hover:text-blue-600 hover:scale-110 active:scale-95 transition-all"
                             title="Rotate 90°"
+                            aria-label={`Rotate page ${pageIndex} 90 degrees`}
                         >
-                            <RotateCw className="w-4 h-4" />
+                            <RotateCw className="w-4 h-4" aria-hidden="true" />
                         </button>
                     )}
                 </div>
             </div>
         </motion.div>
     );
-};
+});
+
+PageThumbnail.displayName = 'PageThumbnail';

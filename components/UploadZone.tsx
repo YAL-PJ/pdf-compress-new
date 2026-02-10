@@ -4,23 +4,43 @@ import { useCallback, useState, useId } from 'react';
 import { motion } from 'framer-motion';
 import { FileUp, File, ArrowUp } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { useFile } from '@/context/FileContext';
+import { MAX_FILE_SIZE_MB } from '@/lib/errors';
 
 interface UploadZoneProps {
-  onFileSelect: (file: File) => void;
+  onFileSelect?: (file: File) => void;
   disabled?: boolean;
 }
 
-export const UploadZone = ({ onFileSelect, disabled = false }: UploadZoneProps) => {
+export const UploadZone = ({ onFileSelect: propOnFileSelect, disabled = false }: UploadZoneProps) => {
+  const { setFile } = useFile();
   const [isDragOver, setIsDragOver] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const inputId = useId();
 
   const handleFile = useCallback(
     (file: File | undefined) => {
-      if (file && !disabled) {
-        onFileSelect(file);
+      if (!file || disabled) return;
+
+      setValidationError(null);
+
+      // Validate file type (accept attribute only works for file picker, not drag-and-drop)
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        setValidationError('Please select a valid PDF file.');
+        return;
       }
+
+      // Validate file size
+      const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+      if (file.size > maxBytes) {
+        setValidationError(`File is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
+        return;
+      }
+
+      setFile(file);
+      propOnFileSelect?.(file);
     },
-    [disabled, onFileSelect]
+    [disabled, setFile, propOnFileSelect]
   );
 
   const handleDragOver = useCallback(
@@ -61,7 +81,6 @@ export const UploadZone = ({ onFileSelect, disabled = false }: UploadZoneProps) 
   return (
     <div className="w-full">
       <motion.label
-        layout
         htmlFor={inputId}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -72,12 +91,12 @@ export const UploadZone = ({ onFileSelect, disabled = false }: UploadZoneProps) 
         whileTap={{ scale: disabled ? 1 : 0.99 }}
         className={twMerge(
           "relative group cursor-pointer flex flex-col items-center justify-center",
-          "w-full aspect-[2/1] min-h-[350px] rounded-lg", // Sharper radius (lg = 0.5rem or 0.375 from globals)
+          "w-full aspect-[2/1] min-h-[350px] rounded-lg",
           "border-2 border-dashed transition-all duration-200",
           disabled
             ? "border-slate-200 bg-slate-50 cursor-not-allowed opacity-60"
             : isDragOver
-              ? "border-slate-900 bg-slate-50 scale-[1.01]" // High contrast active state
+              ? "border-slate-900 bg-slate-50 scale-[1.01]"
               : "border-slate-300 bg-white hover:border-slate-400 hover:bg-slate-50/50"
         )}
       >
@@ -115,14 +134,20 @@ export const UploadZone = ({ onFileSelect, disabled = false }: UploadZoneProps) 
           </div>
 
           <div className="flex items-center gap-2 text-xs font-mono text-slate-600 bg-slate-100 px-3 py-1.5 rounded border border-slate-200">
-            <File className="w-3.5 h-3.5" />
+            <File className="w-3.5 h-3.5" aria-hidden="true" />
             <span>PDF ONLY</span>
             <span className="text-slate-400">|</span>
-            <span>MAX 50MB</span>
+            <span>MAX {MAX_FILE_SIZE_MB}MB</span>
           </div>
+
+          {validationError && (
+            <p className="text-sm font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded border border-red-200" role="alert">
+              {validationError}
+            </p>
+          )}
         </div>
 
-        {/* Technical Corner Markers - Replacing soft accents */}
+        {/* Technical Corner Markers */}
         <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-slate-200 m-2 transition-colors group-hover:border-slate-400" />
         <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-slate-200 m-2 transition-colors group-hover:border-slate-400" />
         <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-slate-200 m-2 transition-colors group-hover:border-slate-400" />

@@ -1,9 +1,35 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
+import { Geist, Geist_Mono } from "next/font/google";
 import { AnalyticsScript } from "@/components";
 import "./globals.css";
 
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+  display: "swap",
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+  display: "swap",
+});
+
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://www.freecompresspdf.com";
+
+/* =========================
+   VIEWPORT
+========================= */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
+    { media: "(prefers-color-scheme: dark)", color: "#020617" },
+  ],
+};
 
 /* =========================
    METADATA (SEO)
@@ -92,19 +118,6 @@ export const metadata: Metadata = {
 };
 
 /* =========================
-   VIEWPORT
-========================= */
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  maximumScale: 5,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
-    { media: "(prefers-color-scheme: dark)", color: "#020617" },
-  ],
-};
-
-/* =========================
    STRUCTURED DATA (JSON-LD)
 ========================= */
 const jsonLd = {
@@ -141,7 +154,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MCMZ8KMLXL";
+  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
   return (
     <html lang="en">
@@ -151,6 +164,18 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+      </head>
+
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        {/* Skip link for accessibility */}
+        <a href="#main-content" className="skip-link">
+          Skip to main content
+        </a>
+
+        {children}
+
+        {/* Analytics event tracking */}
+        <AnalyticsScript />
 
         {/* Google Analytics */}
         {gaMeasurementId && (
@@ -169,18 +194,6 @@ export default function RootLayout({
             </Script>
           </>
         )}
-      </head>
-
-      <body className="antialiased">
-        {/* Skip link for accessibility */}
-        <a href="#main-content" className="skip-link">
-          Skip to main content
-        </a>
-
-        {children}
-
-        {/* Analytics event tracking */}
-        <AnalyticsScript />
       </body>
     </html>
   );

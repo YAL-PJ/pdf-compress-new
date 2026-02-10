@@ -1,6 +1,5 @@
 'use client';
 
-import * as Sentry from '@sentry/nextjs';
 import { useEffect } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
@@ -16,8 +15,7 @@ export default function GlobalError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Report error to Sentry
-    Sentry.captureException(error);
+    console.error('Global Error caught:', error);
   }, [error]);
 
   return (
@@ -26,7 +24,7 @@ export default function GlobalError({
         <div className="min-h-screen flex items-center justify-center p-8">
           <div className="bg-white rounded-xl shadow-lg p-8 max-w-lg w-full text-center border border-slate-200">
             <div className="w-20 h-20 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle className="w-10 h-10 text-red-500" />
+              <AlertTriangle className="w-10 h-10 text-red-500" aria-hidden="true" />
             </div>
 
             <h1 className="text-2xl font-bold text-slate-900 mb-2">
@@ -34,7 +32,7 @@ export default function GlobalError({
             </h1>
 
             <p className="text-slate-500 mb-6">
-              A critical error occurred. We&apos;ve been notified and are investigating the issue.
+              A critical error occurred. Please try refreshing the page.
             </p>
 
             {error.digest && (
@@ -48,17 +46,16 @@ export default function GlobalError({
                 onClick={reset}
                 className="flex items-center justify-center gap-2 px-6 py-3 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
               >
-                <RefreshCw className="w-4 h-4" />
+                <RefreshCw className="w-4 h-4" aria-hidden="true" />
                 Try Again
               </button>
 
-              {/* Using <a> intentionally - global-error replaces entire HTML so next/link won't work */}
               {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
               <a
                 href="/"
                 className="flex items-center justify-center gap-2 px-6 py-3 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
               >
-                <Home className="w-4 h-4" />
+                <Home className="w-4 h-4" aria-hidden="true" />
                 Go Home
               </a>
             </div>
