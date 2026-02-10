@@ -22,7 +22,7 @@ const AppContent = ({ children }: { children: ReactNode }) => {
         return (
             <PdfApp
                 initialFile={file}
-                onReset={() => setFile(null)}
+                onReset={() => { setFile(null); window.scrollTo(0, 0); }}
             />
         );
     }
