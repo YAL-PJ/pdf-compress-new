@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { FileUp, File, ArrowUp } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useFile } from '@/context/FileContext';
+import { MAX_FILE_SIZE_MB } from '@/lib/errors';
 
 interface UploadZoneProps {
   onFileSelect?: (file: File) => void;
@@ -12,21 +13,32 @@ interface UploadZoneProps {
 }
 
 export const UploadZone = ({ onFileSelect: propOnFileSelect, disabled = false }: UploadZoneProps) => {
-  const { setFile } = useFile(); // Hook into the context
+  const { setFile } = useFile();
   const [isDragOver, setIsDragOver] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
   const inputId = useId();
 
   const handleFile = useCallback(
     (file: File | undefined) => {
-      if (file && !disabled) {
-        // Update global context to trigger app load
-        setFile(file);
+      if (!file || disabled) return;
 
-        // Also call prop if provided (for legacy or specific use cases)
-        if (propOnFileSelect) {
-          propOnFileSelect(file);
-        }
+      setValidationError(null);
+
+      // Validate file type (accept attribute only works for file picker, not drag-and-drop)
+      if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+        setValidationError('Please select a valid PDF file.');
+        return;
       }
+
+      // Validate file size
+      const maxBytes = MAX_FILE_SIZE_MB * 1024 * 1024;
+      if (file.size > maxBytes) {
+        setValidationError(`File is too large. Maximum size is ${MAX_FILE_SIZE_MB}MB.`);
+        return;
+      }
+
+      setFile(file);
+      propOnFileSelect?.(file);
     },
     [disabled, setFile, propOnFileSelect]
   );
@@ -69,7 +81,6 @@ export const UploadZone = ({ onFileSelect: propOnFileSelect, disabled = false }:
   return (
     <div className="w-full">
       <motion.label
-        layout
         htmlFor={inputId}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -123,11 +134,17 @@ export const UploadZone = ({ onFileSelect: propOnFileSelect, disabled = false }:
           </div>
 
           <div className="flex items-center gap-2 text-xs font-mono text-slate-600 bg-slate-100 px-3 py-1.5 rounded border border-slate-200">
-            <File className="w-3.5 h-3.5" />
+            <File className="w-3.5 h-3.5" aria-hidden="true" />
             <span>PDF ONLY</span>
             <span className="text-slate-400">|</span>
-            <span>MAX 50MB</span>
+            <span>MAX {MAX_FILE_SIZE_MB}MB</span>
           </div>
+
+          {validationError && (
+            <p className="text-sm font-medium text-red-600 bg-red-50 px-3 py-1.5 rounded border border-red-200" role="alert">
+              {validationError}
+            </p>
+          )}
         </div>
 
         {/* Technical Corner Markers */}

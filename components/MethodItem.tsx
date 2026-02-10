@@ -1,6 +1,6 @@
 'use client';
 
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
@@ -40,15 +40,15 @@ export const MethodItem = memo(({
     const Icon = method.icon;
     const displayBytes = result?.savedBytes ?? 0;
 
-    const handleQualityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleQualityChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const quality = parseInt(e.target.value, 10);
         onImageSettingsChange({ ...imageSettings, quality });
-    };
+    }, [imageSettings, onImageSettingsChange]);
 
-    const handleDpiChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const handleDpiChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
         const targetDpi = parseInt(e.target.value, 10);
         onImageSettingsChange({ ...imageSettings, targetDpi });
-    };
+    }, [imageSettings, onImageSettingsChange]);
 
     return (
         <div>
@@ -136,6 +136,7 @@ export const MethodItem = memo(({
                                     value={imageSettings.quality}
                                     onChange={handleQualityChange}
                                     disabled={disabled}
+                                    aria-label="Image compression quality"
                                     className="w-full h-1 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900"
                                 />
                             </div>
@@ -173,6 +174,7 @@ export const MethodItem = memo(({
                                     value={imageSettings.targetDpi}
                                     onChange={handleDpiChange}
                                     disabled={disabled}
+                                    aria-label="Target DPI for downsampling"
                                     className="w-full text-xs bg-white border rounded px-1.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
                                 >
                                     {DPI_OPTIONS.PRESETS.map((preset) => (

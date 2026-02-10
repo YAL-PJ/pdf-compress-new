@@ -1,31 +1,25 @@
 'use client';
 
-import React, { createContext, useContext, useCallback, useState, useRef, useEffect } from 'react';
+import React, { createContext, useContext, useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import {
-    CompressionOptions,
-    ImageCompressionSettings,
     DEFAULT_COMPRESSION_OPTIONS,
     DEFAULT_IMAGE_SETTINGS,
+} from '@/lib/types';
+import type {
+    CompressionOptions,
+    ImageCompressionSettings,
     CompressionAnalysis,
 } from '@/lib/types';
-import { PdfError } from '@/lib/errors';
 import { usePdfCompression, CompressionState } from '@/hooks/usePdfCompression';
-import { trackPresetSelected } from '@/lib/analytics';
 
-// Define the shape of our context
 interface PdfContextType {
-    // State
     state: CompressionState;
     options: CompressionOptions;
     imageSettings: ImageCompressionSettings;
-
-    // Actions
     setOptions: (options: CompressionOptions) => void;
     setImageSettings: (settings: ImageCompressionSettings) => void;
     processFile: (file: File) => void;
     reset: () => void;
-
-    // Helpers
     isProcessing: boolean;
     isUpdating: boolean;
     analysis: CompressionAnalysis | null;
@@ -50,21 +44,21 @@ interface PdfProviderProps {
 export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps) => {
     const { state, processFile: processFileInternal, reset: resetInternal } = usePdfCompression();
 
-    // Lifted state for settings
     const [options, setOptions] = useState<CompressionOptions>(DEFAULT_COMPRESSION_OPTIONS);
     const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
 
-    // Refs for debouncing auto-recompression
+    // Refs for tracking previous settings for auto-recompression
     const prevSettingsRef = useRef<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
     const prevOptionsRef = useRef<CompressionOptions>(DEFAULT_COMPRESSION_OPTIONS);
+    const initialFileProcessed = useRef(false);
 
-    // Process initial file
+    // Process initial file (once)
     useEffect(() => {
-        if (initialFile && state.status === 'idle') {
-            // Track initial upload
+        if (initialFile && state.status === 'idle' && !initialFileProcessed.current) {
+            initialFileProcessed.current = true;
             processFileInternal(initialFile, { imageSettings, options });
         }
-    }, [initialFile]);
+    }, [initialFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Wrapper for processFile to use current settings
     const processFile = useCallback((file: File) => {
@@ -73,40 +67,43 @@ export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps
         processFileInternal(file, { imageSettings, options });
     }, [processFileInternal, imageSettings, options]);
 
-    // Smart Reset
     const reset = useCallback(() => {
         resetInternal();
         setOptions(DEFAULT_COMPRESSION_OPTIONS);
         setImageSettings(DEFAULT_IMAGE_SETTINGS);
         prevSettingsRef.current = DEFAULT_IMAGE_SETTINGS;
         prevOptionsRef.current = DEFAULT_COMPRESSION_OPTIONS;
-        if (onReset) onReset();
+        initialFileProcessed.current = false;
+        onReset?.();
     }, [resetInternal, onReset]);
 
-    // Auto-recompression effect
+    // Auto-recompression when settings change after initial compression
     useEffect(() => {
         if (state.status !== 'done') return;
 
-        const imageSettingsChanged = JSON.stringify(imageSettings) !== JSON.stringify(prevSettingsRef.current);
-        const optionsChanged = JSON.stringify(options) !== JSON.stringify(prevOptionsRef.current);
+        // Compare by reference first (cheap), then by value
+        const imageSettingsChanged = imageSettings !== prevSettingsRef.current;
+        const optionsChanged = options !== prevOptionsRef.current;
 
         if (!imageSettingsChanged && !optionsChanged) return;
 
-        // Use the original file from state, not the already compressed blob
         const fileToProcess = state.originalFile;
 
-        // Debounce re-compression
         const timer = setTimeout(() => {
             prevSettingsRef.current = imageSettings;
             prevOptionsRef.current = options;
-            // Pass isBackground=true to avoid full loading screen
             processFileInternal(fileToProcess, { imageSettings, options }, true);
         }, 500);
 
         return () => clearTimeout(timer);
     }, [imageSettings, options, state, processFileInternal]);
 
-    const value: PdfContextType = {
+    const isProcessing = state.status === 'processing' || state.status === 'validating';
+    const isUpdating = state.status === 'done' ? !!state.isUpdating : false;
+    const analysis = state.status === 'done' ? state.analysis : null;
+
+    // Memoize context value to prevent unnecessary re-renders
+    const value = useMemo<PdfContextType>(() => ({
         state,
         options,
         imageSettings,
@@ -114,10 +111,10 @@ export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps
         setImageSettings,
         processFile,
         reset,
-        isProcessing: state.status === 'processing' || state.status === 'validating',
-        isUpdating: state.status === 'done' ? !!state.isUpdating : false,
-        analysis: state.status === 'done' ? state.analysis : null,
-    };
+        isProcessing,
+        isUpdating,
+        analysis,
+    }), [state, options, imageSettings, processFile, reset, isProcessing, isUpdating, analysis]);
 
     return (
         <PdfContext.Provider value={value}>

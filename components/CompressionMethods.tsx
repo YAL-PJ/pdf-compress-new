@@ -1,7 +1,7 @@
 'use client';
 
 import { MethodItem } from './MethodItem';
-import type { CompressionOptions, ImageCompressionSettings } from '@/lib/types';
+import type { CompressionOptions, ImageCompressionSettings, MethodResult } from '@/lib/types';
 import { formatBytes } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -10,11 +10,8 @@ import {
   Paperclip, ChevronDown, ChevronRight, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { usePdf } from '@/context/PdfContext';
-
-// ... (Keep existing Type Definitions and Static Config - they are perfect)
-// ... (Lines 61-314 from original file)
 export interface MethodConfig {
   key: keyof CompressionOptions;
   label: string;
@@ -285,6 +282,17 @@ export const CompressionMethods = () => {
   const methodResults = analysis?.methodResults;
   const imageStats = analysis?.imageStats;
 
+  // O(1) lookup instead of O(n) Array.find per method per render
+  const methodResultsMap = useMemo(() => {
+    const map = new Map<string, MethodResult>();
+    if (methodResults) {
+      for (const r of methodResults) {
+        map.set(r.key, r);
+      }
+    }
+    return map;
+  }, [methodResults]);
+
   const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
 
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
@@ -296,24 +304,19 @@ export const CompressionMethods = () => {
     'Advanced': false,
   });
 
-  const toggleCategory = (category: string) => {
+  const toggleCategory = useCallback((category: string) => {
     setExpandedCategories(prev => ({
       ...prev,
       [category]: !prev[category],
     }));
-  };
+  }, []);
 
-  const toggleMethod = (key: keyof CompressionOptions) => {
-    if (disabled) return;
-    setOptions({ ...options, [key]: !options[key] });
-  };
+  const getMethodResult = useCallback((key: keyof CompressionOptions) => {
+    return methodResultsMap.get(key);
+  }, [methodResultsMap]);
 
-  const getMethodResult = (key: keyof CompressionOptions) => {
-    return methodResults?.find(r => r.key === key);
-  };
-
-  // Handle special toggles
-  const handleMethodToggle = (key: keyof CompressionOptions) => {
+  // Handle special toggles with method interdependency logic
+  const handleMethodToggle = useCallback((key: keyof CompressionOptions) => {
     if (key === 'downsampleImages') {
       const newEnabled = !options[key];
       const newOptions = newEnabled
@@ -322,7 +325,6 @@ export const CompressionMethods = () => {
       setOptions(newOptions);
       setImageSettings({ ...imageSettings, enableDownsampling: newEnabled });
     } else if (key === 'convertToGrayscale' || key === 'convertToMonochrome') {
-      // Grayscale/monochrome require recompressImages and are mutually exclusive
       const newEnabled = !options[key];
       const otherKey = key === 'convertToGrayscale' ? 'convertToMonochrome' : 'convertToGrayscale';
       const newOptions = newEnabled
@@ -330,7 +332,6 @@ export const CompressionMethods = () => {
         : { ...options, [key]: false };
       setOptions(newOptions);
     } else if (key === 'recompressImages' && options[key]) {
-      // Disabling recompressImages also disables downsample, grayscale, monochrome
       setOptions({
         ...options,
         [key]: false,
@@ -340,19 +341,20 @@ export const CompressionMethods = () => {
       });
       setImageSettings({ ...imageSettings, enableDownsampling: false });
     } else {
-      toggleMethod(key);
+      if (disabled) return;
+      setOptions({ ...options, [key]: !options[key] });
     }
-  };
+  }, [options, disabled, setOptions, imageSettings, setImageSettings]);
 
-  const getCategoryStats = (category: MethodCategory) => {
+  const getCategoryStats = useCallback((category: MethodCategory) => {
     const enabled = category.methods.filter(m => options[m.key]).length;
     const total = category.methods.length;
     const savings = category.methods.reduce((sum, m) => {
-      const result = getMethodResult(m.key);
+      const result = methodResultsMap.get(m.key);
       return sum + (options[m.key] && result ? result.savedBytes : 0);
     }, 0);
     return { enabled, total, savings };
-  };
+  }, [options, methodResultsMap]);
 
   const displayCategories = activeTab === 'basic' ? BASIC_CATEGORIES : CATEGORIES;
 

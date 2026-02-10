@@ -60,7 +60,7 @@ export const LandingPage = () => {
                     <div className="max-w-6xl mx-auto grid md:grid-cols-3 gap-8 px-4">
                         {features.map(f => (
                             <div key={f.title} className="p-6 rounded-xl border">
-                                <f.icon className="w-8 h-8 mb-3 text-blue-600" />
+                                <f.icon className="w-8 h-8 mb-3 text-blue-600" aria-hidden="true" />
                                 <h3 className="font-bold text-slate-900">{f.title}</h3>
                                 <p className="text-slate-700">{f.description}</p>
                             </div>

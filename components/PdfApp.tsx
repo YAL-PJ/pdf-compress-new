@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, startTransition } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     UploadZone,
@@ -23,9 +23,9 @@ import { usePageManager } from '@/hooks/usePageManager';
 import { usePdf, PdfProvider } from '@/context/PdfContext';
 
 // Types
-import {
-    DEFAULT_COMPRESSION_OPTIONS,
-    DEFAULT_IMAGE_SETTINGS,
+import type {
+    CompressionOptions,
+    ImageCompressionSettings,
 } from '@/lib/types';
 
 
@@ -91,14 +91,10 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
     }, [isBatchMode, clearQueue, handleReset]);
 
     // Handle preset selection
-    const handlePresetSelect = useCallback((newOptions: any, newSettings: any) => {
-        // Immediate visual update handled by button component if needed, 
-        // but React 18 startTransition prioritizes input over state updates
-        import('react').then(({ startTransition }) => {
-            startTransition(() => {
-                setOptions(newOptions);
-                setImageSettings(newSettings);
-            });
+    const handlePresetSelect = useCallback((newOptions: CompressionOptions, newSettings: ImageCompressionSettings) => {
+        startTransition(() => {
+            setOptions(newOptions);
+            setImageSettings(newSettings);
         });
     }, [setOptions, setImageSettings]);
 

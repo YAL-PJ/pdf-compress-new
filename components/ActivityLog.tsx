@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format } from "date-fns";
 import { ChevronDown, ChevronRight, Activity, CheckCircle, AlertTriangle, XCircle, Info } from "lucide-react";
 import type { ProcessingLog } from "@/lib/types";
@@ -13,9 +13,16 @@ interface ActivityLogProps {
 export const ActivityLog = ({ logs, className }: ActivityLogProps) => {
     const [isOpen, setIsOpen] = useState(false);
 
-    // Filter out noisy logs if needed, or categorize
-    const errorCount = logs.filter(l => l.level === 'error').length;
-    const warningCount = logs.filter(l => l.level === 'warning').length;
+    // Single-pass count instead of 3 separate filter() calls
+    const { errorCount, warningCount } = useMemo(() => {
+        let errors = 0;
+        let warnings = 0;
+        for (const l of logs) {
+            if (l.level === 'error') errors++;
+            else if (l.level === 'warning') warnings++;
+        }
+        return { errorCount: errors, warningCount: warnings };
+    }, [logs]);
 
     return (
         <div className={twMerge("border border-slate-200 rounded-lg overflow-hidden bg-white", className)}>
@@ -52,9 +59,9 @@ export const ActivityLog = ({ logs, className }: ActivityLogProps) => {
                     >
                         <div className="p-4 bg-slate-50/50 max-h-[400px] overflow-y-auto space-y-2">
                             {logs.map((log, index) => (
-                                <div key={index} className="flex gap-3 text-xs group">
+                                <div key={`${log.timestamp}-${index}`} className="flex gap-3 text-xs group">
                                     <div className="w-16 flex-shrink-0 text-slate-400 font-mono text-[10px] pt-0.5">
-                                        {format(log.timestamp, "HH:mm:ss.ms")}
+                                        {format(log.timestamp, "HH:mm:ss.SSS")}
                                     </div>
                                     <div className="pt-0.5">
                                         {log.level === 'success' && <CheckCircle className="w-3 h-3 text-emerald-500" />}

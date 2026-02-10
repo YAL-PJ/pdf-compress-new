@@ -11,31 +11,18 @@ import {
   trackCompressionCompleted,
   trackCompressionError,
 } from '@/lib/analytics';
+import {
+  DEFAULT_COMPRESSION_OPTIONS,
+  DEFAULT_IMAGE_SETTINGS,
+} from '@/lib/types';
 import type {
   CompressionAnalysis,
   WorkerResponse,
   WorkerSuccessPayload,
   WorkerErrorPayload,
   WorkerProgressPayload,
-  ImageCompressionSettings,
-  CompressionOptions,
   ProcessingSettings,
 } from '@/lib/types';
-
-// Inline defaults to avoid import issues
-const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
-  useObjectStreams: true, stripMetadata: true, recompressImages: true, downsampleImages: false,
-  convertToGrayscale: false, pngToJpeg: false, convertToMonochrome: false, removeAlphaChannels: false,
-  removeColorProfiles: false, cmykToRgb: false, removeThumbnails: true, removeDuplicateResources: false,
-  removeUnusedFonts: false, removeAttachments: false, flattenForms: false, flattenAnnotations: false,
-  removeJavaScript: true, removeBookmarks: false, removeNamedDestinations: false, removeArticleThreads: true,
-  removeWebCaptureInfo: true, removeHiddenLayers: false, removePageLabels: false, deepCleanMetadata: false,
-  inlineToXObject: false, compressContentStreams: true, removeOrphanObjects: true, removeAlternateContent: false,
-  removeInvisibleText: false,
-};
-const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
-  quality: 75, minSizeThreshold: 10 * 1024, targetDpi: 150, enableDownsampling: false,
-};
 
 // Simple ID generator for job tracking
 const generateJobId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -43,7 +30,7 @@ const generateJobId = () => Math.random().toString(36).substring(2, 15) + Math.r
 export type CompressionState =
   | { status: 'idle' }
   | { status: 'validating' }
-  | { status: 'processing'; progress: string; progressPercent?: number; fileName: string }
+  | { status: 'processing'; progress: string; progressPercent?: number; fileName: string; originalFile: File }
   | { status: 'done'; analysis: CompressionAnalysis; fileName: string; originalFile: File; isUpdating?: boolean }
   | { status: 'error'; error: PdfError };
 
@@ -98,11 +85,11 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
           const p = payload as WorkerProgressPayload;
           setState(prev => ({
             ...prev,
-            status: 'processing',
+            status: 'processing' as const,
             progress: p.message,
             progressPercent: p.percent,
-            // Keep existing fileName if available, or empty string
-            fileName: 'fileName' in prev && prev.fileName ? prev.fileName : ''
+            fileName: 'fileName' in prev ? prev.fileName : '',
+            originalFile: 'originalFile' in prev ? prev.originalFile as File : new File([], ''),
           }));
           break;
         }
@@ -123,8 +110,8 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
 
           setState(prev => ({
             status: 'done',
-            fileName: 'fileName' in prev ? prev.fileName : 'document.pdf', // Fallback
-            originalFile: 'originalFile' in prev ? prev.originalFile as File : new File([], 'error'), // Fallback
+            fileName: 'fileName' in prev ? prev.fileName : 'document.pdf',
+            originalFile: 'originalFile' in prev ? prev.originalFile as File : new File([], 'error'),
             isUpdating: false,
             analysis: {
               originalSize: s.originalSize,
@@ -133,6 +120,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
               fullBlob: new Blob([s.fullCompressedBuffer], { type: 'application/pdf' }),
               methodResults: s.methodResults,
               imageStats: s.imageStats,
+              report: s.report,
             }
           }));
           break;
@@ -221,7 +209,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
         });
         return;
       }
-      setState({ status: 'processing', progress: 'Starting...', fileName: file.name, originalFile: file } as any);
+      setState({ status: 'processing', progress: 'Starting...', fileName: file.name, originalFile: file });
       trackFileUpload(file.size / 1024 / 1024);
     }
 

@@ -117,8 +117,6 @@ export const metadata: Metadata = {
   category: "technology",
 };
 
-
-
 /* =========================
    STRUCTURED DATA (JSON-LD)
 ========================= */
@@ -156,7 +154,7 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || "G-MCMZ8KMLXL";
+  const gaMeasurementId = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
   return (
     <html lang="en">
@@ -166,8 +164,6 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
-
-
       </head>
 
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>

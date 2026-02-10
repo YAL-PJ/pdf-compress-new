@@ -115,7 +115,6 @@ export const ResultsDisplay = memo(({
   }, [blob]);
 
   // Track Telemetry
-  // Track Telemetry
   useEffect(() => {
     if (report) {
       trackTelemetry(report);
@@ -136,7 +135,7 @@ export const ResultsDisplay = memo(({
     link.href = url;
     link.download = getOutputFilename(originalFileName);
     link.click();
-  }, [blob, originalFileName, compressedSize, savedPercent]);
+  }, [blob, originalFileName, compressedSize]);
 
   const compressionRatio = Math.min(Math.max((compressedSize / originalSize) * 100, 5), 100);
 

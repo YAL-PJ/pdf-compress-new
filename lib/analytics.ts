@@ -3,6 +3,8 @@
  * Uses Google Analytics (gtag.js)
  */
 
+import type { CompressionReport } from './types';
+
 type EventName =
   | 'file_upload'
   | 'compression_started'
@@ -32,69 +34,49 @@ declare global {
   }
 }
 
-/**
- * Track an analytics event
- * Events are only sent if Google Analytics is loaded
- */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 export function trackEvent(name: EventName, props?: EventProps): void {
-  // Only track in production or if explicitly enabled
   if (typeof window === 'undefined') return;
 
-  // Use Google Analytics if available
   if (window.gtag) {
     window.gtag('event', name, props);
   }
 
-  // Log events in development for debugging
   if (process.env.NODE_ENV === 'development') {
     console.log('[Analytics]', name, props);
   }
 }
 
-/**
- * Track file upload
- */
 export function trackFileUpload(fileSizeMB: number, isBatch: boolean = false): void {
   trackEvent('file_upload', {
-    file_size_mb: Math.round(fileSizeMB * 100) / 100,
+    file_size_mb: round2(fileSizeMB),
     is_batch: isBatch,
   });
 }
 
-/**
- * Track compression start
- */
 export function trackCompressionStarted(pageCount: number): void {
   trackEvent('compression_started', { page_count: pageCount });
 }
 
-/**
- * Track compression completion
- */
 export function trackCompressionCompleted(
   originalSizeMB: number,
   compressedSizeMB: number,
   savingsPercent: number
 ): void {
   trackEvent('compression_completed', {
-    original_size_mb: Math.round(originalSizeMB * 100) / 100,
-    compressed_size_mb: Math.round(compressedSizeMB * 100) / 100,
+    original_size_mb: round2(originalSizeMB),
+    compressed_size_mb: round2(compressedSizeMB),
     savings_percent: Math.round(savingsPercent),
   });
 }
 
-/**
- * Track download click
- */
 export function trackDownload(fileSizeMB: number): void {
   trackEvent('download_click', {
-    file_size_mb: Math.round(fileSizeMB * 100) / 100,
+    file_size_mb: round2(fileSizeMB),
   });
 }
 
-/**
- * Track batch processing
- */
 export function trackBatchStarted(fileCount: number): void {
   trackEvent('batch_started', { file_count: fileCount });
 }
@@ -106,23 +88,14 @@ export function trackBatchCompleted(fileCount: number, totalSavingsPercent: numb
   });
 }
 
-/**
- * Track method toggle
- */
 export function trackMethodToggle(method: string, enabled: boolean): void {
   trackEvent('method_toggle', { method, enabled });
 }
 
-/**
- * Track preset selection
- */
 export function trackPresetSelected(preset: string): void {
   trackEvent('preset_selected', { preset });
 }
 
-/**
- * Track page operations
- */
 export function trackPageOperation(operation: 'rotated' | 'deleted' | 'reordered'): void {
   if (operation === 'rotated') {
     trackEvent('page_rotated');
@@ -133,9 +106,6 @@ export function trackPageOperation(operation: 'rotated' | 'deleted' | 'reordered
   }
 }
 
-/**
- * Track compression error
- */
 export function trackCompressionError(errorCode: string): void {
   trackEvent('compression_error', { error_code: errorCode });
 }
@@ -143,16 +113,11 @@ export function trackCompressionError(errorCode: string): void {
 /**
  * Send admin telemetry report (Fire and Forget)
  */
-import { CompressionReport } from './types';
-
 export function trackTelemetry(report: CompressionReport): void {
-  // Use requestIdleCallback if available to avoid blocking main thread
   const sendTelemetry = () => {
     try {
-      // Create a lightweight version of the report to avoid massive JSON stringify
       const lightweightReport = {
         ...report,
-        // Keep only important logs (errors/warnings) + last 20 info logs to save space/time
         logs: [
           ...report.logs.filter(l => l.level === 'error' || l.level === 'warning'),
           ...report.logs.filter(l => l.level !== 'error' && l.level !== 'warning').slice(-20)
@@ -165,18 +130,16 @@ export function trackTelemetry(report: CompressionReport): void {
         body: JSON.stringify({ report: lightweightReport }),
         keepalive: true,
       }).catch(err => {
-        // Ignore network errors in client
         if (process.env.NODE_ENV === 'development') console.error('Telemetry failed:', err);
       });
     } catch {
-      // Safety
+      // Fail silently in production
     }
   };
 
   if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    (window as any).requestIdleCallback(sendTelemetry);
+    window.requestIdleCallback(sendTelemetry, { timeout: 5000 });
   } else {
-    // Fallback for browsers without requestIdleCallback or Node env
     setTimeout(sendTelemetry, 1000);
   }
 }

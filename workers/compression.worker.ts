@@ -4,49 +4,12 @@
  */
 
 import { analyzePdf, type ExtendedProcessingSettings } from '../lib/pdf-processor';
+import { isPdfError } from '@/lib/errors';
+import {
+  DEFAULT_COMPRESSION_OPTIONS,
+  DEFAULT_IMAGE_SETTINGS,
+} from '@/lib/types';
 import type { WorkerMessage, WorkerResponse, ImageCompressionSettings, CompressionOptions } from '@/lib/types';
-
-// Inline defaults to avoid import issues in worker environment
-const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
-  useObjectStreams: true,
-  stripMetadata: true,
-  recompressImages: true,
-  downsampleImages: false,
-  convertToGrayscale: false,
-  pngToJpeg: false,
-  convertToMonochrome: false,
-  removeAlphaChannels: false,
-  removeColorProfiles: false,
-  cmykToRgb: false,
-  removeThumbnails: true,
-  removeDuplicateResources: false,
-  removeUnusedFonts: false,
-  removeAttachments: false,
-  flattenForms: false,
-  flattenAnnotations: false,
-  removeJavaScript: true,
-  removeBookmarks: false,
-  removeNamedDestinations: false,
-  removeArticleThreads: true,
-  removeWebCaptureInfo: true,
-  removeHiddenLayers: false,
-  removePageLabels: false,
-  deepCleanMetadata: false,
-  inlineToXObject: false,
-  compressContentStreams: true,
-  removeOrphanObjects: true,
-  removeAlternateContent: false,
-  removeInvisibleText: false,
-};
-
-const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
-  quality: 75,
-  minSizeThreshold: 10 * 1024,
-  targetDpi: 150,
-  enableDownsampling: false,
-};
-
-
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   const { type, payload } = event.data;
@@ -56,7 +19,6 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   const imageSettings: ImageCompressionSettings = payload.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
   const options: CompressionOptions = payload.options ?? DEFAULT_COMPRESSION_OPTIONS;
 
-  // Build extended settings that include both image settings and compression options
   const extendedSettings: ExtendedProcessingSettings = {
     ...imageSettings,
     options,
@@ -64,12 +26,11 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 
   const { jobId } = payload;
 
-  const postResponse = (response: WorkerResponse) => {
-    // Ensure jobId is attached to every response
-    self.postMessage({ ...response, jobId });
+  const postResponse = (response: WorkerResponse, transfer?: Transferable[]) => {
+    self.postMessage({ ...response, jobId }, { transfer: transfer ?? [] });
   };
 
-  const postProgressWithJob = (message: string, percent?: number) => {
+  const postProgress = (message: string, percent?: number) => {
     postResponse({
       type: 'progress',
       payload: { stage: 'analyzing', message, percent },
@@ -80,11 +41,11 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   try {
     const analysis = await analyzePdf(
       payload.arrayBuffer,
-      postProgressWithJob,
+      postProgress,
       extendedSettings
     );
 
-    const buffer = new Uint8Array(analysis.fullCompressedBytes).buffer as ArrayBuffer;
+    const buffer = analysis.fullCompressedBytes.slice().buffer as ArrayBuffer;
 
     postResponse({
       type: 'success',
@@ -95,14 +56,17 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         fullCompressedBuffer: buffer,
         methodResults: analysis.methodResults,
         imageStats: analysis.imageStats,
+        report: analysis.report,
       },
       jobId,
-    });
+    }, [buffer]); // Transfer ArrayBuffer instead of copying
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     let code = 'PROCESSING_FAILED';
-    if (message.includes('encrypt') || message.includes('password')) {
+    if (isPdfError(error)) {
+      code = error.code;
+    } else if (message.includes('encrypt') || message.includes('password')) {
       code = 'ENCRYPTED_PDF';
     } else if (message.includes('Invalid') || message.includes('corrupt')) {
       code = 'CORRUPTED_PDF';
@@ -115,5 +79,3 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     });
   }
 };
-
-export { };

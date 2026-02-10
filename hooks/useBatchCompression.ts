@@ -1,6 +1,9 @@
-
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { BatchFileItem } from '@/lib/batch-types';
+import {
+    DEFAULT_COMPRESSION_OPTIONS,
+    DEFAULT_IMAGE_SETTINGS,
+} from '@/lib/types';
 import type {
     WorkerResponse,
     WorkerSuccessPayload,
@@ -12,30 +15,24 @@ import type {
 import { validateFile, validatePdfSignature } from '@/lib/utils';
 import { createPdfError } from '@/lib/errors';
 
-const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
-    useObjectStreams: true, stripMetadata: true, recompressImages: true, downsampleImages: false,
-    convertToGrayscale: false, pngToJpeg: false, convertToMonochrome: false, removeAlphaChannels: false,
-    removeColorProfiles: false, cmykToRgb: false, removeThumbnails: true, removeDuplicateResources: false,
-    removeUnusedFonts: false, removeAttachments: false, flattenForms: false, flattenAnnotations: false,
-    removeJavaScript: true, removeBookmarks: false, removeNamedDestinations: false, removeArticleThreads: true,
-    removeWebCaptureInfo: true, removeHiddenLayers: false, removePageLabels: false, deepCleanMetadata: false,
-    inlineToXObject: false, compressContentStreams: true, removeOrphanObjects: true, removeAlternateContent: false,
-    removeInvisibleText: false,
-};
-const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
-    quality: 75, minSizeThreshold: 10 * 1024, targetDpi: 150, enableDownsampling: false,
-};
-
 interface BatchCompressionSettings {
     imageSettings: ImageCompressionSettings;
     options: CompressionOptions;
 }
+
+const WORKER_TIMEOUT_MS = 120_000; // 2 minutes per file
 
 export const useBatchCompression = () => {
     const [queue, setQueue] = useState<BatchFileItem[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
     const workerRef = useRef<Worker | null>(null);
     const currentFileIdRef = useRef<string | null>(null);
+    const queueRef = useRef<BatchFileItem[]>([]);
+
+    // Keep queueRef in sync
+    useEffect(() => {
+        queueRef.current = queue;
+    }, [queue]);
 
     // Cleanup worker on unmount
     useEffect(() => {
@@ -46,7 +43,6 @@ export const useBatchCompression = () => {
 
     const addFiles = useCallback((files: File[]) => {
         const newItems: BatchFileItem[] = files.map(file => {
-            // Validate file on add
             const validation = validateFile(file);
             if (!validation.valid) {
                 return {
@@ -97,12 +93,25 @@ export const useBatchCompression = () => {
 
             currentFileIdRef.current = item.id;
 
-            // Update status to processing
             setQueue(prev => prev.map(i =>
                 i.id === item.id ? { ...i, status: 'processing' as const, progress: 0 } : i
             ));
 
-            // Create worker
+            // Per-file timeout to prevent hanging
+            const timeout = setTimeout(() => {
+                setQueue(prev => prev.map(i =>
+                    i.id === item.id ? {
+                        ...i,
+                        status: 'error' as const,
+                        progress: 0,
+                        error: createPdfError('PROCESSING_FAILED', 'Processing timed out'),
+                    } : i
+                ));
+                workerRef.current?.terminate();
+                workerRef.current = null;
+                resolve();
+            }, WORKER_TIMEOUT_MS);
+
             workerRef.current?.terminate();
             workerRef.current = new Worker(
                 new URL('../workers/compression.worker.ts', import.meta.url)
@@ -111,7 +120,6 @@ export const useBatchCompression = () => {
             workerRef.current.onmessage = (event: MessageEvent<WorkerResponse>) => {
                 const { type, payload } = event.data;
 
-                // Ignore if this is not the current file being processed
                 if (currentFileIdRef.current !== item.id) return;
 
                 switch (type) {
@@ -124,6 +132,7 @@ export const useBatchCompression = () => {
                     }
 
                     case 'success': {
+                        clearTimeout(timeout);
                         const s = payload as WorkerSuccessPayload;
                         setQueue(prev => prev.map(i =>
                             i.id === item.id ? {
@@ -137,6 +146,7 @@ export const useBatchCompression = () => {
                                     fullBlob: new Blob([s.fullCompressedBuffer], { type: 'application/pdf' }),
                                     methodResults: s.methodResults,
                                     imageStats: s.imageStats,
+                                    report: s.report,
                                 },
                             } : i
                         ));
@@ -145,6 +155,7 @@ export const useBatchCompression = () => {
                     }
 
                     case 'error': {
+                        clearTimeout(timeout);
                         const e = payload as WorkerErrorPayload;
                         setQueue(prev => prev.map(i =>
                             i.id === item.id ? {
@@ -157,13 +168,14 @@ export const useBatchCompression = () => {
                                 ),
                             } : i
                         ));
-                        resolve(); // Resolve even on error to continue with next file
+                        resolve();
                         break;
                     }
                 }
             };
 
             workerRef.current.onerror = (error) => {
+                clearTimeout(timeout);
                 setQueue(prev => prev.map(i =>
                     i.id === item.id ? {
                         ...i,
@@ -172,14 +184,14 @@ export const useBatchCompression = () => {
                         error: createPdfError('WORKER_ERROR', error.message),
                     } : i
                 ));
-                resolve(); // Resolve even on error to continue with next file
+                resolve();
             };
 
             // Start processing
             item.originalFile.arrayBuffer().then((arrayBuffer) => {
-                // Validate PDF signature (magic bytes) to catch renamed non-PDF files
                 const signatureValidation = validatePdfSignature(arrayBuffer);
                 if (!signatureValidation.valid) {
+                    clearTimeout(timeout);
                     setQueue(prev => prev.map(i =>
                         i.id === item.id ? {
                             ...i,
@@ -200,6 +212,7 @@ export const useBatchCompression = () => {
                     [arrayBuffer]
                 );
             }).catch((err) => {
+                clearTimeout(timeout);
                 setQueue(prev => prev.map(i =>
                     i.id === item.id ? {
                         ...i,
@@ -220,37 +233,32 @@ export const useBatchCompression = () => {
 
         setIsProcessing(true);
 
-        // Get all queued items
-        const queuedItems = queue.filter(item => item.status === 'queued');
+        // Snapshot queued items at start
+        const queuedItems = queueRef.current.filter(item => item.status === 'queued');
 
-        // Process each file sequentially
         for (const item of queuedItems) {
-            // Re-check if item is still in queue (might have been removed)
-            const currentQueue = await new Promise<BatchFileItem[]>(resolve => {
-                setQueue(prev => {
-                    resolve(prev);
-                    return prev;
-                });
-            });
-
-            const stillExists = currentQueue.find(i => i.id === item.id);
-            if (!stillExists || stillExists.status !== 'queued') continue;
+            // Re-check using ref (no extra reconciliation)
+            const current = queueRef.current.find(i => i.id === item.id);
+            if (!current || current.status !== 'queued') continue;
 
             await processFile(item, { imageSettings, options });
         }
 
         setIsProcessing(false);
         currentFileIdRef.current = null;
-    }, [queue, processFile]);
+    }, [processFile]);
 
-    // Get statistics
-    const stats = {
-        total: queue.length,
-        queued: queue.filter(i => i.status === 'queued').length,
-        processing: queue.filter(i => i.status === 'processing').length,
-        done: queue.filter(i => i.status === 'done').length,
-        error: queue.filter(i => i.status === 'error').length,
-    };
+    // Compute stats via useMemo instead of recalculating on every render
+    const stats = useMemo(() => {
+        let queued = 0, processing = 0, done = 0, error = 0;
+        for (const i of queue) {
+            if (i.status === 'queued') queued++;
+            else if (i.status === 'processing') processing++;
+            else if (i.status === 'done') done++;
+            else if (i.status === 'error') error++;
+        }
+        return { total: queue.length, queued, processing, done, error };
+    }, [queue]);
 
     return {
         queue,

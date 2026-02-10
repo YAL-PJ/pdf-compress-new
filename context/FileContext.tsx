@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useMemo, ReactNode } from 'react';
 
 interface FileContextType {
     file: File | null;
@@ -20,8 +20,12 @@ export const useFile = () => {
 export const FileProvider = ({ children }: { children: ReactNode }) => {
     const [file, setFile] = useState<File | null>(null);
 
+    // Memoize to prevent unnecessary re-renders of all consumers
+    // setFile from useState is stable, so file is the only real dependency
+    const value = useMemo(() => ({ file, setFile }), [file]);
+
     return (
-        <FileContext.Provider value={{ file, setFile }}>
+        <FileContext.Provider value={value}>
             {children}
         </FileContext.Provider>
     );

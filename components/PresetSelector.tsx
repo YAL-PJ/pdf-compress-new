@@ -4,10 +4,9 @@ import { PRESETS, PresetId, getPresetForCurrentSettings } from '@/lib/presets';
 import { trackPresetSelected } from '@/lib/analytics';
 import { motion } from 'framer-motion';
 import { twMerge } from 'tailwind-merge';
-import { memo, useState, useEffect } from 'react';
+import { memo, useState, useEffect, startTransition } from 'react';
 import { usePdf } from '@/context/PdfContext';
 
-// No props needed! Fully autonomous component
 export const PresetSelector = memo(() => {
     const { options, imageSettings, setOptions, setImageSettings, isProcessing, isUpdating } = usePdf();
 
@@ -31,17 +30,13 @@ export const PresetSelector = memo(() => {
         // Immediate visual feedback
         setOptimisticPresetId(presetId);
 
-        // Defer tracking slightly to prioritize UI update
-        setTimeout(() => trackPresetSelected(presetId), 0);
+        trackPresetSelected(presetId);
 
         const preset = PRESETS[presetId];
 
-        // Use React transition for smooth updates if available, or just direct update
-        import('react').then(({ startTransition }) => {
-            startTransition(() => {
-                setOptions(preset.options);
-                setImageSettings(preset.imageSettings);
-            });
+        startTransition(() => {
+            setOptions(preset.options);
+            setImageSettings(preset.imageSettings);
         });
     };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import type { PdfError } from '@/lib/errors';
 import { AlertCircle, RefreshCw, Bug, Copy, Check } from 'lucide-react';
 
@@ -13,7 +13,11 @@ export const ErrorDisplay = ({ error, onReset }: ErrorDisplayProps) => {
   const [copied, setCopied] = useState(false);
   const [reportSubmitted, setReportSubmitted] = useState(false);
 
-  const errorDetails = `Error Code: ${error.code}\nMessage: ${error.message}\nTime: ${new Date().toISOString()}`;
+  // Capture timestamp once when error is first rendered, not on every re-render
+  const errorDetails = useMemo(
+    () => `Error Code: ${error.code}\nMessage: ${error.message}\nTime: ${new Date().toISOString()}`,
+    [error.code, error.message]
+  );
 
   const handleCopyError = async () => {
     try {

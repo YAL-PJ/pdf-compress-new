@@ -1,7 +1,7 @@
 'use client';
 
 import React, { Component, ReactNode } from 'react';
-import { AlertTriangle, RefreshCw, Bug } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -11,17 +11,16 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
-  eventId: string | null;
 }
 
 /**
  * Error Boundary component that catches JavaScript errors in child components.
- * Reports errors to Sentry and provides a user-friendly fallback UI.
+ * Provides a user-friendly fallback UI with reset capability.
  */
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, eventId: null };
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -29,18 +28,13 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    // Log to console in development
     if (process.env.NODE_ENV === 'development') {
       console.error('ErrorBoundary caught an error:', error, errorInfo);
     }
   }
 
   handleReset = (): void => {
-    this.setState({ hasError: false, error: null, eventId: null });
-  };
-
-  handleReportFeedback = (): void => {
-    // Reporting removed
+    this.setState({ hasError: false, error: null });
   };
 
   render(): ReactNode {
@@ -65,7 +59,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </h2>
 
             <p className="text-slate-500 mb-6">
-              An unexpected error occurred. Our team has been notified and is working on a fix.
+              An unexpected error occurred. Please try again.
             </p>
 
             {process.env.NODE_ENV === 'development' && this.state.error && (
@@ -74,23 +68,13 @@ export class ErrorBoundary extends Component<Props, State> {
               </pre>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={this.handleReset}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-              >
-                <RefreshCw className="w-4 h-4" aria-hidden="true" />
-                Try Again
-              </button>
-
-              <button
-                onClick={this.handleReportFeedback}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-slate-300 text-slate-700 rounded-lg font-medium hover:bg-slate-50 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
-              >
-                <Bug className="w-4 h-4" aria-hidden="true" />
-                Report Issue
-              </button>
-            </div>
+            <button
+              onClick={this.handleReset}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-slate-900 text-white rounded-lg font-medium hover:bg-slate-800 transition-colors focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+            >
+              <RefreshCw className="w-4 h-4" aria-hidden="true" />
+              Try Again
+            </button>
           </div>
         </div>
       );
