@@ -4,7 +4,8 @@
  */
 
 import type { CompressionReport, MethodResult } from './types';
-import { createLogger } from './logger';
+import { createLogger, getCurrentSessionId } from './logger';
+import { formatBytes } from './utils';
 
 const log = createLogger('analytics');
 
@@ -125,12 +126,76 @@ export function trackCompressionError(errorCode: string): void {
   trackEvent('compression_error', { error_code: errorCode });
 }
 
+const TELEMETRY_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxBDNWqkuC-g7uecl6o-PeJM6oJISqJBfQndt6IlejpBnYDQp5nFhzsyc0iUMjEMvBSYw/exec';
+
 /**
- * Send admin telemetry report (no-op)
- *
- * Disabled because the app uses static export (output: "export") which
- * excludes API routes from the build — /api/telemetry doesn't exist.
+ * Build a telemetry payload with per-method stats
  */
-export function trackTelemetry(_report: CompressionReport, _methodResults?: MethodResult[]): void {
-  // Telemetry disabled — incompatible with static export
+function buildTelemetryPayload(report: CompressionReport, methodResults?: MethodResult[]) {
+  const savingsPercent = report.originalSize > 0
+    ? ((report.originalSize - report.compressedSize) / report.originalSize * 100)
+    : 0;
+
+  const methodBreakdown = methodResults
+    ? methodResults
+      .filter(m => m.savedBytes > 0)
+      .map(m => ({
+        method: m.key,
+        savedBytes: m.savedBytes,
+        savedFormatted: formatBytes(m.savedBytes),
+        percentOfTotal: report.originalSize > 0
+          ? round2((m.savedBytes / report.originalSize) * 100)
+          : 0,
+      }))
+      .sort((a, b) => b.savedBytes - a.savedBytes)
+    : [];
+
+  return {
+    sessionId: typeof window !== 'undefined' ? getCurrentSessionId() : undefined,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+    timestamp: report.timestamp,
+    originalSize: report.originalSize,
+    compressedSize: report.compressedSize,
+    savingsPercent: round2(savingsPercent),
+    pageCount: report.pageCount,
+    methodsUsed: report.methodsUsed,
+    methodsSuccessful: report.methodsSuccessful,
+    topMethod: methodBreakdown.length > 0 ? methodBreakdown[0].method : null,
+    errorCount: report.logs.filter(l => l.level === 'error').length,
+  };
+}
+
+/**
+ * Send telemetry report to Google Sheets via Apps Script (fire and forget)
+ */
+export function trackTelemetry(report: CompressionReport, methodResults?: MethodResult[]): void {
+  const sendTelemetry = () => {
+    try {
+      const payload = buildTelemetryPayload(report, methodResults);
+
+      log.info('Sending telemetry', {
+        originalSize: formatBytes(payload.originalSize),
+        compressedSize: formatBytes(payload.compressedSize),
+        savingsPercent: payload.savingsPercent,
+      });
+
+      fetch(TELEMETRY_SHEET_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ report: payload }),
+        keepalive: true,
+      }).catch(() => {
+        // Silently ignore — telemetry is non-critical
+      });
+    } catch {
+      // Fail silently
+    }
+  };
+
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    window.requestIdleCallback(sendTelemetry, { timeout: 5000 });
+  } else {
+    setTimeout(sendTelemetry, 1000);
+  }
 }
