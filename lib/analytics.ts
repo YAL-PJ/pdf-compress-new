@@ -193,8 +193,18 @@ function buildTelemetryPayload(report: CompressionReport, methodResults?: Method
 
 /**
  * Send admin telemetry report (Fire and Forget)
+ *
+ * Requires NEXT_PUBLIC_TELEMETRY_URL to be set, otherwise telemetry is
+ * silently skipped.  This avoids 404 errors when deployed as a static export
+ * (output: "export") where API routes don't exist.
  */
 export function trackTelemetry(report: CompressionReport, methodResults?: MethodResult[]): void {
+  const telemetryUrl = process.env.NEXT_PUBLIC_TELEMETRY_URL;
+  if (!telemetryUrl) {
+    log.info('Telemetry skipped — NEXT_PUBLIC_TELEMETRY_URL not configured');
+    return;
+  }
+
   const sendTelemetry = () => {
     try {
       const payload = buildTelemetryPayload(report, methodResults);
@@ -207,13 +217,13 @@ export function trackTelemetry(report: CompressionReport, methodResults?: Method
         errorCount: payload.errorCount,
       });
 
-      fetch('/api/telemetry', {
+      fetch(telemetryUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ report: payload }),
         keepalive: true,
-      }).catch(err => {
-        log.warn('Telemetry send failed', { error: String(err) });
+      }).catch(() => {
+        // Silently ignore - telemetry is non-critical
       });
     } catch {
       // Fail silently in production
