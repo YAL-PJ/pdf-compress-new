@@ -2,7 +2,7 @@
  * Structured Logger - provides consistent logging across client and server
  *
  * In development: logs to console with structured formatting
- * In production: logs are captured and sent via telemetry API
+ * In production: logs are captured and sent via telemetry
  *
  * Log levels: debug < info < warn < error
  */

@@ -126,15 +126,16 @@ export function trackCompressionError(errorCode: string): void {
   trackEvent('compression_error', { error_code: errorCode });
 }
 
+const TELEMETRY_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxBDNWqkuC-g7uecl6o-PeJM6oJISqJBfQndt6IlejpBnYDQp5nFhzsyc0iUMjEMvBSYw/exec';
+
 /**
- * Build a detailed telemetry payload with per-method stats
+ * Build a telemetry payload with per-method stats
  */
 function buildTelemetryPayload(report: CompressionReport, methodResults?: MethodResult[]) {
   const savingsPercent = report.originalSize > 0
     ? ((report.originalSize - report.compressedSize) / report.originalSize * 100)
     : 0;
 
-  // Per-method breakdown
   const methodBreakdown = methodResults
     ? methodResults
       .filter(m => m.savedBytes > 0)
@@ -149,50 +150,23 @@ function buildTelemetryPayload(report: CompressionReport, methodResults?: Method
       .sort((a, b) => b.savedBytes - a.savedBytes)
     : [];
 
-  // Error/warning summary
-  const errorLogs = report.logs.filter(l => l.level === 'error');
-  const warningLogs = report.logs.filter(l => l.level === 'warning');
-
   return {
-    // Session
     sessionId: typeof window !== 'undefined' ? getCurrentSessionId() : undefined,
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
     timestamp: report.timestamp,
-
-    // File info
     originalSize: report.originalSize,
-    originalSizeFormatted: formatBytes(report.originalSize),
     compressedSize: report.compressedSize,
-    compressedSizeFormatted: formatBytes(report.compressedSize),
     savingsPercent: round2(savingsPercent),
     pageCount: report.pageCount,
-
-    // Methods
     methodsUsed: report.methodsUsed,
     methodsSuccessful: report.methodsSuccessful,
-    methodCount: report.methodsUsed.length,
-    successfulMethodCount: report.methodsSuccessful.length,
-    methodBreakdown,
-
-    // Top contributing method
-    topMethod: methodBreakdown.length > 0 ? methodBreakdown[0] : null,
-
-    // Errors
-    errorCount: errorLogs.length,
-    warningCount: warningLogs.length,
-    errors: errorLogs.map(l => ({ message: l.message, details: l.details })),
-    warnings: warningLogs.map(l => ({ message: l.message, details: l.details })),
-
-    // Trimmed logs (all errors/warnings + last 20 info/success)
-    logs: [
-      ...report.logs.filter(l => l.level === 'error' || l.level === 'warning'),
-      ...report.logs.filter(l => l.level !== 'error' && l.level !== 'warning').slice(-20),
-    ],
+    topMethod: methodBreakdown.length > 0 ? methodBreakdown[0].method : null,
+    errorCount: report.logs.filter(l => l.level === 'error').length,
   };
 }
 
 /**
- * Send admin telemetry report (Fire and Forget)
+ * Send telemetry report to Google Sheets via Apps Script (fire and forget)
  */
 export function trackTelemetry(report: CompressionReport, methodResults?: MethodResult[]): void {
   const sendTelemetry = () => {
@@ -200,23 +174,22 @@ export function trackTelemetry(report: CompressionReport, methodResults?: Method
       const payload = buildTelemetryPayload(report, methodResults);
 
       log.info('Sending telemetry', {
-        originalSize: payload.originalSizeFormatted,
-        compressedSize: payload.compressedSizeFormatted,
+        originalSize: formatBytes(payload.originalSize),
+        compressedSize: formatBytes(payload.compressedSize),
         savingsPercent: payload.savingsPercent,
-        methodCount: payload.methodCount,
-        errorCount: payload.errorCount,
       });
 
-      fetch('/api/telemetry', {
+      fetch(TELEMETRY_SHEET_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({ report: payload }),
         keepalive: true,
-      }).catch(err => {
-        log.warn('Telemetry send failed', { error: String(err) });
+      }).catch(() => {
+        // Silently ignore — telemetry is non-critical
       });
     } catch {
-      // Fail silently in production
+      // Fail silently
     }
   };
 
