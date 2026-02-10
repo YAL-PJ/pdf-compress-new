@@ -9,10 +9,11 @@ import { twMerge } from 'tailwind-merge';
 import { PageGrid } from './PageGrid';
 import { VisualDiff } from './VisualDiff';
 import { ActivityLog } from './ActivityLog';
+import { CompressionStats } from './CompressionStats';
 import { renderPageToImage } from '@/lib/pdf-renderer';
 
 import type { PageState } from '@/hooks/usePageManager';
-import type { CompressionReport } from '@/lib/types';
+import type { CompressionReport, MethodResult } from '@/lib/types';
 
 interface ResultsDisplayProps {
   originalSize: number;
@@ -35,6 +36,7 @@ interface ResultsDisplayProps {
   onReorderPages?: (fromPosition: number, toPosition: number) => void;
   onMovePage?: (pageIndex: number, direction: 'up' | 'down') => void;
   report?: CompressionReport;
+  methodResults?: MethodResult[];
 }
 
 import { memo } from 'react';
@@ -54,6 +56,7 @@ export const ResultsDisplay = memo(({
   onReorderPages,
   onMovePage,
   report,
+  methodResults,
 }: ResultsDisplayProps) => {
   const blobUrlRef = useRef<string | null>(null);
   const { savedBytes, savedPercent, isSmaller } = calculateSavings(originalSize, compressedSize);
@@ -117,9 +120,9 @@ export const ResultsDisplay = memo(({
   // Track Telemetry
   useEffect(() => {
     if (report) {
-      trackTelemetry(report);
+      trackTelemetry(report, methodResults);
     }
-  }, [report]);
+  }, [report, methodResults]);
 
   const handleDownload = useCallback(() => {
     // Track download event
@@ -255,6 +258,18 @@ export const ResultsDisplay = memo(({
             onMovePage={onMovePage}
           />
         </div>
+
+        {/* Compression Analytics */}
+        {methodResults && (
+          <div className="pt-4 border-t border-slate-100">
+            <CompressionStats
+              methodResults={methodResults}
+              originalSize={originalSize}
+              compressedSize={compressedSize}
+              report={report}
+            />
+          </div>
+        )}
 
         {/* Activity Log */}
         {report && (

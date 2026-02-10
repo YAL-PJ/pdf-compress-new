@@ -299,6 +299,8 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                             onRotatePage={rotatePage}
                                             onReorderPages={reorderPages}
                                             onMovePage={movePage}
+                                            report={analysis?.report}
+                                            methodResults={methodResults}
                                         />
                                     </motion.div>
                                 )}

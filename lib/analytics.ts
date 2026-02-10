@@ -1,9 +1,13 @@
 /**
  * Analytics module for tracking user events
- * Uses Google Analytics (gtag.js)
+ * Uses Google Analytics (gtag.js) + structured logging + telemetry API
  */
 
-import type { CompressionReport } from './types';
+import type { CompressionReport, MethodResult } from './types';
+import { createLogger, getCurrentSessionId } from './logger';
+import { formatBytes } from './utils';
+
+const log = createLogger('analytics');
 
 type EventName =
   | 'file_upload'
@@ -43,12 +47,11 @@ export function trackEvent(name: EventName, props?: EventProps): void {
     window.gtag('event', name, props);
   }
 
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[Analytics]', name, props);
-  }
+  log.debug(`Event: ${name}`, props as Record<string, unknown>);
 }
 
 export function trackFileUpload(fileSizeMB: number, isBatch: boolean = false): void {
+  log.info('File uploaded', { sizeMB: round2(fileSizeMB), isBatch });
   trackEvent('file_upload', {
     file_size_mb: round2(fileSizeMB),
     is_batch: isBatch,
@@ -56,6 +59,7 @@ export function trackFileUpload(fileSizeMB: number, isBatch: boolean = false): v
 }
 
 export function trackCompressionStarted(pageCount: number): void {
+  log.info('Compression started', { pageCount });
   trackEvent('compression_started', { page_count: pageCount });
 }
 
@@ -64,6 +68,11 @@ export function trackCompressionCompleted(
   compressedSizeMB: number,
   savingsPercent: number
 ): void {
+  log.info('Compression completed', {
+    originalMB: round2(originalSizeMB),
+    compressedMB: round2(compressedSizeMB),
+    savingsPercent: Math.round(savingsPercent),
+  });
   trackEvent('compression_completed', {
     original_size_mb: round2(originalSizeMB),
     compressed_size_mb: round2(compressedSizeMB),
@@ -72,16 +81,19 @@ export function trackCompressionCompleted(
 }
 
 export function trackDownload(fileSizeMB: number): void {
+  log.info('Download clicked', { sizeMB: round2(fileSizeMB) });
   trackEvent('download_click', {
     file_size_mb: round2(fileSizeMB),
   });
 }
 
 export function trackBatchStarted(fileCount: number): void {
+  log.info('Batch started', { fileCount });
   trackEvent('batch_started', { file_count: fileCount });
 }
 
 export function trackBatchCompleted(fileCount: number, totalSavingsPercent: number): void {
+  log.info('Batch completed', { fileCount, savingsPercent: Math.round(totalSavingsPercent) });
   trackEvent('batch_completed', {
     file_count: fileCount,
     total_savings_percent: Math.round(totalSavingsPercent),
@@ -89,14 +101,17 @@ export function trackBatchCompleted(fileCount: number, totalSavingsPercent: numb
 }
 
 export function trackMethodToggle(method: string, enabled: boolean): void {
+  log.debug(`Method toggled: ${method}`, { method, enabled });
   trackEvent('method_toggle', { method, enabled });
 }
 
 export function trackPresetSelected(preset: string): void {
+  log.info(`Preset selected: ${preset}`);
   trackEvent('preset_selected', { preset });
 }
 
 export function trackPageOperation(operation: 'rotated' | 'deleted' | 'reordered'): void {
+  log.debug(`Page operation: ${operation}`);
   if (operation === 'rotated') {
     trackEvent('page_rotated');
   } else if (operation === 'deleted') {
@@ -107,30 +122,98 @@ export function trackPageOperation(operation: 'rotated' | 'deleted' | 'reordered
 }
 
 export function trackCompressionError(errorCode: string): void {
+  log.error(`Compression error: ${errorCode}`, { errorCode });
   trackEvent('compression_error', { error_code: errorCode });
+}
+
+/**
+ * Build a detailed telemetry payload with per-method stats
+ */
+function buildTelemetryPayload(report: CompressionReport, methodResults?: MethodResult[]) {
+  const savingsPercent = report.originalSize > 0
+    ? ((report.originalSize - report.compressedSize) / report.originalSize * 100)
+    : 0;
+
+  // Per-method breakdown
+  const methodBreakdown = methodResults
+    ? methodResults
+      .filter(m => m.savedBytes > 0)
+      .map(m => ({
+        method: m.key,
+        savedBytes: m.savedBytes,
+        savedFormatted: formatBytes(m.savedBytes),
+        percentOfTotal: report.originalSize > 0
+          ? round2((m.savedBytes / report.originalSize) * 100)
+          : 0,
+      }))
+      .sort((a, b) => b.savedBytes - a.savedBytes)
+    : [];
+
+  // Error/warning summary
+  const errorLogs = report.logs.filter(l => l.level === 'error');
+  const warningLogs = report.logs.filter(l => l.level === 'warning');
+
+  return {
+    // Session
+    sessionId: typeof window !== 'undefined' ? getCurrentSessionId() : undefined,
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+    timestamp: report.timestamp,
+
+    // File info
+    originalSize: report.originalSize,
+    originalSizeFormatted: formatBytes(report.originalSize),
+    compressedSize: report.compressedSize,
+    compressedSizeFormatted: formatBytes(report.compressedSize),
+    savingsPercent: round2(savingsPercent),
+    pageCount: report.pageCount,
+
+    // Methods
+    methodsUsed: report.methodsUsed,
+    methodsSuccessful: report.methodsSuccessful,
+    methodCount: report.methodsUsed.length,
+    successfulMethodCount: report.methodsSuccessful.length,
+    methodBreakdown,
+
+    // Top contributing method
+    topMethod: methodBreakdown.length > 0 ? methodBreakdown[0] : null,
+
+    // Errors
+    errorCount: errorLogs.length,
+    warningCount: warningLogs.length,
+    errors: errorLogs.map(l => ({ message: l.message, details: l.details })),
+    warnings: warningLogs.map(l => ({ message: l.message, details: l.details })),
+
+    // Trimmed logs (all errors/warnings + last 20 info/success)
+    logs: [
+      ...report.logs.filter(l => l.level === 'error' || l.level === 'warning'),
+      ...report.logs.filter(l => l.level !== 'error' && l.level !== 'warning').slice(-20),
+    ],
+  };
 }
 
 /**
  * Send admin telemetry report (Fire and Forget)
  */
-export function trackTelemetry(report: CompressionReport): void {
+export function trackTelemetry(report: CompressionReport, methodResults?: MethodResult[]): void {
   const sendTelemetry = () => {
     try {
-      const lightweightReport = {
-        ...report,
-        logs: [
-          ...report.logs.filter(l => l.level === 'error' || l.level === 'warning'),
-          ...report.logs.filter(l => l.level !== 'error' && l.level !== 'warning').slice(-20)
-        ]
-      };
+      const payload = buildTelemetryPayload(report, methodResults);
+
+      log.info('Sending telemetry', {
+        originalSize: payload.originalSizeFormatted,
+        compressedSize: payload.compressedSizeFormatted,
+        savingsPercent: payload.savingsPercent,
+        methodCount: payload.methodCount,
+        errorCount: payload.errorCount,
+      });
 
       fetch('/api/telemetry', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report: lightweightReport }),
+        body: JSON.stringify({ report: payload }),
         keepalive: true,
       }).catch(err => {
-        if (process.env.NODE_ENV === 'development') console.error('Telemetry failed:', err);
+        log.warn('Telemetry send failed', { error: String(err) });
       });
     } catch {
       // Fail silently in production

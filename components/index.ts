@@ -12,3 +12,4 @@ export * from './Skeleton';
 export { ErrorBoundary } from './ErrorBoundary';
 export { AnalyticsScript } from './AnalyticsScript';
 export { BetaFeedbackBanner } from './BetaFeedbackBanner';
+export { CompressionStats } from './CompressionStats';
