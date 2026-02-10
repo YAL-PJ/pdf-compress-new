@@ -4,8 +4,7 @@
  */
 
 import type { CompressionReport, MethodResult } from './types';
-import { createLogger, getCurrentSessionId } from './logger';
-import { formatBytes } from './utils';
+import { createLogger } from './logger';
 
 const log = createLogger('analytics');
 
@@ -127,112 +126,11 @@ export function trackCompressionError(errorCode: string): void {
 }
 
 /**
- * Build a detailed telemetry payload with per-method stats
- */
-function buildTelemetryPayload(report: CompressionReport, methodResults?: MethodResult[]) {
-  const savingsPercent = report.originalSize > 0
-    ? ((report.originalSize - report.compressedSize) / report.originalSize * 100)
-    : 0;
-
-  // Per-method breakdown
-  const methodBreakdown = methodResults
-    ? methodResults
-      .filter(m => m.savedBytes > 0)
-      .map(m => ({
-        method: m.key,
-        savedBytes: m.savedBytes,
-        savedFormatted: formatBytes(m.savedBytes),
-        percentOfTotal: report.originalSize > 0
-          ? round2((m.savedBytes / report.originalSize) * 100)
-          : 0,
-      }))
-      .sort((a, b) => b.savedBytes - a.savedBytes)
-    : [];
-
-  // Error/warning summary
-  const errorLogs = report.logs.filter(l => l.level === 'error');
-  const warningLogs = report.logs.filter(l => l.level === 'warning');
-
-  return {
-    // Session
-    sessionId: typeof window !== 'undefined' ? getCurrentSessionId() : undefined,
-    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-    timestamp: report.timestamp,
-
-    // File info
-    originalSize: report.originalSize,
-    originalSizeFormatted: formatBytes(report.originalSize),
-    compressedSize: report.compressedSize,
-    compressedSizeFormatted: formatBytes(report.compressedSize),
-    savingsPercent: round2(savingsPercent),
-    pageCount: report.pageCount,
-
-    // Methods
-    methodsUsed: report.methodsUsed,
-    methodsSuccessful: report.methodsSuccessful,
-    methodCount: report.methodsUsed.length,
-    successfulMethodCount: report.methodsSuccessful.length,
-    methodBreakdown,
-
-    // Top contributing method
-    topMethod: methodBreakdown.length > 0 ? methodBreakdown[0] : null,
-
-    // Errors
-    errorCount: errorLogs.length,
-    warningCount: warningLogs.length,
-    errors: errorLogs.map(l => ({ message: l.message, details: l.details })),
-    warnings: warningLogs.map(l => ({ message: l.message, details: l.details })),
-
-    // Trimmed logs (all errors/warnings + last 20 info/success)
-    logs: [
-      ...report.logs.filter(l => l.level === 'error' || l.level === 'warning'),
-      ...report.logs.filter(l => l.level !== 'error' && l.level !== 'warning').slice(-20),
-    ],
-  };
-}
-
-/**
- * Send admin telemetry report (Fire and Forget)
+ * Send admin telemetry report (no-op)
  *
- * Requires NEXT_PUBLIC_TELEMETRY_URL to be set, otherwise telemetry is
- * silently skipped.  This avoids 404 errors when deployed as a static export
- * (output: "export") where API routes don't exist.
+ * Disabled because the app uses static export (output: "export") which
+ * excludes API routes from the build — /api/telemetry doesn't exist.
  */
-export function trackTelemetry(report: CompressionReport, methodResults?: MethodResult[]): void {
-  const telemetryUrl = process.env.NEXT_PUBLIC_TELEMETRY_URL;
-  if (!telemetryUrl) {
-    log.info('Telemetry skipped — NEXT_PUBLIC_TELEMETRY_URL not configured');
-    return;
-  }
-
-  const sendTelemetry = () => {
-    try {
-      const payload = buildTelemetryPayload(report, methodResults);
-
-      log.info('Sending telemetry', {
-        originalSize: payload.originalSizeFormatted,
-        compressedSize: payload.compressedSizeFormatted,
-        savingsPercent: payload.savingsPercent,
-        methodCount: payload.methodCount,
-        errorCount: payload.errorCount,
-      });
-
-      fetch(telemetryUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ report: payload }),
-        keepalive: true,
-      }).catch(() => {
-        // Silently ignore - telemetry is non-critical
-      });
-    } catch {
-      // Fail silently in production
-    }
-  };
-
-  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    window.requestIdleCallback(sendTelemetry, { timeout: 5000 });
-  } else {
-    setTimeout(sendTelemetry, 1000);
-  }
+export function trackTelemetry(_report: CompressionReport, _methodResults?: MethodResult[]): void {
+  // Telemetry disabled — incompatible with static export
 }
