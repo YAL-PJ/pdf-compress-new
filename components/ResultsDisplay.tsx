@@ -37,6 +37,7 @@ interface ResultsDisplayProps {
   onMovePage?: (pageIndex: number, direction: 'up' | 'down') => void;
   report?: CompressionReport;
   methodResults?: MethodResult[];
+  isUpdating?: boolean;
 }
 
 import { memo } from 'react';
@@ -57,6 +58,7 @@ export const ResultsDisplay = memo(({
   onMovePage,
   report,
   methodResults,
+  isUpdating,
 }: ResultsDisplayProps) => {
   const blobUrlRef = useRef<string | null>(null);
   const { savedBytes, savedPercent, isSmaller } = calculateSavings(originalSize, compressedSize);
@@ -161,7 +163,17 @@ export const ResultsDisplay = memo(({
               {originalFileName}
             </h2>
             <p className="text-xs text-slate-500 font-medium">
-              {pageCount} pages • Ready
+              {pageCount} pages • {isUpdating ? (
+                <span className="inline-flex items-center gap-1 text-blue-600">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Recompressing...
+                </span>
+              ) : diffLoading ? (
+                <span className="inline-flex items-center gap-1 text-slate-500">
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Rendering preview...
+                </span>
+              ) : 'Ready'}
             </p>
           </div>
         </div>
@@ -175,9 +187,19 @@ export const ResultsDisplay = memo(({
         </button>
       </div>
 
+      {/* Updating indicator banner */}
+      {isUpdating && (
+        <div className="bg-blue-50 border-b border-blue-200 px-4 py-2.5 flex items-center gap-2.5">
+          <Loader2 className="w-4 h-4 animate-spin text-blue-600 flex-shrink-0" />
+          <span className="text-xs font-semibold text-blue-700">
+            Recompressing with new settings... Results below may be stale.
+          </span>
+        </div>
+      )}
+
       <div className="p-6 space-y-8">
         {/* Visual Comparison */}
-        <div className="space-y-4">
+        <div className={twMerge("space-y-4 transition-opacity duration-300", isUpdating && "opacity-50")}>
           <div className="flex items-end justify-between text-sm">
             <span className="font-semibold text-slate-600">Size Comparison</span>
             <span className={twMerge(
@@ -223,13 +245,16 @@ export const ResultsDisplay = memo(({
 
 
         {/* Visual Difference Tool */}
-        <div className="space-y-3">
+        <div className={twMerge("space-y-3 transition-opacity duration-300", isUpdating && "opacity-50")}>
           <h3 className="text-sm font-bold text-slate-800">Visual Quality Comparison</h3>
           {diffLoading && (
-            <div className="flex items-center justify-center h-48 bg-slate-50 rounded-lg border border-slate-200">
-              <div className="flex items-center gap-2 text-slate-500">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Generating preview...</span>
+            <div className="relative flex items-center justify-center h-48 bg-slate-50 rounded-lg border border-slate-200 overflow-hidden">
+              {/* Shimmer animation */}
+              <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+              <div className="flex flex-col items-center gap-2 text-slate-500">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                <span className="text-sm font-medium">Rendering visual preview...</span>
+                <span className="text-xs text-slate-400">Comparing original vs compressed</span>
               </div>
             </div>
           )}

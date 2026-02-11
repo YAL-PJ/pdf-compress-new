@@ -301,6 +301,7 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                             onMovePage={movePage}
                                             report={analysis?.report}
                                             methodResults={methodResults}
+                                            isUpdating={isUpdating}
                                         />
                                     </motion.div>
                                 )}
