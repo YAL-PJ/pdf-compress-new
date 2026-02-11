@@ -312,7 +312,9 @@ function removeAlternateImages(
               const bytes = altObj instanceof PDFRawStream
                 ? altObj.contents
                 : altObj.getContents();
-              savedBytes += bytes.length;
+              if (bytes) {
+                savedBytes += bytes.length;
+              }
               removed++;
 
               // Delete the alternate image object
