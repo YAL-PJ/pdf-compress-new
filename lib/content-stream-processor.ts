@@ -310,7 +310,7 @@ export const compressContentStreams = async (
     }
 
     const filter = dict.get(PDFName.of('Filter'));
-    let originalBytes: Uint8Array;
+    let originalBytes: Uint8Array | undefined;
     let isCompressed = false;
 
     try {
@@ -320,6 +320,11 @@ export const compressContentStreams = async (
         originalBytes = stream.getContents();
       }
     } catch {
+      processed++;
+      continue;
+    }
+
+    if (!originalBytes) {
       processed++;
       continue;
     }
@@ -516,7 +521,7 @@ export const removeInvisibleText = async (
         continue;
       }
 
-      let contentBytes: Uint8Array;
+      let contentBytes: Uint8Array | undefined;
       let wasCompressed = false;
 
       try {
@@ -530,6 +535,10 @@ export const removeInvisibleText = async (
           wasCompressed = true;
         }
       } catch {
+        continue;
+      }
+
+      if (!contentBytes) {
         continue;
       }
 
