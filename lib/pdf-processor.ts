@@ -252,8 +252,21 @@ export const analyzePdf = async (
   // (alpha, ICC, CMYK, dedup, fonts, inline, streams, orphans, alternate, invisible, structure)
   // This eliminates 12+ redundant PDFDocument.load() calls
   onProgress?.('Applying optimizations...');
-  const { pdfDoc: workDoc } = await loadPdf(workingBuffer);
-  let lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
+  let workDoc: PDFDocument;
+  let lastSize: number;
+  try {
+    const loaded = await loadPdf(workingBuffer);
+    workDoc = loaded.pdfDoc;
+    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
+  } catch (err) {
+    // If recompressed image buffer is corrupt, fall back to original
+    const msg = err instanceof Error ? err.message : String(err);
+    log('warning', `Failed to load working buffer, falling back to original: ${msg}`);
+    report.errors.push('loadWorkingBuffer');
+    const loaded = await loadPdf(arrayBuffer);
+    workDoc = loaded.pdfDoc;
+    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
+  }
 
   // Helper: apply a method on the shared document, measure incremental savings
   const measureMethod = async (
@@ -432,18 +445,33 @@ export const analyzePdf = async (
   if (options.stripMetadata) {
     report.methodsUsed.push('stripMetadata');
     const preMetaSize = lastSize;
-    stripMetadata(structDoc);
-    const afterMeta = await structDoc.save({ useObjectStreams: false });
-    lastSize = afterMeta.byteLength;
-    metaSaved = Math.max(0, preMetaSize - lastSize);
-    if (metaSaved > 0) log('success', 'Stripped standard metadata');
+    try {
+      stripMetadata(structDoc);
+      const afterMeta = await structDoc.save({ useObjectStreams: false });
+      lastSize = afterMeta.byteLength;
+      metaSaved = Math.max(0, preMetaSize - lastSize);
+      if (metaSaved > 0) log('success', 'Stripped standard metadata');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      log('warning', `Metadata stripping failed: ${msg}`);
+      report.errors.push('stripMetadata');
+    }
   }
 
   // Final save — measure object streams savings by comparing with/without
   const withoutOsSize = lastSize;
-  const fullCompressedBytes = await structDoc.save({
-    useObjectStreams: options.useObjectStreams,
-  });
+  let fullCompressedBytes: Uint8Array;
+  try {
+    fullCompressedBytes = await structDoc.save({
+      useObjectStreams: options.useObjectStreams,
+    });
+  } catch (err) {
+    // If the mutated document can't be saved, fall back to baseline
+    const msg = err instanceof Error ? err.message : String(err);
+    log('warning', `Final save failed, returning baseline: ${msg}`);
+    report.errors.push('finalSave');
+    fullCompressedBytes = baselineBytes;
+  }
 
   const osSaved = options.useObjectStreams
     ? Math.max(0, withoutOsSize - fullCompressedBytes.byteLength)

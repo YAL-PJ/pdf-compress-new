@@ -385,6 +385,10 @@ export const compressContentStreams = async (
  * Decompress a stream based on its filter
  */
 function decompressStream(data: Uint8Array, filter: PDFName | PDFArray): Uint8Array {
+  if (!data) {
+    return new Uint8Array(0);
+  }
+
   let filterName: string | undefined;
 
   if (filter instanceof PDFName) {
@@ -540,6 +544,10 @@ export const removeInvisibleText = async (
         contentBytes = contentObj instanceof PDFRawStream
           ? contentObj.contents
           : contentObj.getContents();
+
+        if (!contentBytes) {
+          continue;
+        }
 
         const filter = contentObj.dict.get(PDFName.of('Filter'));
         if (filter && (filter instanceof PDFName || filter instanceof PDFArray)) {
