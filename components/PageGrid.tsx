@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, KeyboardEvent } from 'react';
 import { PageThumbnail } from './PageThumbnail';
 import { usePageManager, PageState } from '@/hooks/usePageManager';
-import { LayoutGrid, GripVertical } from 'lucide-react';
+import { LayoutGrid, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 
 interface PageGridProps {
@@ -28,11 +28,18 @@ export const PageGrid = ({
     onReorder: externalReorder,
     onMovePage: externalMovePage,
 }: PageGridProps) => {
+    const PREVIEW_LIMIT = 8;
+
     // Use internal state if external state not provided
     const internal = usePageManager(pageCount);
 
     // Use external state if provided, otherwise use internal
     const pages = externalPages ?? internal.pages;
+
+    // Preview collapse state
+    const [showAll, setShowAll] = useState(false);
+    const hasMorePages = pages.length > PREVIEW_LIMIT;
+    const visiblePages = showAll || !hasMorePages ? pages : pages.slice(0, PREVIEW_LIMIT);
     const toggleDelete = externalToggleDelete ?? internal.toggleDelete;
     const rotatePage = externalRotate ?? internal.rotatePage;
     const reorderPages = externalReorder ?? internal.reorderPages;
@@ -175,7 +182,7 @@ export const PageGrid = ({
                 role="listbox"
                 aria-label="PDF pages"
             >
-                {pages.map((page, position) => (
+                {visiblePages.map((page, position) => (
                     <div
                         key={page.index}
                         data-page-item
@@ -229,6 +236,25 @@ export const PageGrid = ({
                     </div>
                 ))}
             </div>
+
+            {hasMorePages && (
+                <button
+                    onClick={() => setShowAll(prev => !prev)}
+                    className="mt-4 w-full py-2.5 flex items-center justify-center gap-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors"
+                >
+                    {showAll ? (
+                        <>
+                            <ChevronUp className="w-4 h-4" />
+                            Show fewer pages
+                        </>
+                    ) : (
+                        <>
+                            <ChevronDown className="w-4 h-4" />
+                            Show all {pages.length} pages ({pages.length - PREVIEW_LIMIT} more)
+                        </>
+                    )}
+                </button>
+            )}
         </div>
     );
 };
