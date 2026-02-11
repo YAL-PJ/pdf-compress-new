@@ -385,9 +385,21 @@ export const compressContentStreams = async (
  * Decompress a stream based on its filter
  */
 function decompressStream(data: Uint8Array, filter: PDFName | PDFArray): Uint8Array {
-  const filterName = filter instanceof PDFName
-    ? filter.toString()
-    : (filter.get(0) as PDFName)?.toString();
+  let filterName: string | undefined;
+
+  if (filter instanceof PDFName) {
+    filterName = filter.toString();
+  } else if (filter instanceof PDFArray && filter.size() > 0) {
+    const first = filter.get(0);
+    if (first instanceof PDFName) {
+      filterName = first.toString();
+    }
+  }
+
+  if (!filterName) {
+    // Empty or unrecognized filter array — return data as-is
+    return data;
+  }
 
   switch (filterName) {
     case '/FlateDecode':

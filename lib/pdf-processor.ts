@@ -139,12 +139,6 @@ export const analyzePdf = async (
   onProgress?.('Analyzing images...');
   log('info', 'Analyzing document images...');
 
-  const { pdfDoc: imgDoc } = await loadPdf(arrayBuffer);
-  const extractPng = options.pngToJpeg;
-  const { images, stats: imageStats } = await extractImages(imgDoc, onProgress, settings.targetDpi, extractPng);
-
-  log('info', `Found ${images.length} images`, imageStats);
-
   // Track savings for each method using a record instead of individual variables
   const savings: Record<string, number> = {};
 
@@ -153,78 +147,96 @@ export const analyzePdf = async (
   let imagesSkipped = 0;
   let imagesDownsampled = 0;
   let pngsConverted = 0;
+  let images: import('./types').ExtractedImage[] = [];
+  let imageStats: ImageStats | undefined;
+  let jpegImages: import('./types').ExtractedImage[] = [];
+  let pngImages: import('./types').ExtractedImage[] = [];
 
-  // Collect all recompressed images
-  const allRecompressedImages: RecompressedImage[] = [];
+  try {
+    const { pdfDoc: imgDoc } = await loadPdf(arrayBuffer);
+    const extractPng = options.pngToJpeg;
+    const extracted = await extractImages(imgDoc, onProgress, settings.targetDpi, extractPng);
+    images = extracted.images;
+    imageStats = extracted.stats;
 
-  // Process JPEG images
-  const jpegImages = images.filter(img => img.format === 'jpeg');
-  if (jpegImages.length > 0 && options.recompressImages) {
-    report.methodsUsed.push('recompressImages');
-    onProgress?.(`Processing ${jpegImages.length} JPEG images...`);
-    log('info', `Recompressing ${jpegImages.length} JPEG images...`);
+    log('info', `Found ${images.length} images`, imageStats);
 
-    const extendedSettings: ExtendedImageSettings = {
-      ...settings,
-      convertToGrayscale: options.convertToGrayscale,
-      convertToMonochrome: options.convertToMonochrome,
-    };
+    // Collect all recompressed images
+    const allRecompressedImages: RecompressedImage[] = [];
 
-    const { results: recompressedImages, downsampleSavings } = await recompressImages(
-      jpegImages,
-      extendedSettings,
-      onProgress
-    );
+    // Process JPEG images
+    jpegImages = images.filter(img => img.format === 'jpeg');
+    if (jpegImages.length > 0 && options.recompressImages) {
+      report.methodsUsed.push('recompressImages');
+      onProgress?.(`Processing ${jpegImages.length} JPEG images...`);
+      log('info', `Recompressing ${jpegImages.length} JPEG images...`);
 
-    imagesProcessed = recompressedImages.length;
-    imagesSkipped = jpegImages.length - imagesProcessed;
-    imagesDownsampled = recompressedImages.filter(img => img.wasDownsampled).length;
+      const extendedSettings: ExtendedImageSettings = {
+        ...settings,
+        convertToGrayscale: options.convertToGrayscale,
+        convertToMonochrome: options.convertToMonochrome,
+      };
 
-    const totalSavings = calculateImageSavings(recompressedImages);
-    savings.downsampleImages = downsampleSavings;
-    savings.recompressImages = totalSavings - downsampleSavings;
+      const { results: recompressedImages, downsampleSavings } = await recompressImages(
+        jpegImages,
+        extendedSettings,
+        onProgress
+      );
 
-    if (totalSavings > 0) {
-      report.methodsSuccessful.push('recompressImages');
-      log('success', `Recompressed ${imagesProcessed} JPEGs`, { savedBytes: totalSavings, downsampled: imagesDownsampled });
-    } else {
-      log('info', 'No savings from JPEG recompression');
+      imagesProcessed = recompressedImages.length;
+      imagesSkipped = jpegImages.length - imagesProcessed;
+      imagesDownsampled = recompressedImages.filter(img => img.wasDownsampled).length;
+
+      const totalSavings = calculateImageSavings(recompressedImages);
+      savings.downsampleImages = downsampleSavings;
+      savings.recompressImages = totalSavings - downsampleSavings;
+
+      if (totalSavings > 0) {
+        report.methodsSuccessful.push('recompressImages');
+        log('success', `Recompressed ${imagesProcessed} JPEGs`, { savedBytes: totalSavings, downsampled: imagesDownsampled });
+      } else {
+        log('info', 'No savings from JPEG recompression');
+      }
+
+      allRecompressedImages.push(...recompressedImages);
     }
 
-    allRecompressedImages.push(...recompressedImages);
-  }
+    // Convert PNG to JPEG
+    pngImages = images.filter(img => img.format === 'png');
+    if (pngImages.length > 0 && options.pngToJpeg) {
+      report.methodsUsed.push('pngToJpeg');
+      onProgress?.(`Converting ${pngImages.length} PNG images to JPEG...`);
+      log('info', `Converting ${pngImages.length} PNGs to JPEG...`);
 
-  // Convert PNG to JPEG
-  const pngImages = images.filter(img => img.format === 'png');
-  if (pngImages.length > 0 && options.pngToJpeg) {
-    report.methodsUsed.push('pngToJpeg');
-    onProgress?.(`Converting ${pngImages.length} PNG images to JPEG...`);
-    log('info', `Converting ${pngImages.length} PNGs to JPEG...`);
+      const { results: convertedPngs, savings: pngSavings } = await convertPngsToJpeg(
+        pngImages,
+        settings.quality,
+        onProgress
+      );
 
-    const { results: convertedPngs, savings: pngSavings } = await convertPngsToJpeg(
-      pngImages,
-      settings.quality,
-      onProgress
-    );
+      pngsConverted = convertedPngs.length;
+      savings.pngToJpeg = pngSavings;
+      allRecompressedImages.push(...convertedPngs);
 
-    pngsConverted = convertedPngs.length;
-    savings.pngToJpeg = pngSavings;
-    allRecompressedImages.push(...convertedPngs);
-
-    if (pngSavings > 0) {
-      report.methodsSuccessful.push('pngToJpeg');
-      log('success', `Converted ${pngsConverted} PNGs`, { savedBytes: pngSavings });
+      if (pngSavings > 0) {
+        report.methodsSuccessful.push('pngToJpeg');
+        log('success', `Converted ${pngsConverted} PNGs`, { savedBytes: pngSavings });
+      }
     }
-  }
 
-  // Embed all processed images
-  if (allRecompressedImages.length > 0) {
-    onProgress?.('Embedding optimized images...');
-    recompressedImageBytes = await embedRecompressedImages(
-      arrayBuffer,
-      allRecompressedImages,
-      onProgress
-    );
+    // Embed all processed images
+    if (allRecompressedImages.length > 0) {
+      onProgress?.('Embedding optimized images...');
+      recompressedImageBytes = await embedRecompressedImages(
+        arrayBuffer,
+        allRecompressedImages,
+        onProgress
+      );
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log('warning', `Image processing failed, skipping: ${msg}`);
+    report.errors.push('imageProcessing');
   }
 
   // Working buffer for further processing
@@ -255,16 +267,23 @@ export const analyzePdf = async (
     }
     report.methodsUsed.push(key);
     const before = lastSize;
-    const result = await apply(workDoc);
-    const afterBytes = await workDoc.save({ useObjectStreams: false });
-    lastSize = afterBytes.byteLength;
-    const saved = Math.max(0, before - lastSize);
-    savings[key] = saved;
-    if (saved > 0) {
-      report.methodsSuccessful.push(key);
-      log('success', `Applied: ${key}`, { saved });
+    try {
+      const result = await apply(workDoc);
+      const afterBytes = await workDoc.save({ useObjectStreams: false });
+      lastSize = afterBytes.byteLength;
+      const saved = Math.max(0, before - lastSize);
+      savings[key] = saved;
+      if (saved > 0) {
+        report.methodsSuccessful.push(key);
+        log('success', `Applied: ${key}`, { saved });
+      }
+      return result;
+    } catch (err) {
+      savings[key] = 0;
+      const msg = err instanceof Error ? err.message : String(err);
+      log('warning', `Method ${key} failed: ${msg}`);
+      report.errors.push(key);
     }
-    return result;
   };
 
   // Image-related in-place mutations
@@ -371,16 +390,23 @@ export const analyzePdf = async (
     }
     report.methodsUsed.push(key);
     const before = lastSize;
-    const result = apply(structDoc);
-    const afterBytes = await structDoc.save({ useObjectStreams: false });
-    lastSize = afterBytes.byteLength;
-    const saved = Math.max(0, before - lastSize);
-    structSavings[key] = saved;
-    if (saved > 0) {
-      report.methodsSuccessful.push(key);
-      log('success', `Applied cleanup: ${key}`, { saved });
+    try {
+      const result = apply(structDoc);
+      const afterBytes = await structDoc.save({ useObjectStreams: false });
+      lastSize = afterBytes.byteLength;
+      const saved = Math.max(0, before - lastSize);
+      structSavings[key] = saved;
+      if (saved > 0) {
+        report.methodsSuccessful.push(key);
+        log('success', `Applied cleanup: ${key}`, { saved });
+      }
+      return result;
+    } catch (err) {
+      structSavings[key] = 0;
+      const msg = err instanceof Error ? err.message : String(err);
+      log('warning', `Method ${key} failed: ${msg}`);
+      report.errors.push(key);
     }
-    return result;
   };
 
   // Apply each method incrementally, measuring the delta
