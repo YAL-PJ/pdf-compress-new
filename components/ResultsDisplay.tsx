@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatBytes, calculateSavings, getOutputFilename } from '@/lib/utils';
 import { trackDownload, trackTelemetry } from '@/lib/analytics';
+import { applyPageOperations, hasPageModifications } from '@/lib/page-operations';
 import { motion } from 'framer-motion';
 import { Download, RefreshCw, FileCheck, ArrowRight, X, Loader2 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
@@ -62,6 +63,10 @@ export const ResultsDisplay = memo(({
 }: ResultsDisplayProps) => {
   const blobUrlRef = useRef<string | null>(null);
   const { savedBytes, savedPercent, isSmaller } = calculateSavings(originalSize, compressedSize);
+
+  // Count active (non-deleted) pages
+  const activePageCount = pages ? pages.filter(p => !p.isDeleted).length : pageCount;
+  const hasPageOps = pages ? hasPageModifications(pages) : false;
 
   // Visual diff state
   const [diffImages, setDiffImages] = useState<{ original: string; compressed: string } | null>(null);
@@ -126,21 +131,40 @@ export const ResultsDisplay = memo(({
     }
   }, [report, methodResults]);
 
-  const handleDownload = useCallback(() => {
-    // Track download event
-    trackDownload(compressedSize / 1024 / 1024);
+  const [isApplyingPageOps, setIsApplyingPageOps] = useState(false);
 
+  const handleDownload = useCallback(async () => {
     if (blobUrlRef.current) {
       URL.revokeObjectURL(blobUrlRef.current);
     }
-    const url = URL.createObjectURL(blob);
+
+    let downloadBlob = blob;
+
+    // Apply page operations (delete, rotate, reorder) if user made any changes
+    if (pages && hasPageModifications(pages)) {
+      setIsApplyingPageOps(true);
+      try {
+        downloadBlob = await applyPageOperations(blob, pages);
+      } catch (err) {
+        console.error('Failed to apply page operations:', err);
+        // Fall back to original compressed blob
+        downloadBlob = blob;
+      } finally {
+        setIsApplyingPageOps(false);
+      }
+    }
+
+    // Track download event
+    trackDownload(downloadBlob.size / 1024 / 1024);
+
+    const url = URL.createObjectURL(downloadBlob);
     blobUrlRef.current = url;
 
     const link = document.createElement('a');
     link.href = url;
     link.download = getOutputFilename(originalFileName);
     link.click();
-  }, [blob, originalFileName, compressedSize]);
+  }, [blob, originalFileName, pages]);
 
   const compressionRatio = Math.min(Math.max((compressedSize / originalSize) * 100, 5), 100);
 
@@ -163,7 +187,11 @@ export const ResultsDisplay = memo(({
               {originalFileName}
             </h2>
             <p className="text-xs text-slate-500 font-medium">
-              {pageCount} pages • {isUpdating ? (
+              {activePageCount !== pageCount ? (
+                <span>{activePageCount}/{pageCount} pages</span>
+              ) : (
+                <span>{pageCount} pages</span>
+              )} • {isUpdating ? (
                 <span className="inline-flex items-center gap-1 text-blue-600">
                   <Loader2 className="w-3 h-3 animate-spin" />
                   Recompressing...
@@ -314,11 +342,21 @@ export const ResultsDisplay = memo(({
           </button>
           <button
             onClick={handleDownload}
-            className="flex-[2] px-4 py-3 rounded-md bg-slate-900 text-white font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 text-sm shadow-sm"
+            disabled={isApplyingPageOps}
+            className="flex-[2] px-4 py-3 rounded-md bg-slate-900 text-white font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 text-sm shadow-sm disabled:opacity-70 disabled:cursor-wait"
           >
-            <Download className="w-4 h-4" />
-            DOWNLOAD PDF
-            <ArrowRight className="w-4 h-4 opacity-70" />
+            {isApplyingPageOps ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Applying page changes...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                DOWNLOAD PDF
+                <ArrowRight className="w-4 h-4 opacity-70" />
+              </>
+            )}
           </button>
         </div>
       </div>
