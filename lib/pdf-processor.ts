@@ -3,8 +3,8 @@
  * Full Phase 2 implementation with all compression methods
  */
 
-import { PDFDocument } from 'pdf-lib';
-import type { PdfInfo, MethodResult, ImageCompressionSettings, CompressionOptions, RecompressedImage, CompressionReport, ProcessingLog } from './types';
+import { PDFDocument, PDFName, PDFDict, PDFArray, PDFRef } from 'pdf-lib';
+import type { PdfInfo, PdfFeatures, MethodResult, ImageCompressionSettings, CompressionOptions, RecompressedImage, CompressionReport, ProcessingLog } from './types';
 import { DEFAULT_IMAGE_SETTINGS, DEFAULT_COMPRESSION_OPTIONS } from './types';
 import { formatBytes } from './utils';
 import {
@@ -74,6 +74,105 @@ const stripMetadata = (pdfDoc: PDFDocument): void => {
   pdfDoc.setModificationDate(new Date(0));
 };
 
+/**
+ * Detect which features are present in the PDF document
+ * Used to indicate which compression methods are relevant
+ */
+const detectFeatures = (pdfDoc: PDFDocument, imageStats?: ImageStats): PdfFeatures => {
+  const catalog = pdfDoc.catalog;
+
+  // JavaScript detection
+  let hasJavaScript = false;
+  if (catalog.has(PDFName.of('OpenAction')) || catalog.has(PDFName.of('AA'))) {
+    hasJavaScript = true;
+  }
+  if (!hasJavaScript) {
+    const names = catalog.get(PDFName.of('Names'));
+    if (names instanceof PDFDict && names.has(PDFName.of('JavaScript'))) {
+      hasJavaScript = true;
+    }
+  }
+  if (!hasJavaScript) {
+    const pages = pdfDoc.getPages();
+    for (const page of pages) {
+      if (page.node.has(PDFName.of('AA'))) {
+        hasJavaScript = true;
+        break;
+      }
+    }
+  }
+
+  // Forms detection
+  let hasForms = false;
+  try {
+    const form = pdfDoc.getForm();
+    hasForms = form.getFields().length > 0;
+  } catch {
+    // No forms
+  }
+
+  // Annotations detection
+  let hasAnnotations = false;
+  const pages = pdfDoc.getPages();
+  for (const page of pages) {
+    const annots = page.node.get(PDFName.of('Annots'));
+    if (annots instanceof PDFArray && annots.size() > 0) {
+      hasAnnotations = true;
+      break;
+    }
+  }
+
+  // Thumbnails detection
+  let hasThumbnails = false;
+  for (const page of pages) {
+    if (page.node.has(PDFName.of('Thumb'))) {
+      hasThumbnails = true;
+      break;
+    }
+  }
+
+  // Attachments detection
+  let hasAttachments = false;
+  const namesDict = catalog.get(PDFName.of('Names'));
+  if (namesDict instanceof PDFDict && namesDict.has(PDFName.of('EmbeddedFiles'))) {
+    hasAttachments = true;
+  }
+  if (!hasAttachments && catalog.has(PDFName.of('AF'))) {
+    hasAttachments = true;
+  }
+
+  // Metadata detection
+  const hasMetadata = !!(
+    pdfDoc.getTitle() || pdfDoc.getAuthor() || pdfDoc.getSubject() ||
+    pdfDoc.getProducer() || pdfDoc.getCreator() ||
+    catalog.has(PDFName.of('Metadata'))
+  );
+
+  return {
+    hasImages: (imageStats?.totalImages ?? 0) > 0,
+    hasJpegImages: (imageStats?.jpegCount ?? 0) > 0,
+    hasPngImages: (imageStats?.pngCount ?? 0) > 0,
+    hasAlphaImages: (imageStats?.alphaCount ?? 0) > 0,
+    hasIccProfiles: (imageStats?.iccCount ?? 0) > 0,
+    hasCmykImages: (imageStats?.cmykCount ?? 0) > 0,
+    hasHighDpiImages: (imageStats?.highDpiCount ?? 0) > 0,
+    hasJavaScript,
+    hasBookmarks: catalog.has(PDFName.of('Outlines')),
+    hasNamedDestinations: catalog.has(PDFName.of('Dests')) ||
+      (namesDict instanceof PDFDict && namesDict.has(PDFName.of('Dests'))),
+    hasArticleThreads: catalog.has(PDFName.of('Threads')),
+    hasWebCaptureInfo: catalog.has(PDFName.of('SpiderInfo')) ||
+      catalog.has(PDFName.of('IDS')) || catalog.has(PDFName.of('URLS')),
+    hasHiddenLayers: catalog.has(PDFName.of('OCProperties')),
+    hasPageLabels: catalog.has(PDFName.of('PageLabels')),
+    hasForms,
+    hasAnnotations,
+    hasAttachments,
+    hasThumbnails,
+    hasMetadata,
+  };
+};
+
 type ProgressCallback = (message: string, percent?: number) => void;
 
 // Extended settings that include compression options
@@ -95,6 +194,7 @@ export const analyzePdf = async (
   fullCompressedBytes: Uint8Array;
   methodResults: MethodResult[];
   imageStats?: ImageStats;
+  pdfFeatures?: PdfFeatures;
   report: CompressionReport;
 }> => {
   const originalSize = arrayBuffer.byteLength;
@@ -107,6 +207,9 @@ export const analyzePdf = async (
   // Establish baseline size
   const baselineBytes = await baseDoc.save({ useObjectStreams: false });
   const baselineSize = baselineBytes.byteLength;
+
+  // Detect PDF features (will be enriched with image stats later)
+  let pdfFeatures: PdfFeatures | undefined;
 
   // Tracking Report
   const report: CompressionReport = {
@@ -160,6 +263,9 @@ export const analyzePdf = async (
     imageStats = extracted.stats;
 
     log('info', `Found ${images.length} images`, imageStats);
+
+    // Detect PDF features for method availability indicators
+    pdfFeatures = detectFeatures(imgDoc, imageStats);
 
     // Collect all recompressed images
     const allRecompressedImages: RecompressedImage[] = [];
@@ -540,6 +646,7 @@ export const analyzePdf = async (
     fullCompressedBytes,
     methodResults,
     imageStats,
+    pdfFeatures,
     report,
   };
 };

@@ -112,6 +112,29 @@ export interface ProcessingSettings {
   imageSettings?: ImageCompressionSettings;
 }
 
+/** Features detected in the PDF document - used to indicate method relevance */
+export interface PdfFeatures {
+  hasImages: boolean;
+  hasJpegImages: boolean;
+  hasPngImages: boolean;
+  hasAlphaImages: boolean;
+  hasIccProfiles: boolean;
+  hasCmykImages: boolean;
+  hasHighDpiImages: boolean;
+  hasJavaScript: boolean;
+  hasBookmarks: boolean;
+  hasNamedDestinations: boolean;
+  hasArticleThreads: boolean;
+  hasWebCaptureInfo: boolean;
+  hasHiddenLayers: boolean;
+  hasPageLabels: boolean;
+  hasForms: boolean;
+  hasAnnotations: boolean;
+  hasAttachments: boolean;
+  hasThumbnails: boolean;
+  hasMetadata: boolean;
+}
+
 /** Result for a single compression method */
 export interface MethodResult {
   key: keyof CompressionOptions;
@@ -142,6 +165,7 @@ export interface CompressionAnalysis {
     alphaCount: number;
   };
   report?: CompressionReport;
+  pdfFeatures?: PdfFeatures;
 }
 
 export interface PdfInfo {
@@ -215,6 +239,7 @@ export interface WorkerSuccessPayload {
     alphaCount: number;
   };
   report?: CompressionReport;
+  pdfFeatures?: PdfFeatures;
 }
 
 export interface WorkerErrorPayload {
