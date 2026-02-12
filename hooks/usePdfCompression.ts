@@ -121,6 +121,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
               methodResults: s.methodResults,
               imageStats: s.imageStats,
               report: s.report,
+              pdfFeatures: s.pdfFeatures,
             }
           }));
           break;

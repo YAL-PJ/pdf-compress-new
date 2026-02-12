@@ -56,6 +56,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         fullCompressedBuffer: buffer,
         methodResults: analysis.methodResults,
         imageStats: analysis.imageStats,
+        pdfFeatures: analysis.pdfFeatures,
         report: analysis.report,
       },
       jobId,

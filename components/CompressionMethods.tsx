@@ -1,7 +1,7 @@
 'use client';
 
 import { MethodItem } from './MethodItem';
-import type { CompressionOptions, ImageCompressionSettings, MethodResult } from '@/lib/types';
+import type { CompressionOptions, ImageCompressionSettings, MethodResult, PdfFeatures } from '@/lib/types';
 import { formatBytes } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -281,6 +281,7 @@ export const CompressionMethods = () => {
   const disabled = isProcessing && !isUpdating;
   const methodResults = analysis?.methodResults;
   const imageStats = analysis?.imageStats;
+  const pdfFeatures = analysis?.pdfFeatures;
 
   // O(1) lookup instead of O(n) Array.find per method per render
   const methodResultsMap = useMemo(() => {
@@ -314,6 +315,52 @@ export const CompressionMethods = () => {
   const getMethodResult = useCallback((key: keyof CompressionOptions) => {
     return methodResultsMap.get(key);
   }, [methodResultsMap]);
+
+  // Check if a method is not applicable (the PDF doesn't have the relevant feature)
+  const getMethodNotApplicable = useCallback((key: keyof CompressionOptions): string | undefined => {
+    if (!pdfFeatures) return undefined; // Still loading, don't show indicators yet
+    switch (key) {
+      // Image methods
+      case 'recompressImages':
+      case 'downsampleImages':
+      case 'convertToGrayscale':
+      case 'convertToMonochrome':
+        return !pdfFeatures.hasImages ? 'No images found' : undefined;
+      case 'pngToJpeg':
+        return !pdfFeatures.hasPngImages ? 'No PNG images' : undefined;
+      case 'removeAlphaChannels':
+        return !pdfFeatures.hasAlphaImages ? 'No transparent images' : undefined;
+      case 'removeColorProfiles':
+        return !pdfFeatures.hasIccProfiles ? 'No ICC profiles' : undefined;
+      case 'cmykToRgb':
+        return !pdfFeatures.hasCmykImages ? 'No CMYK images' : undefined;
+      // Structure/cleanup methods
+      case 'removeJavaScript':
+        return !pdfFeatures.hasJavaScript ? 'No JavaScript found' : undefined;
+      case 'removeBookmarks':
+        return !pdfFeatures.hasBookmarks ? 'No bookmarks found' : undefined;
+      case 'removeNamedDestinations':
+        return !pdfFeatures.hasNamedDestinations ? 'No destinations found' : undefined;
+      case 'removeArticleThreads':
+        return !pdfFeatures.hasArticleThreads ? 'No article threads' : undefined;
+      case 'removeWebCaptureInfo':
+        return !pdfFeatures.hasWebCaptureInfo ? 'No web capture info' : undefined;
+      case 'removeHiddenLayers':
+        return !pdfFeatures.hasHiddenLayers ? 'No hidden layers' : undefined;
+      case 'removePageLabels':
+        return !pdfFeatures.hasPageLabels ? 'No page labels' : undefined;
+      case 'flattenForms':
+        return !pdfFeatures.hasForms ? 'No forms found' : undefined;
+      case 'flattenAnnotations':
+        return !pdfFeatures.hasAnnotations ? 'No annotations found' : undefined;
+      case 'removeAttachments':
+        return !pdfFeatures.hasAttachments ? 'No attachments found' : undefined;
+      case 'removeThumbnails':
+        return !pdfFeatures.hasThumbnails ? 'No thumbnails found' : undefined;
+      default:
+        return undefined;
+    }
+  }, [pdfFeatures]);
 
   // Handle special toggles with method interdependency logic
   const handleMethodToggle = useCallback((key: keyof CompressionOptions) => {
@@ -420,6 +467,7 @@ export const CompressionMethods = () => {
                 imageSettings={imageSettings}
                 onImageSettingsChange={setImageSettings}
                 imageStats={imageStats}
+                notApplicable={getMethodNotApplicable(method.key)}
               />
             ))}
           </div>
@@ -473,6 +521,7 @@ export const CompressionMethods = () => {
                             imageSettings={imageSettings}
                             onImageSettingsChange={setImageSettings}
                             imageStats={imageStats}
+                            notApplicable={getMethodNotApplicable(method.key)}
                           />
                         ))}
                       </div>

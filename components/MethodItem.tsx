@@ -25,6 +25,8 @@ interface MethodItemProps {
         otherCount: number;
         highDpiCount: number;
     };
+    /** If set, this method won't save anything for this PDF (e.g. "No images found") */
+    notApplicable?: string;
 }
 
 export const MethodItem = memo(({
@@ -35,7 +37,8 @@ export const MethodItem = memo(({
     onToggle,
     imageSettings,
     onImageSettingsChange,
-    imageStats
+    imageStats,
+    notApplicable
 }: MethodItemProps) => {
     const Icon = method.icon;
     const displayBytes = result?.savedBytes ?? 0;
@@ -55,18 +58,23 @@ export const MethodItem = memo(({
             <button
                 onClick={() => onToggle(method.key)}
                 disabled={disabled}
+                title={notApplicable || undefined}
                 className={twMerge(
                     "w-full flex items-center gap-2 p-2 rounded text-left transition-all duration-200",
                     "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1",
-                    isEnabled
+                    isEnabled && !notApplicable
                         ? "bg-slate-900 text-white"
+                        : isEnabled && notApplicable
+                        ? "bg-slate-700 text-white"
                         : "bg-white hover:bg-slate-50 text-slate-700",
-                    disabled && "opacity-50 cursor-not-allowed"
+                    disabled && "opacity-50 cursor-not-allowed",
+                    notApplicable && !isEnabled && "opacity-50"
                 )}
             >
                 <div className={twMerge(
                     "flex items-center justify-center",
-                    isEnabled ? "text-white" : "text-slate-600"
+                    isEnabled ? "text-white" : "text-slate-600",
+                    notApplicable && !isEnabled && "text-slate-400"
                 )}>
                     <Icon className="w-4 h-4" />
                 </div>
@@ -74,15 +82,20 @@ export const MethodItem = memo(({
                 <div className="flex-1 min-w-0">
                     <div className="font-medium text-xs leading-none flex justify-between items-center">
                         <span className="truncate">{method.label}</span>
-                        {isEnabled && displayBytes > 0 && (
+                        {notApplicable ? (
+                            <span className="text-[9px] bg-slate-200 text-slate-500 px-1 py-0.5 rounded ml-1 flex-shrink-0 whitespace-nowrap">
+                                {notApplicable}
+                            </span>
+                        ) : isEnabled && displayBytes > 0 ? (
                             <span className="text-[9px] bg-emerald-500/20 text-emerald-200 px-1 py-0.5 rounded ml-1 flex-shrink-0">
                                 -{formatBytes(displayBytes)}
                             </span>
-                        )}
+                        ) : null}
                     </div>
                     <div className={twMerge(
                         "text-[10px] mt-0.5 truncate",
-                        isEnabled ? "text-slate-300" : "text-slate-600"
+                        isEnabled ? "text-slate-300" : "text-slate-600",
+                        notApplicable && !isEnabled && "text-slate-400"
                     )}>
                         {method.description}
                     </div>
@@ -92,7 +105,8 @@ export const MethodItem = memo(({
                     "w-4 h-4 rounded border flex items-center justify-center transition-colors flex-shrink-0",
                     isEnabled
                         ? "bg-white border-white text-slate-900"
-                        : "bg-transparent border-slate-400 text-transparent"
+                        : "bg-transparent border-slate-400 text-transparent",
+                    notApplicable && !isEnabled && "border-slate-300"
                 )}>
                     <Check className="w-3 h-3 stroke-[3]" />
                 </div>
