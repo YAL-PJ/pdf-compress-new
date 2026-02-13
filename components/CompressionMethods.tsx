@@ -32,8 +32,6 @@ interface MethodCategory {
 const BASIC_METHOD_KEYS: ReadonlySet<keyof CompressionOptions> = new Set([
   'useObjectStreams',
   'stripMetadata',
-  'recompressImages',
-  'downsampleImages',
   'pngToJpeg',
   'removeThumbnails',
   'removeDuplicateResources',
@@ -423,6 +421,31 @@ export const CompressionMethods = () => {
         </h2>
       </div>
 
+      {/* Adjustable Settings - always visible, separate from tabs */}
+      <div className="border-b">
+        <div className="flex items-center gap-2 p-2 bg-slate-50/80">
+          <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600" />
+          <span className="text-xs font-bold text-slate-800">Adjustable Settings</span>
+          <span className="text-[10px] text-slate-500">Fine-tune values</span>
+        </div>
+        <div className="p-1.5 space-y-0.5">
+          {ADJUSTABLE_METHODS.map(method => (
+            <MethodItem
+              key={method.key}
+              method={method}
+              isEnabled={options[method.key]}
+              disabled={disabled}
+              result={getMethodResult(method.key)}
+              onToggle={handleMethodToggle}
+              imageSettings={imageSettings}
+              onImageSettingsChange={setImageSettings}
+              imageStats={imageStats}
+              notApplicable={getMethodNotApplicable(method.key)}
+            />
+          ))}
+        </div>
+      </div>
+
       {/* Basic / Advanced tabs */}
       <div className="flex border-b">
         <button
@@ -481,102 +504,74 @@ export const CompressionMethods = () => {
             ))}
           </div>
         ) : (
-          // Advanced: split into Adjustable settings and Quick toggles
-          <>
-            {/* Adjustable Settings Section */}
-            <div className="border rounded">
-              <div className="flex items-center gap-2 p-2 bg-slate-50/80 border-b">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600" />
-                <span className="text-xs font-bold text-slate-800">Adjustable Settings</span>
-                <span className="text-[10px] text-slate-500">Fine-tune values</span>
-              </div>
-              <div className="p-1.5 space-y-0.5">
-                {ADJUSTABLE_METHODS.map(method => (
-                  <MethodItem
-                    key={method.key}
-                    method={method}
-                    isEnabled={options[method.key]}
-                    disabled={disabled}
-                    result={getMethodResult(method.key)}
-                    onToggle={handleMethodToggle}
-                    imageSettings={imageSettings}
-                    onImageSettingsChange={setImageSettings}
-                    imageStats={imageStats}
-                    notApplicable={getMethodNotApplicable(method.key)}
-                  />
-                ))}
-              </div>
+          // Advanced: Quick toggles only (adjustable settings are in their own section above)
+          <div className="border rounded">
+            <div className="flex items-center gap-2 p-2 bg-slate-50/80 border-b">
+              <ToggleLeft className="w-3.5 h-3.5 text-slate-600" />
+              <span className="text-xs font-bold text-slate-800">Quick Toggles</span>
+              <span className="text-[10px] text-slate-500">Enable or disable</span>
             </div>
+            <div className="p-0.5">
+              {TOGGLE_CATEGORIES.map((category) => {
+                const stats = getCategoryStats(category);
+                const isExpanded = expandedCategories[category.name];
 
-            {/* Quick Toggles Section */}
-            <div className="border rounded">
-              <div className="flex items-center gap-2 p-2 bg-slate-50/80 border-b">
-                <ToggleLeft className="w-3.5 h-3.5 text-slate-600" />
-                <span className="text-xs font-bold text-slate-800">Quick Toggles</span>
-                <span className="text-[10px] text-slate-500">Enable or disable</span>
-              </div>
-              <div className="p-0.5">
-                {TOGGLE_CATEGORIES.map((category) => {
-                  const stats = getCategoryStats(category);
-                  const isExpanded = expandedCategories[category.name];
-
-                  return (
-                    <div key={category.name} className="border-b last:border-b-0">
-                      <button
-                        onClick={() => toggleCategory(category.name)}
-                        className="w-full flex items-center justify-between p-2 text-left hover:bg-slate-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          {isExpanded ? (
-                            <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
-                          ) : (
-                            <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-                          )}
-                          <span className="text-xs font-bold text-slate-800">{category.name}</span>
-                          <span className="text-[10px] text-slate-600">
-                            {stats.enabled}/{stats.total}
-                          </span>
-                        </div>
-                        {stats.savings > 0 && (
-                          <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
-                            -{formatBytes(stats.savings)}
-                          </span>
+                return (
+                  <div key={category.name} className="border-b last:border-b-0">
+                    <button
+                      onClick={() => toggleCategory(category.name)}
+                      className="w-full flex items-center justify-between p-2 text-left hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
+                        ) : (
+                          <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
                         )}
-                      </button>
+                        <span className="text-xs font-bold text-slate-800">{category.name}</span>
+                        <span className="text-[10px] text-slate-600">
+                          {stats.enabled}/{stats.total}
+                        </span>
+                      </div>
+                      {stats.savings > 0 && (
+                        <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
+                          -{formatBytes(stats.savings)}
+                        </span>
+                      )}
+                    </button>
 
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="p-1.5 pt-0 space-y-0.5">
-                              {category.methods.map(method => (
-                                <MethodItem
-                                  key={method.key}
-                                  method={method}
-                                  isEnabled={options[method.key]}
-                                  disabled={disabled}
-                                  result={getMethodResult(method.key)}
-                                  onToggle={handleMethodToggle}
-                                  imageSettings={imageSettings}
-                                  onImageSettingsChange={setImageSettings}
-                                  imageStats={imageStats}
-                                  notApplicable={getMethodNotApplicable(method.key)}
-                                />
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
-              </div>
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="p-1.5 pt-0 space-y-0.5">
+                            {category.methods.map(method => (
+                              <MethodItem
+                                key={method.key}
+                                method={method}
+                                isEnabled={options[method.key]}
+                                disabled={disabled}
+                                result={getMethodResult(method.key)}
+                                onToggle={handleMethodToggle}
+                                imageSettings={imageSettings}
+                                onImageSettingsChange={setImageSettings}
+                                imageStats={imageStats}
+                                notApplicable={getMethodNotApplicable(method.key)}
+                              />
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
             </div>
-          </>
+          </div>
         )}
       </div>
 
