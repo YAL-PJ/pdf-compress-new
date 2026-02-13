@@ -375,10 +375,13 @@ export const analyzePdf = async (
   }
 
   // Helper: apply a method on the shared document, measure incremental savings
+  // When cleanOrphans=true, orphan objects created by the method are cleaned up
+  // and their savings are attributed to the method that caused them.
   const measureMethod = async (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number | Promise<void | { savedBytes: number; [k: string]: unknown }>,
+    cleanOrphans: boolean = false,
   ) => {
     if (!enabled) {
       savings[key] = 0;
@@ -388,6 +391,9 @@ export const analyzePdf = async (
     const before = lastSize;
     try {
       const result = await apply(workDoc);
+      if (cleanOrphans) {
+        await removeOrphanObjects(workDoc);
+      }
       const afterBytes = await workDoc.save({ useObjectStreams: false });
       lastSize = afterBytes.byteLength;
       const saved = Math.max(0, before - lastSize);
@@ -405,26 +411,35 @@ export const analyzePdf = async (
     }
   };
 
+  // Run orphan removal FIRST to clean pre-existing orphans before other methods
+  if (options.removeOrphanObjects) {
+    onProgress?.('Removing orphan objects...');
+    await measureMethod('removeOrphanObjects', true, async (doc) => {
+      const r = await removeOrphanObjects(doc, onProgress);
+      if (r.orphansRemoved > 0) log('success', `Removed ${r.orphansRemoved} orphan objects`);
+    });
+  }
+
   // Image-related in-place mutations
   if (options.removeAlphaChannels) {
     await measureMethod('removeAlphaChannels', true, (doc) => {
       const r = removeAlphaChannels(doc);
       if (r.processed > 0) log('success', `Removed alpha channels from ${r.processed} images`);
-    });
+    }, true);
   }
 
   if (options.removeColorProfiles) {
     await measureMethod('removeColorProfiles', true, (doc) => {
       const r = removeIccProfiles(doc);
       if (r.removed > 0) log('success', `Removed ${r.removed} ICC profiles`);
-    });
+    }, true);
   }
 
   if (options.cmykToRgb) {
     await measureMethod('cmykToRgb', true, async (doc) => {
       const r = await convertCmykToRgb(doc, settings.quality, onProgress);
       if (r.converted > 0) log('success', `Converted ${r.converted} CMYK images to RGB`);
-    });
+    }, true);
   }
 
   // Resource optimization
@@ -437,7 +452,7 @@ export const analyzePdf = async (
       } else {
         log('info', 'No duplicate resources found');
       }
-    });
+    }, true);
   }
 
   if (options.removeUnusedFonts) {
@@ -449,7 +464,7 @@ export const analyzePdf = async (
       } else {
         log('info', 'No unused fonts found');
       }
-    });
+    }, true);
   }
 
   // Content stream optimization
@@ -467,20 +482,13 @@ export const analyzePdf = async (
     });
   }
 
-  if (options.removeOrphanObjects) {
-    await measureMethod('removeOrphanObjects', true, async (doc) => {
-      const r = await removeOrphanObjects(doc, onProgress);
-      if (r.orphansRemoved > 0) log('success', `Removed ${r.orphansRemoved} orphan objects`);
-    });
-  }
-
   if (options.removeAlternateContent) {
     await measureMethod('removeAlternateContent', true, async (doc) => {
       const r = await removeAlternateContent(doc, onProgress);
       if (r.alternatesRemoved > 0 || r.printOnlyRemoved > 0 || r.screenOnlyRemoved > 0) {
         log('success', 'Removed alternate content objects');
       }
-    });
+    }, true);
   }
 
   if (options.removeInvisibleText) {
@@ -498,10 +506,13 @@ export const analyzePdf = async (
   const structDoc = workDoc; // Alias for clarity — same document instance
 
   // Helper: measure a single structure method's incremental savings
+  // When cleanOrphans=true, orphan objects created by the method are cleaned up
+  // and their savings are attributed to the method that caused them.
   const measureStructMethod = async (
     key: string,
     enabled: boolean,
-    apply: (doc: PDFDocument) => void | number
+    apply: (doc: PDFDocument) => void | number,
+    cleanOrphans: boolean = false,
   ): Promise<number | void> => {
     if (!enabled) {
       structSavings[key] = 0;
@@ -511,6 +522,9 @@ export const analyzePdf = async (
     const before = lastSize;
     try {
       const result = apply(structDoc);
+      if (cleanOrphans) {
+        await removeOrphanObjects(structDoc);
+      }
       const afterBytes = await structDoc.save({ useObjectStreams: false });
       lastSize = afterBytes.byteLength;
       const saved = Math.max(0, before - lastSize);
@@ -529,20 +543,21 @@ export const analyzePdf = async (
   };
 
   // Apply each method incrementally, measuring the delta
-  await measureStructMethod('removeJavaScript', options.removeJavaScript, removeJS);
-  // ... rest of calls follow original order
-  await measureStructMethod('removeBookmarks', options.removeBookmarks, removeBM);
-  await measureStructMethod('removeNamedDestinations', options.removeNamedDestinations, removeND);
-  await measureStructMethod('removeArticleThreads', options.removeArticleThreads, removeAT);
-  await measureStructMethod('removeWebCaptureInfo', options.removeWebCaptureInfo, removeWC);
-  await measureStructMethod('removeHiddenLayers', options.removeHiddenLayers, removeHL);
+  // Methods that remove references pass cleanOrphans=true so orphan savings
+  // are attributed to the method that caused them
+  await measureStructMethod('removeJavaScript', options.removeJavaScript, removeJS, true);
+  await measureStructMethod('removeBookmarks', options.removeBookmarks, removeBM, true);
+  await measureStructMethod('removeNamedDestinations', options.removeNamedDestinations, removeND, true);
+  await measureStructMethod('removeArticleThreads', options.removeArticleThreads, removeAT, true);
+  await measureStructMethod('removeWebCaptureInfo', options.removeWebCaptureInfo, removeWC, true);
+  await measureStructMethod('removeHiddenLayers', options.removeHiddenLayers, removeHL, true);
   await measureStructMethod('removePageLabels', options.removePageLabels, removePL);
-  await measureStructMethod('deepCleanMetadata', options.deepCleanMetadata, deepCleanMD);
-  await measureStructMethod('removeThumbnails', options.removeThumbnails, removeTN);
-  const attResult = await measureStructMethod('removeAttachments', options.removeAttachments, removeATT);
+  await measureStructMethod('deepCleanMetadata', options.deepCleanMetadata, deepCleanMD, true);
+  await measureStructMethod('removeThumbnails', options.removeThumbnails, removeTN, true);
+  const attResult = await measureStructMethod('removeAttachments', options.removeAttachments, removeATT, true);
   if (typeof attResult === 'number') structAttachmentsRemoved = attResult;
-  await measureStructMethod('flattenForms', options.flattenForms, flattenFM);
-  await measureStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
+  await measureStructMethod('flattenForms', options.flattenForms, flattenFM, true);
+  await measureStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN, true);
 
   onProgress?.('Creating final compressed file...');
 
