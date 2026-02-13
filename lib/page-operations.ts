@@ -57,5 +57,5 @@ export const applyPageOperations = async (
     }
 
     const pdfBytes = await destDoc.save();
-    return new Blob([pdfBytes.buffer.slice(pdfBytes.byteOffset, pdfBytes.byteOffset + pdfBytes.byteLength)], { type: 'application/pdf' });
+    return new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
 };
