@@ -68,13 +68,13 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   pngToJpeg: false,
   convertToMonochrome: false,
   removeAlphaChannels: false,
-  removeColorProfiles: false,
+  removeColorProfiles: true,  // Safe — strips ICC profiles, colors render fine in sRGB
   cmykToRgb: false,
 
   // Resources (Phase 2) - safe to enable by default
   removeThumbnails: true,
-  removeDuplicateResources: false,  // Can be slow, off by default
-  removeUnusedFonts: false,  // Can cause issues if incorrectly detected, off by default
+  removeDuplicateResources: true,  // Safe — only removes exact duplicates, no quality impact
+  removeUnusedFonts: true,  // Safe — only removes fonts with zero Tf references, fail-safe on parse errors
   removeAttachments: false,  // User may want to keep attachments
 
   // Interactive (Phase 2.10-2.11) - off by default, destructive
@@ -89,7 +89,7 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   removeWebCaptureInfo: true,  // Rarely needed
   removeHiddenLayers: false,  // Can affect content
   removePageLabels: false,  // May affect pagination display
-  deepCleanMetadata: false,  // More aggressive than stripMetadata
+  deepCleanMetadata: true,  // Safe — removes XMP metadata streams, no visual impact
 
   // Advanced Optimization (Phase 2 - New)
   inlineToXObject: false,        // Off - rarely needed, can increase size
