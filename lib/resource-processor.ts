@@ -15,6 +15,7 @@ import {
   PDFHexString,
   PDFString,
 } from 'pdf-lib';
+import pako from 'pako';
 
 export interface DuplicateRemovalResult {
   duplicatesFound: number;
@@ -40,7 +41,8 @@ const hashBytes = (bytes: Uint8Array): string => {
 };
 
 /**
- * Get content bytes from a stream object
+ * Get raw content bytes from a stream object (without decompression).
+ * Used for hashing/deduplication where we compare raw bytes.
  */
 const getStreamBytes = (stream: PDFStream | PDFRawStream): Uint8Array | null => {
   try {
@@ -48,6 +50,52 @@ const getStreamBytes = (stream: PDFStream | PDFRawStream): Uint8Array | null => 
       return stream.contents;
     }
     return stream.getContents();
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Get decompressed content bytes from a stream object.
+ * Content streams are often Flate-compressed; we must decompress
+ * before scanning for PDF operators like Tf.
+ */
+const getDecompressedStreamBytes = (stream: PDFStream | PDFRawStream): Uint8Array | null => {
+  try {
+    let rawBytes: Uint8Array;
+    if (stream instanceof PDFRawStream) {
+      rawBytes = stream.contents;
+    } else {
+      rawBytes = stream.getContents();
+    }
+
+    // Check if the stream has a Filter that needs decompression
+    const filter = stream.dict.get(PDFName.of('Filter'));
+    if (!filter) {
+      return rawBytes;
+    }
+
+    let filterName: string | undefined;
+    if (filter instanceof PDFName) {
+      filterName = filter.toString();
+    } else if (filter instanceof PDFArray && filter.size() > 0) {
+      const first = filter.get(0);
+      if (first instanceof PDFName) {
+        filterName = first.toString();
+      }
+    }
+
+    if (filterName === '/FlateDecode') {
+      try {
+        return pako.inflate(rawBytes);
+      } catch {
+        // Decompression failed, return raw bytes as fallback
+        return rawBytes;
+      }
+    }
+
+    // For other filters, return raw bytes
+    return rawBytes;
   } catch {
     return null;
   }
@@ -223,7 +271,7 @@ export const removeUnusedFonts = (pdfDoc: PDFDocument): UnusedFontResult => {
     if (contents instanceof PDFRef) {
       const contentObj = pdfDoc.context.lookup(contents);
       if (contentObj instanceof PDFRawStream || contentObj instanceof PDFStream) {
-        const bytes = getStreamBytes(contentObj);
+        const bytes = getDecompressedStreamBytes(contentObj);
         if (bytes) {
           const fonts = extractUsedFonts(bytes);
           fonts.forEach(f => allUsedFonts.add(f));
@@ -235,7 +283,7 @@ export const removeUnusedFonts = (pdfDoc: PDFDocument): UnusedFontResult => {
         if (contentRef instanceof PDFRef) {
           const contentObj = pdfDoc.context.lookup(contentRef);
           if (contentObj instanceof PDFRawStream || contentObj instanceof PDFStream) {
-            const bytes = getStreamBytes(contentObj);
+            const bytes = getDecompressedStreamBytes(contentObj);
             if (bytes) {
               const fonts = extractUsedFonts(bytes);
               fonts.forEach(f => allUsedFonts.add(f));
