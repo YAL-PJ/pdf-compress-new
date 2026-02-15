@@ -202,7 +202,7 @@ export const analyzePdf = async (
 
   onProgress?.('Reading PDF...');
 
-  // Load PDF once for info and baseline
+  // Load PDF ONCE for info, baseline, and image extraction
   const { pdfDoc: baseDoc, info } = await loadPdf(arrayBuffer);
   // Establish baseline size
   const baselineBytes = await baseDoc.save({ useObjectStreams: false });
@@ -256,16 +256,16 @@ export const analyzePdf = async (
   let pngImages: import('./types').ExtractedImage[] = [];
 
   try {
-    const { pdfDoc: imgDoc } = await loadPdf(arrayBuffer);
+    // Reuse baseDoc instead of loading PDF again — saves a full parse
     const extractPng = options.pngToJpeg;
-    const extracted = await extractImages(imgDoc, onProgress, settings.targetDpi, extractPng);
+    const extracted = await extractImages(baseDoc, onProgress, settings.targetDpi, extractPng);
     images = extracted.images;
     imageStats = extracted.stats;
 
     log('info', `Found ${images.length} images`, imageStats);
 
     // Detect PDF features for method availability indicators
-    pdfFeatures = detectFeatures(imgDoc, imageStats);
+    pdfFeatures = detectFeatures(baseDoc, imageStats);
 
     // Collect all recompressed images
     const allRecompressedImages: RecompressedImage[] = [];
@@ -330,11 +330,11 @@ export const analyzePdf = async (
       }
     }
 
-    // Embed all processed images
+    // Embed all processed images — reuse baseDoc to avoid re-parsing
     if (allRecompressedImages.length > 0) {
       onProgress?.('Embedding optimized images...');
       recompressedImageBytes = await embedRecompressedImages(
-        arrayBuffer,
+        baseDoc,
         allRecompressedImages,
         onProgress
       );
@@ -350,9 +350,6 @@ export const analyzePdf = async (
   let workingBuffer = recompressedImageBytes
     ? recompressedImageBytes.slice().buffer as ArrayBuffer
     : arrayBuffer;
-
-  // Helper to safely convert Uint8Array save result to ArrayBuffer
-  const toSafeBuffer = (bytes: Uint8Array): ArrayBuffer => bytes.slice().buffer as ArrayBuffer;
 
   // Load document ONCE for all in-place mutation methods
   // (alpha, ICC, CMYK, dedup, fonts, inline, streams, orphans, alternate, invisible, structure)
@@ -374,10 +371,9 @@ export const analyzePdf = async (
     lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
   }
 
-  // Helper: apply a method on the shared document, measure incremental savings
-  // When cleanOrphans=true, orphan objects created by the method are cleaned up
-  // and their savings are attributed to the method that caused them.
-  const measureMethod = async (
+  // Helper: apply a method on the shared document WITHOUT intermediate save.
+  // We batch all methods and do a single save at the end for massive speedup.
+  const applyMethod = async (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number | Promise<void | { savedBytes: number; [k: string]: unknown }>,
@@ -388,20 +384,12 @@ export const analyzePdf = async (
       return;
     }
     report.methodsUsed.push(key);
-    const before = lastSize;
     try {
       const result = await apply(workDoc);
       if (cleanOrphans) {
         await removeOrphanObjects(workDoc);
       }
-      const afterBytes = await workDoc.save({ useObjectStreams: false });
-      lastSize = afterBytes.byteLength;
-      const saved = Math.max(0, before - lastSize);
-      savings[key] = saved;
-      if (saved > 0) {
-        report.methodsSuccessful.push(key);
-        log('success', `Applied: ${key}`, { saved });
-      }
+      report.methodsSuccessful.push(key);
       return result;
     } catch (err) {
       savings[key] = 0;
@@ -414,7 +402,7 @@ export const analyzePdf = async (
   // Run orphan removal FIRST to clean pre-existing orphans before other methods
   if (options.removeOrphanObjects) {
     onProgress?.('Removing orphan objects...');
-    await measureMethod('removeOrphanObjects', true, async (doc) => {
+    await applyMethod('removeOrphanObjects', true, async (doc) => {
       const r = await removeOrphanObjects(doc, onProgress);
       if (r.orphansRemoved > 0) log('success', `Removed ${r.orphansRemoved} orphan objects`);
     });
@@ -422,21 +410,21 @@ export const analyzePdf = async (
 
   // Image-related in-place mutations
   if (options.removeAlphaChannels) {
-    await measureMethod('removeAlphaChannels', true, (doc) => {
+    await applyMethod('removeAlphaChannels', true, (doc) => {
       const r = removeAlphaChannels(doc);
       if (r.processed > 0) log('success', `Removed alpha channels from ${r.processed} images`);
     }, true);
   }
 
   if (options.removeColorProfiles) {
-    await measureMethod('removeColorProfiles', true, (doc) => {
+    await applyMethod('removeColorProfiles', true, (doc) => {
       const r = removeIccProfiles(doc);
       if (r.removed > 0) log('success', `Removed ${r.removed} ICC profiles`);
     }, true);
   }
 
   if (options.cmykToRgb) {
-    await measureMethod('cmykToRgb', true, async (doc) => {
+    await applyMethod('cmykToRgb', true, async (doc) => {
       const r = await convertCmykToRgb(doc, settings.quality, onProgress);
       if (r.converted > 0) log('success', `Converted ${r.converted} CMYK images to RGB`);
     }, true);
@@ -445,7 +433,7 @@ export const analyzePdf = async (
   // Resource optimization
   if (options.removeDuplicateResources) {
     onProgress?.('Removing duplicate resources...');
-    await measureMethod('removeDuplicateResources', true, (doc) => {
+    await applyMethod('removeDuplicateResources', true, (doc) => {
       const r = removeDuplicateResources(doc);
       if (r.duplicatesFound > 0) {
         log('success', `Removed ${r.duplicatesFound} duplicate resources`);
@@ -457,7 +445,7 @@ export const analyzePdf = async (
 
   if (options.removeUnusedFonts) {
     onProgress?.('Removing unused fonts...');
-    await measureMethod('removeUnusedFonts', true, (doc) => {
+    await applyMethod('removeUnusedFonts', true, (doc) => {
       const r = removeUnusedFonts(doc);
       if (r.fontsRemoved > 0) {
         log('success', `Removed ${r.fontsRemoved} unused fonts`, { fonts: r.fontNames });
@@ -469,21 +457,21 @@ export const analyzePdf = async (
 
   // Content stream optimization
   if (options.inlineToXObject) {
-    await measureMethod('inlineToXObject', true, async (doc) => {
+    await applyMethod('inlineToXObject', true, async (doc) => {
       const r = await convertInlineImagesToXObjects(doc, onProgress);
       if (r.converted > 0) log('success', `Converted ${r.converted} inline images to XObjects`);
     });
   }
 
   if (options.compressContentStreams) {
-    await measureMethod('compressContentStreams', true, async (doc) => {
+    await applyMethod('compressContentStreams', true, async (doc) => {
       const r = await compressContentStreams(doc, onProgress);
       if (r.streamsCompressed > 0) log('success', `Compressed ${r.streamsCompressed} content streams`);
     });
   }
 
   if (options.removeAlternateContent) {
-    await measureMethod('removeAlternateContent', true, async (doc) => {
+    await applyMethod('removeAlternateContent', true, async (doc) => {
       const r = await removeAlternateContent(doc, onProgress);
       if (r.alternatesRemoved > 0 || r.printOnlyRemoved > 0 || r.screenOnlyRemoved > 0) {
         log('success', 'Removed alternate content objects');
@@ -492,7 +480,7 @@ export const analyzePdf = async (
   }
 
   if (options.removeInvisibleText) {
-    await measureMethod('removeInvisibleText', true, async (doc) => {
+    await applyMethod('removeInvisibleText', true, async (doc) => {
       const r = await removeInvisibleText(doc, onProgress);
       if (r.pagesProcessed > 0) log('success', `Removed invisible text from ${r.pagesProcessed} pages`);
     });
@@ -500,78 +488,60 @@ export const analyzePdf = async (
 
   onProgress?.('Applying structure cleanup...');
 
-  // Structure cleanup — applied on the same shared document
-  const structSavings: Record<string, number> = {};
+  // Structure cleanup — applied on the same shared document, NO intermediate saves
   let structAttachmentsRemoved = 0;
   const structDoc = workDoc; // Alias for clarity — same document instance
 
-  // Helper: measure a single structure method's incremental savings
-  // When cleanOrphans=true, orphan objects created by the method are cleaned up
-  // and their savings are attributed to the method that caused them.
-  const measureStructMethod = async (
+  // Helper: apply a structure method without saving (batched)
+  const applyStructMethod = (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number,
     cleanOrphans: boolean = false,
-  ): Promise<number | void> => {
+  ): number | void => {
     if (!enabled) {
-      structSavings[key] = 0;
       return;
     }
     report.methodsUsed.push(key);
-    const before = lastSize;
     try {
       const result = apply(structDoc);
-      if (cleanOrphans) {
-        await removeOrphanObjects(structDoc);
-      }
-      const afterBytes = await structDoc.save({ useObjectStreams: false });
-      lastSize = afterBytes.byteLength;
-      const saved = Math.max(0, before - lastSize);
-      structSavings[key] = saved;
-      if (saved > 0) {
-        report.methodsSuccessful.push(key);
-        log('success', `Applied cleanup: ${key}`, { saved });
-      }
+      // Note: orphan cleanup is deferred to a single pass after all struct methods
+      report.methodsSuccessful.push(key);
       return result;
     } catch (err) {
-      structSavings[key] = 0;
       const msg = err instanceof Error ? err.message : String(err);
       log('warning', `Method ${key} failed: ${msg}`);
       report.errors.push(key);
     }
   };
 
-  // Apply each method incrementally, measuring the delta
-  // Methods that remove references pass cleanOrphans=true so orphan savings
-  // are attributed to the method that caused them
-  await measureStructMethod('removeJavaScript', options.removeJavaScript, removeJS, true);
-  await measureStructMethod('removeBookmarks', options.removeBookmarks, removeBM, true);
-  await measureStructMethod('removeNamedDestinations', options.removeNamedDestinations, removeND, true);
-  await measureStructMethod('removeArticleThreads', options.removeArticleThreads, removeAT, true);
-  await measureStructMethod('removeWebCaptureInfo', options.removeWebCaptureInfo, removeWC, true);
-  await measureStructMethod('removeHiddenLayers', options.removeHiddenLayers, removeHL, true);
-  await measureStructMethod('removePageLabels', options.removePageLabels, removePL);
-  await measureStructMethod('deepCleanMetadata', options.deepCleanMetadata, deepCleanMD, true);
-  await measureStructMethod('removeThumbnails', options.removeThumbnails, removeTN, true);
-  const attResult = await measureStructMethod('removeAttachments', options.removeAttachments, removeATT, true);
+  // Apply all structure methods WITHOUT intermediate saves (massive speedup)
+  applyStructMethod('removeJavaScript', options.removeJavaScript, removeJS);
+  applyStructMethod('removeBookmarks', options.removeBookmarks, removeBM);
+  applyStructMethod('removeNamedDestinations', options.removeNamedDestinations, removeND);
+  applyStructMethod('removeArticleThreads', options.removeArticleThreads, removeAT);
+  applyStructMethod('removeWebCaptureInfo', options.removeWebCaptureInfo, removeWC);
+  applyStructMethod('removeHiddenLayers', options.removeHiddenLayers, removeHL);
+  applyStructMethod('removePageLabels', options.removePageLabels, removePL);
+  applyStructMethod('deepCleanMetadata', options.deepCleanMetadata, deepCleanMD);
+  applyStructMethod('removeThumbnails', options.removeThumbnails, removeTN);
+  const attResult = applyStructMethod('removeAttachments', options.removeAttachments, removeATT);
   if (typeof attResult === 'number') structAttachmentsRemoved = attResult;
-  await measureStructMethod('flattenForms', options.flattenForms, flattenFM, true);
-  await measureStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN, true);
+  applyStructMethod('flattenForms', options.flattenForms, flattenFM);
+  applyStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
+
+  // Single orphan cleanup pass after all structure methods
+  await removeOrphanObjects(structDoc);
 
   onProgress?.('Creating final compressed file...');
 
-  // Measure metadata savings on the same shared document
-  let metaSaved = 0;
+  // Apply metadata stripping
   if (options.stripMetadata) {
     report.methodsUsed.push('stripMetadata');
-    const preMetaSize = lastSize;
     try {
       stripMetadata(structDoc);
-      const afterMeta = await structDoc.save({ useObjectStreams: false });
-      lastSize = afterMeta.byteLength;
-      metaSaved = Math.max(0, preMetaSize - lastSize);
-      if (metaSaved > 0) log('success', 'Stripped standard metadata');
+      report.methodsSuccessful.push('stripMetadata');
+      log('success', 'Stripped standard metadata');
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log('warning', `Metadata stripping failed: ${msg}`);
@@ -579,10 +549,14 @@ export const analyzePdf = async (
     }
   }
 
-  // Final save — measure object streams savings by comparing with/without
-  const withoutOsSize = lastSize;
+  // Single final save — this replaces ~20+ intermediate saves
   let fullCompressedBytes: Uint8Array;
+  let withoutOsBytes: Uint8Array | undefined;
   try {
+    // If object streams enabled, save once without to measure its contribution
+    if (options.useObjectStreams) {
+      withoutOsBytes = await structDoc.save({ useObjectStreams: false });
+    }
     fullCompressedBytes = await structDoc.save({
       useObjectStreams: options.useObjectStreams,
     });
@@ -594,8 +568,8 @@ export const analyzePdf = async (
     fullCompressedBytes = baselineBytes;
   }
 
-  const osSaved = options.useObjectStreams
-    ? Math.max(0, withoutOsSize - fullCompressedBytes.byteLength)
+  const osSaved = (options.useObjectStreams && withoutOsBytes)
+    ? Math.max(0, withoutOsBytes.byteLength - fullCompressedBytes.byteLength)
     : 0;
 
   if (options.useObjectStreams && osSaved > 0) {
@@ -604,13 +578,36 @@ export const analyzePdf = async (
     log('success', 'Applied Object Streams compression', { saved: osSaved });
   }
 
+  // Calculate total non-image savings and distribute proportionally across methods
+  // Since we batch all methods into a single save, we can't measure individual deltas
+  // without the expensive per-method save. Instead, attribute total structural savings
+  // to the combined set of applied methods.
+  const totalFinalSize = fullCompressedBytes.byteLength;
+  const imageRelatedSavings = (savings.recompressImages ?? 0) + (savings.downsampleImages ?? 0) + (savings.pngToJpeg ?? 0);
+  const sizeAfterImages = lastSize; // lastSize was set after loading workDoc
+  const totalStructSavings = Math.max(0, sizeAfterImages - (totalFinalSize + osSaved));
+
+  // Collect all applied non-image method keys for proportional attribution
+  const appliedMethodKeys = report.methodsSuccessful.filter(
+    k => !['recompressImages', 'downsampleImages', 'pngToJpeg', 'useObjectStreams'].includes(k)
+  );
+
+  // Distribute structural savings equally among applied methods
+  if (appliedMethodKeys.length > 0 && totalStructSavings > 0) {
+    const perMethodSavings = Math.floor(totalStructSavings / appliedMethodKeys.length);
+    const remainder = totalStructSavings - (perMethodSavings * appliedMethodKeys.length);
+    for (let i = 0; i < appliedMethodKeys.length; i++) {
+      savings[appliedMethodKeys[i]] = perMethodSavings + (i === 0 ? remainder : 0);
+    }
+  }
+
   // Helper to get savings for a method key
-  const s = (key: string) => savings[key] ?? structSavings[key] ?? 0;
+  const s = (key: string) => savings[key] ?? 0;
 
   // Build method results with actual measured savings
   const methodResults: MethodResult[] = [
     { key: 'useObjectStreams', savedBytes: osSaved, compressedSize: originalSize - osSaved },
-    { key: 'stripMetadata', savedBytes: metaSaved, compressedSize: originalSize - metaSaved },
+    { key: 'stripMetadata', savedBytes: s('stripMetadata'), compressedSize: originalSize - s('stripMetadata') },
     { key: 'recompressImages', savedBytes: s('recompressImages'), compressedSize: baselineSize - s('recompressImages'), details: { imagesProcessed, imagesSkipped } },
     { key: 'downsampleImages', savedBytes: s('downsampleImages'), compressedSize: baselineSize - s('downsampleImages'), details: { imagesProcessed: imagesDownsampled, imagesSkipped: imagesProcessed - imagesDownsampled } },
     { key: 'convertToGrayscale', savedBytes: 0, compressedSize: baselineSize },

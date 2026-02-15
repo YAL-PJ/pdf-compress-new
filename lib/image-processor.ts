@@ -582,29 +582,36 @@ export const recompressImages = async (
 
   onProgress?.(`Recompressing ${total} JPEG images...`, 0);
 
-  // Process one at a time for stability
-  for (let i = 0; i < total; i++) {
-    const image = images[i];
-    const result = await recompressJpeg(image, settings);
+  // Process images in parallel batches for much better throughput
+  // OffscreenCanvas operations are async and benefit from concurrent execution
+  const BATCH_SIZE = 4;
+  let processed = 0;
 
-    if (result) {
-      results.push(result);
+  for (let batchStart = 0; batchStart < total; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, total);
+    const batch = images.slice(batchStart, batchEnd);
 
-      // Track downsampling savings separately
-      if (result.wasDownsampled && result.originalWidth && result.originalHeight) {
-        // Estimate how much of the savings came from downsampling
-        // by comparing the dimension reduction ratio
-        const originalPixels = result.originalWidth * result.originalHeight;
-        const newPixels = result.width * result.height;
-        const pixelReductionRatio = 1 - (newPixels / originalPixels);
+    const batchResults = await Promise.all(
+      batch.map(image => recompressJpeg(image, settings))
+    );
 
-        // Attribute proportional savings to downsampling
-        downsampleSavings += Math.round(result.savedBytes * pixelReductionRatio);
+    for (const result of batchResults) {
+      processed++;
+      if (result) {
+        results.push(result);
+
+        // Track downsampling savings separately
+        if (result.wasDownsampled && result.originalWidth && result.originalHeight) {
+          const originalPixels = result.originalWidth * result.originalHeight;
+          const newPixels = result.width * result.height;
+          const pixelReductionRatio = 1 - (newPixels / originalPixels);
+          downsampleSavings += Math.round(result.savedBytes * pixelReductionRatio);
+        }
       }
     }
 
-    const progress = Math.round(((i + 1) / total) * 100);
-    onProgress?.(`Processed ${i + 1}/${total} images`, progress);
+    const progress = Math.round((processed / total) * 100);
+    onProgress?.(`Processed ${processed}/${total} images`, progress);
   }
 
   return { results, downsampleSavings };
@@ -612,14 +619,19 @@ export const recompressImages = async (
 
 /**
  * Embed recompressed images back into PDF
+ * Can accept either an ArrayBuffer (loads new doc) or an existing PDFDocument (avoids re-parse)
  */
 export const embedRecompressedImages = async (
-  originalBuffer: ArrayBuffer,
+  source: ArrayBuffer | PDFDocument,
   recompressedImages: RecompressedImage[],
   onProgress?: (message: string) => void
 ): Promise<Uint8Array> => {
+  // Load or reuse document
+  const pdfDoc = source instanceof ArrayBuffer
+    ? await PDFDocument.load(source)
+    : source;
+
   if (recompressedImages.length === 0) {
-    const pdfDoc = await PDFDocument.load(originalBuffer);
     return pdfDoc.save({ useObjectStreams: false });
   }
 
@@ -631,7 +643,6 @@ export const embedRecompressedImages = async (
     imageMap.set(img.ref, img);
   }
 
-  const pdfDoc = await PDFDocument.load(originalBuffer);
   const context = pdfDoc.context;
 
   // Find and replace image streams
@@ -998,15 +1009,28 @@ export const convertPngsToJpeg = async (
 
   onProgress?.(`Converting ${pngImages.length} PNG images to JPEG...`, 0);
 
-  for (let i = 0; i < pngImages.length; i++) {
-    const result = await convertPngToJpeg(pngImages[i], quality);
-    if (result) {
-      results.push(result);
-      savings += result.savedBytes;
+  // Process PNG conversions in parallel batches
+  const BATCH_SIZE = 4;
+  let processed = 0;
+
+  for (let batchStart = 0; batchStart < pngImages.length; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, pngImages.length);
+    const batch = pngImages.slice(batchStart, batchEnd);
+
+    const batchResults = await Promise.all(
+      batch.map(img => convertPngToJpeg(img, quality))
+    );
+
+    for (const result of batchResults) {
+      processed++;
+      if (result) {
+        results.push(result);
+        savings += result.savedBytes;
+      }
     }
 
-    const progress = Math.round(((i + 1) / pngImages.length) * 100);
-    onProgress?.(`Converted ${i + 1}/${pngImages.length} PNGs`, progress);
+    const progress = Math.round((processed / pngImages.length) * 100);
+    onProgress?.(`Converted ${processed}/${pngImages.length} PNGs`, progress);
   }
 
   return { results, savings };
