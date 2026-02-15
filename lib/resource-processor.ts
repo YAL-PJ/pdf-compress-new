@@ -252,46 +252,150 @@ const extractUsedFonts = (contentBytes: Uint8Array): Set<string> => {
  * Remove unused fonts from PDF
  * Analyzes content streams to find which fonts are actually used
  */
+/**
+ * Extract font references from a content stream (ref or array of refs)
+ */
+const extractFontsFromContentRef = (
+  pdfDoc: PDFDocument,
+  contents: PDFRef | PDFArray,
+  usedFonts: Set<string>,
+): void => {
+  if (contents instanceof PDFRef) {
+    const contentObj = pdfDoc.context.lookup(contents);
+    if (contentObj instanceof PDFRawStream || contentObj instanceof PDFStream) {
+      const bytes = getDecompressedStreamBytes(contentObj);
+      if (bytes) {
+        extractUsedFonts(bytes).forEach(f => usedFonts.add(f));
+      }
+    }
+  } else if (contents instanceof PDFArray) {
+    for (let i = 0; i < contents.size(); i++) {
+      const contentRef = contents.get(i);
+      if (contentRef instanceof PDFRef) {
+        extractFontsFromContentRef(pdfDoc, contentRef, usedFonts);
+      }
+    }
+  }
+};
+
+/**
+ * Scan Form XObjects for font usage (they have their own content streams)
+ */
+const extractFontsFromXObjects = (
+  pdfDoc: PDFDocument,
+  resources: PDFDict,
+  usedFonts: Set<string>,
+  visited: Set<string>,
+): void => {
+  const xobjects = resources.get(PDFName.of('XObject'));
+  if (!(xobjects instanceof PDFDict)) return;
+
+  for (const [, value] of xobjects.entries()) {
+    const ref = value instanceof PDFRef ? value : null;
+    if (!ref) continue;
+
+    // Avoid infinite recursion from circular references
+    const refKey = `${ref.objectNumber}-${ref.generationNumber}`;
+    if (visited.has(refKey)) continue;
+    visited.add(refKey);
+
+    const obj = pdfDoc.context.lookup(ref);
+    if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) continue;
+
+    const stream = obj;
+    const dict = stream.dict;
+
+    // Only process Form XObjects (not Image XObjects)
+    const subtype = dict.get(PDFName.of('Subtype'));
+    if (!(subtype instanceof PDFName) || subtype.toString() !== '/Form') continue;
+
+    // Scan the Form XObject's content stream for Tf operators
+    const bytes = getDecompressedStreamBytes(stream);
+    if (bytes) {
+      extractUsedFonts(bytes).forEach(f => usedFonts.add(f));
+    }
+
+    // Recursively scan nested Form XObject resources
+    const formResources = dict.get(PDFName.of('Resources'));
+    if (formResources instanceof PDFDict) {
+      extractFontsFromXObjects(pdfDoc, formResources, usedFonts, visited);
+    }
+  }
+};
+
+/**
+ * Scan annotation appearance streams for font usage
+ */
+const extractFontsFromAnnotations = (
+  pdfDoc: PDFDocument,
+  pageDict: PDFDict,
+  usedFonts: Set<string>,
+): void => {
+  const annots = pageDict.get(PDFName.of('Annots'));
+  if (!annots) return;
+
+  const annotArray = annots instanceof PDFRef
+    ? pdfDoc.context.lookup(annots)
+    : annots;
+  if (!(annotArray instanceof PDFArray)) return;
+
+  for (let i = 0; i < annotArray.size(); i++) {
+    const annotRef = annotArray.get(i);
+    const annotObj = annotRef instanceof PDFRef
+      ? pdfDoc.context.lookup(annotRef)
+      : annotRef;
+    if (!(annotObj instanceof PDFDict)) continue;
+
+    const ap = annotObj.get(PDFName.of('AP'));
+    if (!(ap instanceof PDFDict)) continue;
+
+    // Check Normal, Rollover, and Down appearance streams
+    for (const apKey of ['N', 'R', 'D']) {
+      const appearance = ap.get(PDFName.of(apKey));
+      if (!appearance) continue;
+
+      const appearanceObj = appearance instanceof PDFRef
+        ? pdfDoc.context.lookup(appearance)
+        : appearance;
+
+      if (appearanceObj instanceof PDFRawStream || appearanceObj instanceof PDFStream) {
+        const bytes = getDecompressedStreamBytes(appearanceObj);
+        if (bytes) {
+          extractUsedFonts(bytes).forEach(f => usedFonts.add(f));
+        }
+      }
+    }
+  }
+};
+
 export const removeUnusedFonts = (pdfDoc: PDFDocument): UnusedFontResult => {
   const result: UnusedFontResult = {
     fontsRemoved: 0,
     fontNames: [],
   };
 
-  // Collect all used font names across all pages
+  // Collect all used font names across all pages, including XObjects and annotations
   const allUsedFonts = new Set<string>();
   const pages = pdfDoc.getPages();
+  const visitedXObjects = new Set<string>();
 
   for (const page of pages) {
     const pageDict = page.node;
 
-    // Get content streams
+    // Scan page content streams
     const contents = pageDict.get(PDFName.of('Contents'));
-
-    if (contents instanceof PDFRef) {
-      const contentObj = pdfDoc.context.lookup(contents);
-      if (contentObj instanceof PDFRawStream || contentObj instanceof PDFStream) {
-        const bytes = getDecompressedStreamBytes(contentObj);
-        if (bytes) {
-          const fonts = extractUsedFonts(bytes);
-          fonts.forEach(f => allUsedFonts.add(f));
-        }
-      }
-    } else if (contents instanceof PDFArray) {
-      for (let i = 0; i < contents.size(); i++) {
-        const contentRef = contents.get(i);
-        if (contentRef instanceof PDFRef) {
-          const contentObj = pdfDoc.context.lookup(contentRef);
-          if (contentObj instanceof PDFRawStream || contentObj instanceof PDFStream) {
-            const bytes = getDecompressedStreamBytes(contentObj);
-            if (bytes) {
-              const fonts = extractUsedFonts(bytes);
-              fonts.forEach(f => allUsedFonts.add(f));
-            }
-          }
-        }
-      }
+    if (contents instanceof PDFRef || contents instanceof PDFArray) {
+      extractFontsFromContentRef(pdfDoc, contents, allUsedFonts);
     }
+
+    // Scan Form XObjects (which have their own content streams)
+    const resources = pageDict.get(PDFName.of('Resources'));
+    if (resources instanceof PDFDict) {
+      extractFontsFromXObjects(pdfDoc, resources, allUsedFonts, visitedXObjects);
+    }
+
+    // Scan annotation appearance streams
+    extractFontsFromAnnotations(pdfDoc, pageDict, allUsedFonts);
   }
 
   // Now check each page's font resources
@@ -315,7 +419,7 @@ export const removeUnusedFonts = (pdfDoc: PDFDocument): UnusedFontResult => {
       // fontKey is like /F1, /F2, etc.
       const fontKeyStr = fontKey.toString().replace('/', '');
 
-      // Check if this font key is used in content streams
+      // Check if this font key is used in any content stream
       if (!allUsedFonts.has(fontKeyStr)) {
         // Get font name for logging
         let fontName = fontKeyStr;

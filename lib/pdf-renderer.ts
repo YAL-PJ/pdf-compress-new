@@ -38,6 +38,8 @@ export const renderPageToImage = async (
     standardFontDataUrl: '/standard_fonts/',
     cMapUrl: '/cmaps/',
     cMapPacked: true,
+    // Suppress font fallback warnings — expected for PDFs with non-embedded fonts
+    verbosity: pdfjs.VerbosityLevel.ERRORS,
   });
   const pdf = await loadingTask.promise;
 
@@ -81,6 +83,7 @@ export const getPdfPageCount = async (file: File): Promise<number> => {
     standardFontDataUrl: '/standard_fonts/',
     cMapUrl: '/cmaps/',
     cMapPacked: true,
+    verbosity: pdfjs.VerbosityLevel.ERRORS,
   });
   const pdf = await loadingTask.promise;
   return pdf.numPages;
