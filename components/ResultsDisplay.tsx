@@ -33,6 +33,7 @@ interface ResultsDisplayProps {
   // Page management (lifted state)
   pages?: PageState[];
   onToggleDeletePage?: (pageIndex: number) => void;
+  onToggleKeepOriginalPage?: (pageIndex: number) => void;
   onRotatePage?: (pageIndex: number) => void;
   onReorderPages?: (fromPosition: number, toPosition: number) => void;
   onMovePage?: (pageIndex: number, direction: 'up' | 'down') => void;
@@ -54,6 +55,7 @@ export const ResultsDisplay = memo(({
   imageStats,
   pages,
   onToggleDeletePage,
+  onToggleKeepOriginalPage,
   onRotatePage,
   onReorderPages,
   onMovePage,
@@ -144,7 +146,7 @@ export const ResultsDisplay = memo(({
     if (pages && hasPageModifications(pages)) {
       setIsApplyingPageOps(true);
       try {
-        downloadBlob = await applyPageOperations(blob, pages);
+        downloadBlob = await applyPageOperations(blob, pages, originalFile);
       } catch (err) {
         console.error('Failed to apply page operations:', err);
         // Fall back to original compressed blob
@@ -306,6 +308,7 @@ export const ResultsDisplay = memo(({
             pageCount={pageCount}
             pages={pages}
             onToggleDelete={onToggleDeletePage}
+            onToggleKeepOriginal={onToggleKeepOriginalPage}
             onRotate={onRotatePage}
             onReorder={onReorderPages}
             onMovePage={onMovePage}

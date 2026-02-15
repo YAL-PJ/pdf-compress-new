@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 export interface PageState {
     index: number; // 1-based original index
     isDeleted: boolean;
+    keepOriginal: boolean; // true = skip compression, use original page
     rotation: number; // 0, 90, 180, 270
 }
 
@@ -12,6 +13,7 @@ const createInitialPages = (count: number): PageState[] =>
     Array.from({ length: count }, (_, i) => ({
         index: i + 1,
         isDeleted: false,
+        keepOriginal: false,
         rotation: 0,
     }));
 
@@ -35,6 +37,12 @@ export const usePageManager = (initialPageCount: number) => {
     const toggleDelete = useCallback((pageIndex: number) => {
         setPages(prev => prev.map(p =>
             p.index === pageIndex ? { ...p, isDeleted: !p.isDeleted } : p
+        ));
+    }, []);
+
+    const toggleKeepOriginal = useCallback((pageIndex: number) => {
+        setPages(prev => prev.map(p =>
+            p.index === pageIndex ? { ...p, keepOriginal: !p.keepOriginal } : p
         ));
     }, []);
 
@@ -81,6 +89,7 @@ export const usePageManager = (initialPageCount: number) => {
         pages,
         activePages,
         toggleDelete,
+        toggleKeepOriginal,
         rotatePage,
         reorderPages,
         movePage,

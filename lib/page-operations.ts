@@ -8,25 +8,39 @@ import type { PageState } from '@/hooks/usePageManager';
 
 /**
  * Check whether the page states represent any actual modifications
- * (deletions, rotations, or reordering) compared to the original PDF.
+ * (deletions, rotations, reordering, or keep-original) compared to the original PDF.
  */
 export const hasPageModifications = (pages: PageState[]): boolean => {
     const hasDeleted = pages.some(p => p.isDeleted);
+    const hasKeepOriginal = pages.some(p => p.keepOriginal);
     const hasRotated = pages.some(p => p.rotation !== 0);
     const hasReordered = pages.some((p, i) => p.index !== i + 1);
-    return hasDeleted || hasRotated || hasReordered;
+    return hasDeleted || hasKeepOriginal || hasRotated || hasReordered;
 };
 
 /**
  * Apply page operations to a PDF blob and return a new modified blob.
- * Operations applied: reorder, delete marked pages, rotate pages.
+ * Operations applied: reorder, delete marked pages, keep-original pages, rotate pages.
+ *
+ * @param compressedBlob - The compressed PDF blob
+ * @param pages - Page states with user modifications
+ * @param originalFile - The original uncompressed file (needed for keep-original pages)
  */
 export const applyPageOperations = async (
-    sourceBlob: Blob,
+    compressedBlob: Blob,
     pages: PageState[],
+    originalFile?: File,
 ): Promise<Blob> => {
-    const arrayBuffer = await sourceBlob.arrayBuffer();
-    const srcDoc = await PDFDocument.load(arrayBuffer, { ignoreEncryption: true });
+    const compressedBuffer = await compressedBlob.arrayBuffer();
+    const compressedDoc = await PDFDocument.load(compressedBuffer, { ignoreEncryption: true });
+
+    // Load original document if any pages need to keep their original version
+    const hasKeepOriginal = originalFile && pages.some(p => p.keepOriginal && !p.isDeleted);
+    let originalDoc: PDFDocument | null = null;
+    if (hasKeepOriginal) {
+        const originalBuffer = await originalFile.arrayBuffer();
+        originalDoc = await PDFDocument.load(originalBuffer, { ignoreEncryption: true });
+    }
 
     // Create a new document and copy pages in the desired order
     const destDoc = await PDFDocument.create();
@@ -39,21 +53,20 @@ export const applyPageOperations = async (
         throw new Error('Cannot create a PDF with no pages');
     }
 
-    // Copy pages in the reordered sequence
-    const originalIndices = activePages.map(p => p.index - 1); // convert 1-based to 0-based
-    const copiedPages = await destDoc.copyPages(srcDoc, originalIndices);
+    for (const pageState of activePages) {
+        const zeroIndex = pageState.index - 1; // convert 1-based to 0-based
 
-    for (let i = 0; i < copiedPages.length; i++) {
-        const page = copiedPages[i];
-        const pageState = activePages[i];
+        // Choose source: original doc for keep-original pages, compressed for others
+        const sourceDoc = (pageState.keepOriginal && originalDoc) ? originalDoc : compressedDoc;
+        const [copiedPage] = await destDoc.copyPages(sourceDoc, [zeroIndex]);
 
         // Apply rotation if needed
         if (pageState.rotation !== 0) {
-            const currentRotation = page.getRotation().angle;
-            page.setRotation(degrees(currentRotation + pageState.rotation));
+            const currentRotation = copiedPage.getRotation().angle;
+            copiedPage.setRotation(degrees(currentRotation + pageState.rotation));
         }
 
-        destDoc.addPage(page);
+        destDoc.addPage(copiedPage);
     }
 
     const pdfBytes = await destDoc.save();
