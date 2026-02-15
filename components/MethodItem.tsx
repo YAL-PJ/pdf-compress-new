@@ -54,6 +54,9 @@ export const MethodItem = memo(({
         onImageSettingsChange({ ...imageSettings, targetDpi });
     }, [imageSettings, onImageSettingsChange]);
 
+    // Check if target DPI is at or above original - downsampling won't help
+    const dpiAboveOriginal = imageStats && imageStats.avgDpi > 0 && imageSettings.targetDpi >= imageStats.avgDpi;
+
     return (
         <div>
             <button
@@ -185,12 +188,20 @@ export const MethodItem = memo(({
                                 )}
 
                                 <div className="text-[10px] font-medium text-slate-700">Target DPI</div>
+                                {dpiAboveOriginal && (
+                                    <div className="text-[9px] text-amber-600 bg-amber-50 border border-amber-200 rounded px-1.5 py-1">
+                                        Target DPI is equal to or higher than original (~{imageStats!.avgDpi} DPI) — no effect.
+                                    </div>
+                                )}
                                 <select
                                     value={imageSettings.targetDpi}
                                     onChange={handleDpiChange}
                                     disabled={disabled}
                                     aria-label="Target DPI for downsampling"
-                                    className="w-full text-xs bg-white border rounded px-1.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                    className={twMerge(
+                                        "w-full text-xs bg-white border rounded px-1.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900",
+                                        dpiAboveOriginal && "opacity-50"
+                                    )}
                                 >
                                     {DPI_OPTIONS.PRESETS.map((preset) => {
                                         const isOriginal = imageStats && imageStats.avgDpi > 0 &&
