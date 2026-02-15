@@ -31,8 +31,8 @@ export function settingsForTargetPercent(targetPercent: number): TargetSizeResul
   const pct = clamp(targetPercent, 10, 100);
 
   // === Quality mapping (continuous) ===
-  // 10% → quality 20, 50% → quality 55, 100% → quality 95
-  const quality = clamp(lerp(20, 95, (pct - 10) / 90), 10, 95);
+  // 10% → quality 20, 50% → quality 55, 100% → quality 100
+  const quality = clamp(lerp(20, 100, (pct - 10) / 90), 10, 100);
 
   // === DPI mapping ===
   // 10-40% → 72 DPI, 40-70% → 72→150, 70-100% → 150→300

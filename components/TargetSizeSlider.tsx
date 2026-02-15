@@ -259,6 +259,7 @@ export const TargetSizeSlider = memo(() => {
           </div>
           <p className="text-[10px] text-slate-400 mb-1.5">
             Reduces image resolution to target DPI.
+            {imageStats && imageStats.avgDpi > 0 ? ` Current avg: ~${imageStats.avgDpi} DPI.` : ''}
             {imageStats && imageStats.highDpiCount > 0 ? ` ${imageStats.highDpiCount} high-DPI image${imageStats.highDpiCount !== 1 ? 's' : ''} found.` : ''}
           </p>
           <select
@@ -270,11 +271,17 @@ export const TargetSizeSlider = memo(() => {
               focus:outline-none focus:ring-1 focus:ring-slate-400
               cursor-pointer hover:bg-slate-100 transition-colors"
           >
-            {DPI_OPTIONS.PRESETS.map((preset) => (
-              <option key={preset.value} value={preset.value}>
-                {preset.label}
-              </option>
-            ))}
+            {DPI_OPTIONS.PRESETS.map((preset) => {
+              // Mark the option closest to the original average DPI
+              const isOriginal = imageStats && imageStats.avgDpi > 0 &&
+                Math.abs(preset.value - imageStats.avgDpi) <=
+                  Math.min(...DPI_OPTIONS.PRESETS.map(p => Math.abs(p.value - (imageStats?.avgDpi ?? 0))));
+              return (
+                <option key={preset.value} value={preset.value}>
+                  {preset.label}{isOriginal ? ' ← original' : ''}
+                </option>
+              );
+            })}
           </select>
         </div>
       </div>

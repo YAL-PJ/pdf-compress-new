@@ -163,6 +163,7 @@ export interface CompressionAnalysis {
     cmykCount: number;
     iccCount: number;
     alphaCount: number;
+    avgDpi: number;
   };
   report?: CompressionReport;
   pdfFeatures?: PdfFeatures;
@@ -237,6 +238,7 @@ export interface WorkerSuccessPayload {
     cmykCount: number;
     iccCount: number;
     alphaCount: number;
+    avgDpi: number;
   };
   report?: CompressionReport;
   pdfFeatures?: PdfFeatures;
