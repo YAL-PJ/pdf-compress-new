@@ -76,6 +76,9 @@ export const TargetSizeSlider = memo(() => {
     }
   };
 
+  // Check if target DPI is at or above original - downsampling won't help
+  const dpiAboveOriginal = imageStats && imageStats.avgDpi > 0 && imageSettings.targetDpi >= imageStats.avgDpi;
+
   // Label for current zone
   const zoneLabel = targetPercent <= 35
     ? 'Maximum compression'
@@ -244,7 +247,7 @@ export const TargetSizeSlider = memo(() => {
         <div className="border-t border-slate-100" />
 
         {/* DPI / Downsample */}
-        <div>
+        <div className={dpiAboveOriginal ? 'opacity-50' : ''}>
           <div className="flex items-center gap-1.5 mb-0.5">
             <Minimize2 className="w-3 h-3 text-slate-400" />
             <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Downsample</span>
@@ -262,6 +265,11 @@ export const TargetSizeSlider = memo(() => {
             {imageStats && imageStats.avgDpi > 0 ? ` Current avg: ~${imageStats.avgDpi} DPI.` : ''}
             {imageStats && imageStats.highDpiCount > 0 ? ` ${imageStats.highDpiCount} high-DPI image${imageStats.highDpiCount !== 1 ? 's' : ''} found.` : ''}
           </p>
+          {dpiAboveOriginal && (
+            <p className="text-[10px] text-amber-600 mb-1.5">
+              Target DPI is equal to or higher than original (~{imageStats!.avgDpi} DPI) — downsampling will have no effect.
+            </p>
+          )}
           <select
             value={imageSettings.targetDpi}
             onChange={handleDpiChange}
