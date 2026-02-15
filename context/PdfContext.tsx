@@ -10,6 +10,7 @@ import type {
     ImageCompressionSettings,
     CompressionAnalysis,
 } from '@/lib/types';
+import { PRESETS } from '@/lib/presets';
 import { usePdfCompression, CompressionState } from '@/hooks/usePdfCompression';
 
 interface PdfContextType {
@@ -44,12 +45,12 @@ interface PdfProviderProps {
 export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps) => {
     const { state, processFile: processFileInternal, reset: resetInternal } = usePdfCompression();
 
-    const [options, setOptions] = useState<CompressionOptions>(DEFAULT_COMPRESSION_OPTIONS);
-    const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
+    const [options, setOptions] = useState<CompressionOptions>(PRESETS.balanced.options);
+    const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(PRESETS.balanced.imageSettings);
 
     // Refs for tracking previous settings for auto-recompression
-    const prevSettingsRef = useRef<ImageCompressionSettings>(DEFAULT_IMAGE_SETTINGS);
-    const prevOptionsRef = useRef<CompressionOptions>(DEFAULT_COMPRESSION_OPTIONS);
+    const prevSettingsRef = useRef<ImageCompressionSettings>(PRESETS.balanced.imageSettings);
+    const prevOptionsRef = useRef<CompressionOptions>(PRESETS.balanced.options);
     const initialFileProcessed = useRef(false);
 
     // Process initial file (once)
@@ -69,10 +70,10 @@ export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps
 
     const reset = useCallback(() => {
         resetInternal();
-        setOptions(DEFAULT_COMPRESSION_OPTIONS);
-        setImageSettings(DEFAULT_IMAGE_SETTINGS);
-        prevSettingsRef.current = DEFAULT_IMAGE_SETTINGS;
-        prevOptionsRef.current = DEFAULT_COMPRESSION_OPTIONS;
+        setOptions(PRESETS.balanced.options);
+        setImageSettings(PRESETS.balanced.imageSettings);
+        prevSettingsRef.current = PRESETS.balanced.imageSettings;
+        prevOptionsRef.current = PRESETS.balanced.options;
         initialFileProcessed.current = false;
         onReset?.();
     }, [resetInternal, onReset]);
