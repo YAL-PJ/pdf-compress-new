@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import { renderPageToImage } from '@/lib/pdf-renderer';
-import { Loader2, Trash2, RotateCw } from 'lucide-react';
+import { Loader2, Trash2, RotateCw, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { twMerge } from 'tailwind-merge';
 
@@ -10,8 +10,10 @@ interface PageThumbnailProps {
     file: File;
     pageIndex: number; // 1-based index
     onToggleDelete: (index: number) => void;
+    onToggleKeepOriginal?: (index: number) => void;
     onRotate?: (index: number) => void;
     isDeleted?: boolean;
+    keepOriginal?: boolean;
     rotation?: number; // 0, 90, 180, 270
 }
 
@@ -19,8 +21,10 @@ export const PageThumbnail = memo(({
     file,
     pageIndex,
     onToggleDelete,
+    onToggleKeepOriginal,
     onRotate,
     isDeleted = false,
+    keepOriginal = false,
     rotation = 0
 }: PageThumbnailProps) => {
     const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -96,6 +100,7 @@ export const PageThumbnail = memo(({
     }, [file, pageIndex]);
 
     const handleToggleDelete = useCallback(() => onToggleDelete(pageIndex), [onToggleDelete, pageIndex]);
+    const handleToggleKeepOriginal = useCallback(() => onToggleKeepOriginal?.(pageIndex), [onToggleKeepOriginal, pageIndex]);
     const handleRotate = useCallback(() => onRotate?.(pageIndex), [onRotate, pageIndex]);
 
     return (
@@ -108,7 +113,9 @@ export const PageThumbnail = memo(({
                 "relative group aspect-[3/4] rounded-lg shadow-sm border transition-all duration-200 overflow-hidden",
                 isDeleted
                     ? "border-red-200 bg-red-50 opacity-60 grayscale"
-                    : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
+                    : keepOriginal
+                        ? "border-blue-300 bg-blue-50 ring-1 ring-blue-200"
+                        : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-md"
             )}
         >
             {/* Loading State */}
@@ -142,6 +149,15 @@ export const PageThumbnail = memo(({
                 </div>
             )}
 
+            {/* Keep Original Overlay */}
+            {keepOriginal && !isDeleted && (
+                <div className="absolute inset-0 flex items-center justify-center bg-blue-50/40">
+                    <div className="bg-blue-100 text-blue-600 rounded-full p-2 border border-blue-200">
+                        <ShieldCheck className="w-5 h-5" aria-hidden="true" />
+                    </div>
+                </div>
+            )}
+
             {/* Hover Actions */}
             <div className="absolute inset-0 bg-slate-900/0 group-hover:bg-slate-900/10 transition-colors flex items-start justify-end p-2 opacity-0 group-hover:opacity-100">
                 <div className="flex flex-col gap-2">
@@ -158,6 +174,22 @@ export const PageThumbnail = memo(({
                     >
                         {isDeleted ? <RotateCw className="w-4 h-4" aria-hidden="true" /> : <Trash2 className="w-4 h-4" aria-hidden="true" />}
                     </button>
+
+                    {onToggleKeepOriginal && !isDeleted && (
+                        <button
+                            onClick={handleToggleKeepOriginal}
+                            className={twMerge(
+                                "p-1.5 rounded-full shadow-sm transition-all hover:scale-110 active:scale-95",
+                                keepOriginal
+                                    ? "bg-blue-600 text-white hover:bg-blue-500"
+                                    : "bg-white text-blue-500 hover:text-blue-600"
+                            )}
+                            title={keepOriginal ? "Enable compression" : "Keep original (no compression)"}
+                            aria-label={keepOriginal ? `Enable compression for page ${pageIndex}` : `Keep page ${pageIndex} original (no compression)`}
+                        >
+                            <ShieldCheck className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                    )}
 
                     {onRotate && !isDeleted && (
                         <button

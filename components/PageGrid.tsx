@@ -13,6 +13,7 @@ interface PageGridProps {
     // Optional: accept external state (for lifted state pattern)
     pages?: PageState[];
     onToggleDelete?: (pageIndex: number) => void;
+    onToggleKeepOriginal?: (pageIndex: number) => void;
     onRotate?: (pageIndex: number) => void;
     onReorder?: (fromPosition: number, toPosition: number) => void;
     onMovePage?: (pageIndex: number, direction: 'up' | 'down') => void;
@@ -24,6 +25,7 @@ export const PageGrid = ({
     className,
     pages: externalPages,
     onToggleDelete: externalToggleDelete,
+    onToggleKeepOriginal: externalToggleKeepOriginal,
     onRotate: externalRotate,
     onReorder: externalReorder,
     onMovePage: externalMovePage,
@@ -41,6 +43,7 @@ export const PageGrid = ({
     const hasMorePages = pages.length > PREVIEW_LIMIT;
     const visiblePages = showAll || !hasMorePages ? pages : pages.slice(0, PREVIEW_LIMIT);
     const toggleDelete = externalToggleDelete ?? internal.toggleDelete;
+    const toggleKeepOriginal = externalToggleKeepOriginal ?? internal.toggleKeepOriginal;
     const rotatePage = externalRotate ?? internal.rotatePage;
     const reorderPages = externalReorder ?? internal.reorderPages;
     const movePage = externalMovePage ?? internal.movePage;
@@ -173,7 +176,7 @@ export const PageGrid = ({
 
             {/* Instructions */}
             <p className="text-xs text-slate-500 mb-3">
-                Drag pages to reorder • Use <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Shift</kbd>+<kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Arrow</kbd> keys to move • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">R</kbd> to rotate • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Del</kbd> to toggle delete
+                Drag pages to reorder • Use <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Shift</kbd>+<kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Arrow</kbd> keys to move • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">R</kbd> to rotate • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Del</kbd> to toggle delete • Hover for keep-original option
             </p>
 
             <div
@@ -189,7 +192,7 @@ export const PageGrid = ({
                         tabIndex={focusedIndex === position ? 0 : -1}
                         role="option"
                         aria-selected={focusedIndex === position}
-                        aria-label={`Page ${page.index}${page.isDeleted ? ', marked for deletion' : ''}${page.rotation > 0 ? `, rotated ${page.rotation} degrees` : ''}`}
+                        aria-label={`Page ${page.index}${page.isDeleted ? ', marked for deletion' : ''}${page.keepOriginal ? ', keeping original' : ''}${page.rotation > 0 ? `, rotated ${page.rotation} degrees` : ''}`}
                         draggable
                         onDragStart={(e) => handleDragStart(e, position)}
                         onDragEnd={handleDragEnd}
@@ -224,8 +227,10 @@ export const PageGrid = ({
                             file={file}
                             pageIndex={page.index}
                             isDeleted={page.isDeleted}
+                            keepOriginal={page.keepOriginal}
                             rotation={page.rotation}
                             onToggleDelete={toggleDelete}
+                            onToggleKeepOriginal={toggleKeepOriginal}
                             onRotate={rotatePage}
                         />
 

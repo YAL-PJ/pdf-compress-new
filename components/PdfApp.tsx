@@ -63,7 +63,7 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
 
     // Page management - lifted state
     const pageCount = state.status === 'done' && analysis ? analysis.pageCount : 0;
-    const { pages, toggleDelete, rotatePage, reorderPages, movePage } = usePageManager(pageCount);
+    const { pages, toggleDelete, toggleKeepOriginal, rotatePage, reorderPages, movePage } = usePageManager(pageCount);
 
     const handleReset = useCallback(() => {
         resetContext();
@@ -296,6 +296,7 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                             imageStats={currentResult.imageStats}
                                             pages={pages}
                                             onToggleDeletePage={toggleDelete}
+                                            onToggleKeepOriginalPage={toggleKeepOriginal}
                                             onRotatePage={rotatePage}
                                             onReorderPages={reorderPages}
                                             onMovePage={movePage}
