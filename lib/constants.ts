@@ -3,8 +3,8 @@
  */
 
 export const FILE_CONSTRAINTS = {
-  MAX_SIZE_BYTES: 100 * 1024 * 1024,
-  MAX_SIZE_DISPLAY: '100MB',
+  MAX_SIZE_BYTES: 200 * 1024 * 1024,
+  MAX_SIZE_DISPLAY: '200MB',
   ACCEPTED_TYPES: ['application/pdf'],
   ACCEPTED_EXTENSIONS: ['.pdf'],
 } as const;
