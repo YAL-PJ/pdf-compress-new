@@ -283,7 +283,7 @@ export const CompressionMethods = () => {
     return map;
   }, [methodResults]);
 
-  const [activeTab, setActiveTab] = useState<RiskLevel>('safe');
+  const [activeTab, setActiveTab] = useState<RiskLevel>('medium');
 
   const getMethodResult = useCallback((key: keyof CompressionOptions) => {
     return methodResultsMap.get(key);
