@@ -7,7 +7,6 @@ import {
   Package, Eraser, Image as ImageIcon, Settings2, Minimize2, Palette, FileImage, Square, Layers,
   Bookmark, Link2, Newspaper, Globe, EyeOff, Hash, Trash2, FileText, MessageSquare, Code, Copy, Type,
   Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye,
-  SlidersHorizontal,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useState, useMemo, useCallback } from 'react';
@@ -249,9 +248,7 @@ const HIGH_METHODS: MethodConfig[] = [
 
 const ALL_METHODS = [...SAFE_METHODS, ...MEDIUM_METHODS, ...HIGH_METHODS];
 
-// Separate adjustable methods (with settings panels) from simple toggles
-const ADJUSTABLE_METHODS = ALL_METHODS.filter(m => m.hasSettings);
-
+// Filter out adjustable methods (compress images, downsample) - these are now in the main controls
 const SAFE_TOGGLE_METHODS = SAFE_METHODS.filter(m => !m.hasSettings);
 const MEDIUM_TOGGLE_METHODS = MEDIUM_METHODS.filter(m => !m.hasSettings);
 const HIGH_TOGGLE_METHODS = HIGH_METHODS.filter(m => !m.hasSettings);
@@ -385,7 +382,7 @@ export const CompressionMethods = () => {
 
   const totalEnabled = useMemo(() => {
     const allToggle = [...SAFE_TOGGLE_METHODS, ...MEDIUM_TOGGLE_METHODS, ...HIGH_TOGGLE_METHODS];
-    return allToggle.filter(m => options[m.key]).length + ADJUSTABLE_METHODS.filter(m => options[m.key]).length;
+    return allToggle.filter(m => options[m.key]).length;
   }, [options]);
 
   return (
@@ -429,31 +426,6 @@ export const CompressionMethods = () => {
             transition={{ duration: 0.2, ease: 'easeInOut' }}
             className="overflow-hidden border-t"
           >
-            {/* Adjustable Settings */}
-            <div className="border-b">
-              <div className="flex items-center gap-2 p-2 bg-slate-50/80">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-slate-600" />
-                <span className="text-xs font-bold text-slate-800">Adjustable Settings</span>
-                <span className="text-[10px] text-slate-500">Fine-tune values</span>
-              </div>
-              <div className="p-1.5 space-y-0.5">
-                {ADJUSTABLE_METHODS.map(method => (
-                  <MethodItem
-                    key={method.key}
-                    method={method}
-                    isEnabled={options[method.key]}
-                    disabled={disabled}
-                    result={getMethodResult(method.key)}
-                    onToggle={handleMethodToggle}
-                    imageSettings={imageSettings}
-                    onImageSettingsChange={setImageSettings}
-                    imageStats={imageStats}
-                    notApplicable={getMethodNotApplicable(method.key)}
-                  />
-                ))}
-              </div>
-            </div>
-
             {/* Risk-level tabs */}
             <div className="flex border-b">
               {([
