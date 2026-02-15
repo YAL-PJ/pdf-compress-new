@@ -92,7 +92,7 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   deepCleanMetadata: true,  // Safe — removes XMP metadata streams, no visual impact
 
   // Advanced Optimization (Phase 2 - New)
-  inlineToXObject: false,        // Off - rarely needed, can increase size
+  inlineToXObject: true,         // On - safe, enables deduplication of inline images
   compressContentStreams: true,  // On - safe and beneficial
   removeOrphanObjects: true,     // On - safe cleanup
   removeAlternateContent: false, // Off - may affect print quality
