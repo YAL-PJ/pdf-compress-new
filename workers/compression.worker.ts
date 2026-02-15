@@ -1,9 +1,11 @@
 /**
  * PDF Compression Web Worker
- * Supports all Phase 2 compression methods
+ * Supports all Phase 2 compression methods with iterative escalation
+ * when target size is not met.
  */
 
 import { analyzePdf, type ExtendedProcessingSettings } from '../lib/pdf-processor';
+import { getEscalationTier, MAX_ESCALATION_TIERS } from '../lib/target-size';
 import { isPdfError } from '@/lib/errors';
 import {
   DEFAULT_COMPRESSION_OPTIONS,
@@ -18,11 +20,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 
   const imageSettings: ImageCompressionSettings = payload.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
   const options: CompressionOptions = payload.options ?? DEFAULT_COMPRESSION_OPTIONS;
-
-  const extendedSettings: ExtendedProcessingSettings = {
-    ...imageSettings,
-    options,
-  };
+  const targetPercent = payload.targetPercent;
 
   const { jobId } = payload;
 
@@ -39,11 +37,98 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   };
 
   try {
-    const analysis = await analyzePdf(
-      payload.arrayBuffer,
+    // Keep a copy of the original arrayBuffer for retries
+    // (analyzePdf may transfer/consume the buffer)
+    const originalBuffer = payload.arrayBuffer;
+    const originalSize = originalBuffer.byteLength;
+    const targetBytes = targetPercent ? Math.round(originalSize * (targetPercent / 100)) : 0;
+    const hasTarget = targetPercent !== undefined && targetPercent < 100;
+
+    // === Pass 0: Initial compression with user settings ===
+    let currentOptions = options;
+    let currentImageSettings = imageSettings;
+    let extendedSettings: ExtendedProcessingSettings = {
+      ...currentImageSettings,
+      options: currentOptions,
+    };
+
+    let analysis = await analyzePdf(
+      originalBuffer,
       postProgress,
       extendedSettings
     );
+
+    // === Iterative escalation if target not met ===
+    if (hasTarget && analysis.fullCompressedBytes.byteLength > targetBytes) {
+      for (let tier = 1; tier <= MAX_ESCALATION_TIERS; tier++) {
+        const compressedSize = analysis.fullCompressedBytes.byteLength;
+        const currentPercent = Math.round((compressedSize / originalSize) * 100);
+
+        postProgress(
+          `Target not met (${currentPercent}% > ${targetPercent}%). Escalating to tier ${tier}/${MAX_ESCALATION_TIERS}...`
+        );
+
+        // Get escalated settings based on the current settings
+        const escalated = getEscalationTier(tier, currentOptions, currentImageSettings);
+        currentOptions = escalated.options;
+        currentImageSettings = escalated.imageSettings;
+
+        extendedSettings = {
+          ...currentImageSettings,
+          options: currentOptions,
+        };
+
+        // Re-run compression with escalated settings on original buffer
+        // We need to re-create the buffer since it may have been transferred
+        const retryBuffer = originalBuffer.byteLength > 0
+          ? originalBuffer
+          : analysis.fullCompressedBytes.slice().buffer as ArrayBuffer;
+
+        const escalatedAnalysis = await analyzePdf(
+          retryBuffer,
+          (msg, pct) => postProgress(`[Tier ${tier}] ${msg}`, pct),
+          extendedSettings
+        );
+
+        // Only use escalated result if it's actually smaller
+        if (escalatedAnalysis.fullCompressedBytes.byteLength < analysis.fullCompressedBytes.byteLength) {
+          // Merge report logs from escalation into original report
+          if (escalatedAnalysis.report && analysis.report) {
+            escalatedAnalysis.report.logs = [
+              ...analysis.report.logs,
+              {
+                timestamp: Date.now(),
+                level: 'info' as const,
+                message: `Escalated to tier ${tier} (target: ${targetPercent}%)`,
+              },
+              ...escalatedAnalysis.report.logs,
+            ];
+          }
+          analysis = escalatedAnalysis;
+        }
+
+        // Check if we've met the target
+        if (analysis.fullCompressedBytes.byteLength <= targetBytes) {
+          postProgress(`Target met at tier ${tier}!`);
+          break;
+        }
+      }
+
+      // Log final result if target still not met
+      if (analysis.fullCompressedBytes.byteLength > targetBytes) {
+        const finalPercent = Math.round((analysis.fullCompressedBytes.byteLength / originalSize) * 100);
+        if (analysis.report) {
+          analysis.report.logs.push({
+            timestamp: Date.now(),
+            level: 'warning',
+            message: `Could not reach target of ${targetPercent}% after all ${MAX_ESCALATION_TIERS} escalation tiers. Best result: ${finalPercent}%`,
+          });
+        }
+        postProgress(
+          `Best compression: ${finalPercent}% (target was ${targetPercent}%). All methods exhausted.`
+        );
+      }
+    }
 
     const buffer = analysis.fullCompressedBytes.slice().buffer as ArrayBuffer;
 

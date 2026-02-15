@@ -110,6 +110,7 @@ export const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
 export interface ProcessingSettings {
   options?: CompressionOptions;
   imageSettings?: ImageCompressionSettings;
+  targetPercent?: number;  // Target size as % of original (10-100), enables iterative compression
 }
 
 /** Features detected in the PDF document - used to indicate method relevance */
@@ -213,6 +214,7 @@ export interface WorkerMessage {
     fileName: string;
     imageSettings?: ImageCompressionSettings;
     options?: CompressionOptions;
+    targetPercent?: number;  // Target size as % of original, enables iterative compression
     jobId: string;
   };
 }
