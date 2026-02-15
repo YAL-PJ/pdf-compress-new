@@ -17,7 +17,7 @@ export const COMPRESSION_DEFAULTS = {
 export const IMAGE_COMPRESSION = {
   DEFAULT_QUALITY: 75,
   MIN_QUALITY: 10,
-  MAX_QUALITY: 95,
+  MAX_QUALITY: 100,
   QUALITY_PRESETS: {
     low: { value: 50, label: 'Low (smaller files)' },
     medium: { value: 75, label: 'Medium (balanced)' },

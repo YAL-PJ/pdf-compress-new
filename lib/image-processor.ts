@@ -55,6 +55,7 @@ export interface ImageStats {
   cmykCount: number;     // Images with CMYK colorspace
   iccCount: number;      // Images with ICC profiles
   alphaCount: number;    // Images with alpha/SMask
+  avgDpi: number;        // Average estimated DPI across all images
 }
 
 export interface ImageExtractionResult {
@@ -320,7 +321,11 @@ export const extractImages = async (
     cmykCount: 0,
     iccCount: 0,
     alphaCount: 0,
+    avgDpi: 0,
   };
+
+  let dpiSum = 0;
+  let dpiCount = 0;
 
   onProgress?.('Scanning for images...', 0);
 
@@ -380,11 +385,16 @@ export const extractImages = async (
     // Check for transparency
     const hasTransparency = hasAlphaChannel(dict);
 
+    // Track DPI for all images
+    const imgDpi = estimateImageDpi(width, height);
+    dpiSum += imgDpi;
+    dpiCount++;
+
     if (isJpegStream(dict)) {
       stats.jpegCount++;
 
       // Estimate DPI and check if high-DPI
-      const estimatedDpi = estimateImageDpi(width, height);
+      const estimatedDpi = imgDpi;
       if (shouldDownsample(width, height, targetDpi)) {
         stats.highDpiCount++;
       }
@@ -407,7 +417,7 @@ export const extractImages = async (
 
       // Extract PNG if requested (for PNG to JPEG conversion)
       if (extractPng) {
-        const estimatedDpi = estimateImageDpi(width, height);
+        const estimatedDpi = imgDpi;
         if (shouldDownsample(width, height, targetDpi)) {
           stats.highDpiCount++;
         }
@@ -430,6 +440,9 @@ export const extractImages = async (
       stats.otherCount++;
     }
   }
+
+  // Compute average DPI across all images
+  stats.avgDpi = dpiCount > 0 ? Math.round(dpiSum / dpiCount) : 0;
 
   onProgress?.(`Found ${stats.jpegCount} JPEG, ${stats.pngCount} PNG images`, 100);
 

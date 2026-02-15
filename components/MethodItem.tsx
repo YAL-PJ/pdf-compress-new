@@ -24,6 +24,7 @@ interface MethodItemProps {
         pngCount: number;
         otherCount: number;
         highDpiCount: number;
+        avgDpi: number;
     };
     /** If set, this method won't save anything for this PDF (e.g. "No images found") */
     notApplicable?: string;
@@ -191,11 +192,16 @@ export const MethodItem = memo(({
                                     aria-label="Target DPI for downsampling"
                                     className="w-full text-xs bg-white border rounded px-1.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900"
                                 >
-                                    {DPI_OPTIONS.PRESETS.map((preset) => (
-                                        <option key={preset.value} value={preset.value}>
-                                            {preset.label}
-                                        </option>
-                                    ))}
+                                    {DPI_OPTIONS.PRESETS.map((preset) => {
+                                        const isOriginal = imageStats && imageStats.avgDpi > 0 &&
+                                            Math.abs(preset.value - imageStats.avgDpi) <=
+                                              Math.min(...DPI_OPTIONS.PRESETS.map(p => Math.abs(p.value - (imageStats?.avgDpi ?? 0))));
+                                        return (
+                                            <option key={preset.value} value={preset.value}>
+                                                {preset.label}{isOriginal ? ' ← original' : ''}
+                                            </option>
+                                        );
+                                    })}
                                 </select>
                             </div>
                         </div>
