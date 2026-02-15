@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useState, useCallback, useRef } from 'react';
+import { memo, useState, useMemo, useRef } from 'react';
 import { usePdf } from '@/context/PdfContext';
 import { settingsForTargetPercent, TARGET_SIZE_STEPS } from '@/lib/target-size';
 import { formatBytes } from '@/lib/utils';
@@ -26,6 +26,15 @@ export const TargetSizeSlider = memo(() => {
   const disabled = isProcessing && !isUpdating;
   const originalSize = analysis?.originalSize ?? 0;
   const imageStats = analysis?.imageStats;
+  const methodResults = analysis?.methodResults;
+
+  // Lookup savings for image compression and downsampling
+  const qualitySaved = useMemo(() => {
+    return methodResults?.find(r => r.key === 'recompressImages')?.savedBytes ?? 0;
+  }, [methodResults]);
+  const downsampleSaved = useMemo(() => {
+    return methodResults?.find(r => r.key === 'downsampleImages')?.savedBytes ?? 0;
+  }, [methodResults]);
 
   // Don't render if no file has been compressed yet
   if (!analysis || originalSize === 0) return null;
@@ -172,16 +181,25 @@ export const TargetSizeSlider = memo(() => {
       <div className="border-t" />
 
       {/* === Secondary Controls - Quality & DPI === */}
-      <div className="px-4 py-3 grid grid-cols-2 gap-3">
+      <div className="px-4 py-3 space-y-3">
         {/* Image Quality */}
         <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex items-center gap-1.5 mb-0.5">
             <ImageIcon className="w-3 h-3 text-slate-400" />
-            <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Quality</span>
+            <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Image Quality</span>
             <span className="ml-auto text-[10px] font-mono font-bold text-slate-800 bg-slate-100 px-1 py-0.5 rounded">
               {imageSettings.quality}%
             </span>
+            {qualitySaved > 0 && (
+              <span className="text-[9px] font-medium text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">
+                -{formatBytes(qualitySaved)}
+              </span>
+            )}
           </div>
+          <p className="text-[10px] text-slate-400 mb-1.5">
+            Re-encodes images at lower quality.
+            {imageStats ? ` ${imageStats.totalImages} image${imageStats.totalImages !== 1 ? 's' : ''} (${imageStats.jpegCount} JPEG)` : ''}
+          </p>
           <div className="relative">
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-slate-100 rounded-full" />
             <div
@@ -222,12 +240,27 @@ export const TargetSizeSlider = memo(() => {
           </div>
         </div>
 
+        {/* Thin separator */}
+        <div className="border-t border-slate-100" />
+
         {/* DPI / Downsample */}
         <div>
-          <div className="flex items-center gap-1.5 mb-1.5">
+          <div className="flex items-center gap-1.5 mb-0.5">
             <Minimize2 className="w-3 h-3 text-slate-400" />
-            <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">DPI</span>
+            <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Downsample</span>
+            <span className="ml-auto text-[10px] font-mono font-bold text-slate-800 bg-slate-100 px-1 py-0.5 rounded">
+              {imageSettings.targetDpi} DPI
+            </span>
+            {downsampleSaved > 0 && (
+              <span className="text-[9px] font-medium text-emerald-700 bg-emerald-50 px-1 py-0.5 rounded">
+                -{formatBytes(downsampleSaved)}
+              </span>
+            )}
           </div>
+          <p className="text-[10px] text-slate-400 mb-1.5">
+            Reduces image resolution to target DPI.
+            {imageStats && imageStats.highDpiCount > 0 ? ` ${imageStats.highDpiCount} high-DPI image${imageStats.highDpiCount !== 1 ? 's' : ''} found.` : ''}
+          </p>
           <select
             value={imageSettings.targetDpi}
             onChange={handleDpiChange}
@@ -245,16 +278,6 @@ export const TargetSizeSlider = memo(() => {
           </select>
         </div>
       </div>
-
-      {/* Image stats hint */}
-      {imageStats && imageStats.totalImages > 0 && (
-        <div className="px-4 pb-2">
-          <div className="text-[9px] text-slate-400 text-center">
-            {imageStats.totalImages} image{imageStats.totalImages !== 1 ? 's' : ''} detected
-            {imageStats.highDpiCount > 0 && ` ({imageStats.highDpiCount} high-DPI)`}
-          </div>
-        </div>
-      )}
     </div>
   );
 });
