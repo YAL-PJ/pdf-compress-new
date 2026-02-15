@@ -33,7 +33,12 @@ export const renderPageToImage = async (
   const pdfjs = await getPdfjs();
 
   const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+  const loadingTask = pdfjs.getDocument({
+    data: arrayBuffer,
+    standardFontDataUrl: '/standard_fonts/',
+    cMapUrl: '/cmaps/',
+    cMapPacked: true,
+  });
   const pdf = await loadingTask.promise;
 
   // Validate page index
@@ -71,7 +76,12 @@ export const renderPageToImage = async (
 export const getPdfPageCount = async (file: File): Promise<number> => {
   const pdfjs = await getPdfjs();
   const arrayBuffer = await file.arrayBuffer();
-  const loadingTask = pdfjs.getDocument({ data: arrayBuffer });
+  const loadingTask = pdfjs.getDocument({
+    data: arrayBuffer,
+    standardFontDataUrl: '/standard_fonts/',
+    cMapUrl: '/cmaps/',
+    cMapPacked: true,
+  });
   const pdf = await loadingTask.promise;
   return pdf.numPages;
 };
