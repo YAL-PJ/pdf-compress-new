@@ -43,7 +43,7 @@ export const PresetSelector = memo(() => {
     const presetKeys: PresetId[] = ['minimal', 'balanced', 'aggressive'];
 
     return (
-        <div className="grid grid-cols-1 gap-2 mb-6">
+        <div className="grid grid-cols-3 gap-2 mb-6">
             {presetKeys.map((key) => {
                 const preset = PRESETS[key];
                 const isActive = activePresetId === key;
@@ -55,7 +55,7 @@ export const PresetSelector = memo(() => {
                         onClick={() => handlePresetClick(key)}
                         disabled={disabled}
                         className={twMerge(
-                            "relative group p-3 rounded-lg border text-left transition-all duration-200",
+                            "relative group px-3 py-2 rounded-lg border text-center transition-all duration-200",
                             "focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-1 select-none",
                             isActive
                                 ? "bg-slate-900 border-slate-900 text-white shadow-md transform scale-[1.02]"
@@ -64,25 +64,17 @@ export const PresetSelector = memo(() => {
                         )}
                         title={preset.description}
                     >
-                        <div className="flex items-center gap-3">
-                            <Icon className={twMerge("w-5 h-5 flex-shrink-0", isActive ? "text-emerald-400" : "text-slate-500")} />
-                            <div className="flex-1 min-w-0">
-                                <div className="text-sm font-bold truncate">{preset.label}</div>
-                                <div className={twMerge(
-                                    "text-xs truncate",
-                                    isActive ? "text-slate-300" : "text-slate-500"
-                                )}>
-                                    {preset.description}
-                                </div>
-                            </div>
+                        <div className="flex items-center justify-center gap-1.5">
+                            <Icon className={twMerge("w-4 h-4 flex-shrink-0", isActive ? "text-emerald-400" : "text-slate-500")} />
+                            <span className="text-sm font-bold">{preset.label}</span>
                         </div>
 
-                        {/* Active Checkmark */}
+                        {/* Active indicator dot */}
                         {isActive && (
                             <motion.div
                                 layoutId="active-preset"
                                 transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                                className="absolute top-1/2 -translate-y-1/2 right-3 w-1.5 h-1.5 rounded-full bg-emerald-400"
+                                className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1.5 rounded-full bg-emerald-400"
                             />
                         )}
                     </button>
