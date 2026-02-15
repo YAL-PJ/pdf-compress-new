@@ -74,27 +74,46 @@ export const ResultsDisplay = memo(({
   const [diffImages, setDiffImages] = useState<{ original: string; compressed: string } | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
   const [diffError, setDiffError] = useState(false);
+  const [previewPage, setPreviewPage] = useState(1);
 
-  // Generate visual diff preview images
+  // Cache rendered page images to avoid re-rendering on navigation back
+  const pageImageCache = useRef<Map<number, { original: string; compressed: string }>>(new Map());
+
+  // Reset cache and page when file changes
+  useEffect(() => {
+    pageImageCache.current.clear();
+    setPreviewPage(1);
+    setDiffImages(null);
+  }, [originalFile, blob]);
+
+  // Generate visual diff preview images for the current page
   useEffect(() => {
     let cancelled = false;
 
     const generatePreviews = async () => {
       if (!originalFile || !blob) return;
 
+      // Check cache first
+      const cached = pageImageCache.current.get(previewPage);
+      if (cached) {
+        setDiffImages(cached);
+        setDiffLoading(false);
+        return;
+      }
+
       setDiffLoading(true);
       setDiffError(false);
 
       try {
-        // Render page 1 of original
-        const originalImage = await renderPageToImage(originalFile, 1, 1.0);
+        const originalImage = await renderPageToImage(originalFile, previewPage, 1.0);
 
-        // Create a File from the compressed blob for rendering
         const compressedFile = new File([blob], 'compressed.pdf', { type: 'application/pdf' });
-        const compressedImage = await renderPageToImage(compressedFile, 1, 1.0);
+        const compressedImage = await renderPageToImage(compressedFile, previewPage, 1.0);
 
         if (!cancelled) {
-          setDiffImages({ original: originalImage, compressed: compressedImage });
+          const images = { original: originalImage, compressed: compressedImage };
+          pageImageCache.current.set(previewPage, images);
+          setDiffImages(images);
           setDiffLoading(false);
         }
       } catch (err) {
@@ -106,16 +125,23 @@ export const ResultsDisplay = memo(({
       }
     };
 
-    // Delay generation to avoid blocking the main thread during initial render (INP optimization)
+    // Delay only on initial load (page 1), navigate instantly for other pages
+    const delay = previewPage === 1 && !pageImageCache.current.has(1) ? 800 : 0;
     const timeoutId = setTimeout(() => {
       generatePreviews();
-    }, 800);
+    }, delay);
 
     return () => {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [originalFile, blob]);
+  }, [originalFile, blob, previewPage]);
+
+  const handlePreviewPageChange = useCallback((page: number) => {
+    if (page >= 1 && page <= pageCount) {
+      setPreviewPage(page);
+    }
+  }, [pageCount]);
 
   useEffect(() => {
     return () => {
@@ -297,6 +323,9 @@ export const ResultsDisplay = memo(({
             <VisualDiff
               originalImageSrc={diffImages.original}
               compressedImageSrc={diffImages.compressed}
+              currentPage={previewPage}
+              totalPages={pageCount}
+              onPageChange={handlePreviewPageChange}
             />
           )}
         </div>
@@ -312,6 +341,8 @@ export const ResultsDisplay = memo(({
             onRotate={onRotatePage}
             onReorder={onReorderPages}
             onMovePage={onMovePage}
+            selectedPreviewPage={previewPage}
+            onSelectPreviewPage={handlePreviewPageChange}
           />
         </div>
 

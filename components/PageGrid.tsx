@@ -17,6 +17,9 @@ interface PageGridProps {
     onRotate?: (pageIndex: number) => void;
     onReorder?: (fromPosition: number, toPosition: number) => void;
     onMovePage?: (pageIndex: number, direction: 'up' | 'down') => void;
+    // Page preview selection
+    selectedPreviewPage?: number;
+    onSelectPreviewPage?: (pageIndex: number) => void;
 }
 
 export const PageGrid = ({
@@ -29,6 +32,8 @@ export const PageGrid = ({
     onRotate: externalRotate,
     onReorder: externalReorder,
     onMovePage: externalMovePage,
+    selectedPreviewPage,
+    onSelectPreviewPage,
 }: PageGridProps) => {
     const PREVIEW_LIMIT = 8;
 
@@ -176,7 +181,7 @@ export const PageGrid = ({
 
             {/* Instructions */}
             <p className="text-xs text-slate-500 mb-3">
-                Drag pages to reorder • Use <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Shift</kbd>+<kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Arrow</kbd> keys to move • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">R</kbd> to rotate • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Del</kbd> to toggle delete • Hover for keep-original option
+                Click a page to preview it • Drag to reorder • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Shift</kbd>+<kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Arrow</kbd> to move • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">R</kbd> to rotate • <kbd className="px-1 py-0.5 bg-slate-100 rounded text-[10px]">Del</kbd> to toggle delete
             </p>
 
             <div
@@ -223,16 +228,30 @@ export const PageGrid = ({
                             )} />
                         )}
 
-                        <PageThumbnail
-                            file={file}
-                            pageIndex={page.index}
-                            isDeleted={page.isDeleted}
-                            keepOriginal={page.keepOriginal}
-                            rotation={page.rotation}
-                            onToggleDelete={toggleDelete}
-                            onToggleKeepOriginal={toggleKeepOriginal}
-                            onRotate={rotatePage}
-                        />
+                        <div
+                            onClick={() => onSelectPreviewPage?.(page.index)}
+                            className={twMerge(
+                                "relative",
+                                onSelectPreviewPage && "cursor-pointer",
+                                selectedPreviewPage === page.index && "ring-2 ring-emerald-500 ring-offset-1 rounded-lg"
+                            )}
+                        >
+                            <PageThumbnail
+                                file={file}
+                                pageIndex={page.index}
+                                isDeleted={page.isDeleted}
+                                keepOriginal={page.keepOriginal}
+                                rotation={page.rotation}
+                                onToggleDelete={toggleDelete}
+                                onToggleKeepOriginal={toggleKeepOriginal}
+                                onRotate={rotatePage}
+                            />
+                            {selectedPreviewPage === page.index && (
+                                <div className="absolute -top-1 -left-1 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full z-10 shadow-sm">
+                                    Preview
+                                </div>
+                            )}
+                        </div>
 
                         {/* Position indicator */}
                         <div className="absolute top-1 right-1 bg-slate-900/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded backdrop-blur-sm">
