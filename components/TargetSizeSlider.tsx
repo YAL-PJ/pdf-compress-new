@@ -15,6 +15,7 @@ export const TargetSizeSlider = memo(() => {
     setOptions,
     imageSettings,
     setImageSettings,
+    setTargetPercent: setContextTargetPercent,
     isProcessing,
     isUpdating,
   } = usePdf();
@@ -53,6 +54,8 @@ export const TargetSizeSlider = memo(() => {
       const { options, imageSettings } = settingsForTargetPercent(newPercent);
       setOptions(options);
       setImageSettings(imageSettings);
+      // Pass target percent so worker can iterate toward it
+      setContextTargetPercent(newPercent);
     }, 300);
   };
 
