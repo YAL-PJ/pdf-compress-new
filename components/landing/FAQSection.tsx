@@ -18,7 +18,7 @@ const faqs = [
   },
   {
     question: 'Is there a file size limit?',
-    answer: 'We support PDFs up to 100MB. Larger files may work but could be slow depending on your device. For very large files, we recommend using the batch mode to process them efficiently.',
+    answer: 'We support PDFs up to 200MB. Larger files may work but could be slow depending on your device. For very large files, we recommend using the batch mode to process them efficiently.',
   },
   {
     question: 'Can I compress multiple PDFs at once?',

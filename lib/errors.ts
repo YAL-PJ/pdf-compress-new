@@ -3,7 +3,7 @@
  * Enables specific error handling and user-friendly messages
  */
 
-export const MAX_FILE_SIZE_MB = 50;
+export const MAX_FILE_SIZE_MB = 200;
 
 export class PdfError extends Error {
   constructor(
