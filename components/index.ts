@@ -4,6 +4,7 @@ export * from './ProcessingIndicator';
 export * from './ErrorDisplay';
 export * from './CompressionMethods';
 export * from './PresetSelector';
+export * from './TargetSizeSlider';
 export * from './VisualDiff';
 export * from './PageGrid';
 export * from './batch';

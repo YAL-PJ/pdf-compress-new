@@ -9,6 +9,7 @@ import {
     ErrorDisplay,
     CompressionMethods,
     PresetSelector,
+    TargetSizeSlider,
     BatchUploadZone,
     FileQueueList,
     ErrorBoundary,
@@ -173,6 +174,8 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                         {/* Simplified Prop Usage via Context in wrapper */}
                                         <PresetSelector />
                                     </div>
+
+                                    <TargetSizeSlider />
 
                                     <CompressionMethods />
 
