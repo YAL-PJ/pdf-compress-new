@@ -93,11 +93,11 @@ export const MethodItem = memo(({
                         ) : null}
                     </div>
                     <div className={twMerge(
-                        "text-[10px] mt-0.5 truncate",
-                        isEnabled ? "text-slate-300" : "text-slate-600",
+                        "text-[10px] mt-0.5",
+                        isEnabled ? "text-slate-300" : "text-slate-500",
                         notApplicable && !isEnabled && "text-slate-400"
                     )}>
-                        {method.description}
+                        {method.impact}
                     </div>
                 </div>
 

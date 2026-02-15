@@ -1,14 +1,13 @@
 'use client';
 
 import { MethodItem } from './MethodItem';
-import type { CompressionOptions, ImageCompressionSettings, MethodResult, PdfFeatures } from '@/lib/types';
-import { formatBytes } from '@/lib/utils';
-import { motion, AnimatePresence } from 'framer-motion';
+import type { CompressionOptions, MethodResult } from '@/lib/types';
+import { motion } from 'framer-motion';
 import {
-  Package, Eraser, Image as ImageIcon, Check, Settings2, Minimize2, Palette, FileImage, Square, Layers,
+  Package, Eraser, Image as ImageIcon, Settings2, Minimize2, Palette, FileImage, Square, Layers,
   Bookmark, Link2, Newspaper, Globe, EyeOff, Hash, Trash2, FileText, MessageSquare, Code, Copy, Type,
-  Paperclip, ChevronDown, ChevronRight, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye,
-  SlidersHorizontal, ToggleLeft,
+  Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye,
+  SlidersHorizontal,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useState, useMemo, useCallback } from 'react';
@@ -17,263 +16,244 @@ export interface MethodConfig {
   key: keyof CompressionOptions;
   label: string;
   description: string;
+  impact: string;
   icon: React.ElementType;
   hasSettings?: boolean;
   warning?: string;
 }
 
-interface MethodCategory {
-  name: string;
-  methods: MethodConfig[];
-  defaultExpanded?: boolean;
-}
+type RiskLevel = 'safe' | 'medium' | 'high';
 
-// Static config - defined at module level to avoid recreating on every render
-const BASIC_METHOD_KEYS: ReadonlySet<keyof CompressionOptions> = new Set([
-  'useObjectStreams',
-  'stripMetadata',
-  'pngToJpeg',
-  'removeThumbnails',
-  'removeDuplicateResources',
-  'removeJavaScript',
-  'compressContentStreams',
-  'removeOrphanObjects',
-]);
+// Methods organized by risk level - how much harm/loss they cause to the file
 
-const CATEGORIES: MethodCategory[] = [
+const SAFE_METHODS: MethodConfig[] = [
   {
-    name: 'Structure',
-    defaultExpanded: true,
-    methods: [
-      {
-        key: 'useObjectStreams',
-        label: 'Object Streams',
-        description: 'Optimize PDF internal structure',
-        icon: Package,
-      },
-      {
-        key: 'stripMetadata',
-        label: 'Strip Metadata',
-        description: 'Remove basic document info',
-        icon: Eraser,
-      },
-      {
-        key: 'deepCleanMetadata',
-        label: 'Deep Clean Metadata',
-        description: 'Remove XMP, tags, hidden data',
-        icon: Trash2,
-      },
-    ],
+    key: 'useObjectStreams',
+    label: 'Object Streams',
+    description: 'Optimize PDF internal structure',
+    impact: 'No visual or functional change. Reorganizes internal data for smaller size.',
+    icon: Package,
   },
   {
-    name: 'Images',
-    defaultExpanded: true,
-    methods: [
-      {
-        key: 'recompressImages',
-        label: 'Compress Images',
-        description: 'Re-encode at lower quality',
-        icon: ImageIcon,
-        hasSettings: true,
-      },
-      {
-        key: 'downsampleImages',
-        label: 'Downsample',
-        description: 'Reduce image resolution',
-        icon: Minimize2,
-        hasSettings: true,
-      },
-      {
-        key: 'convertToGrayscale',
-        label: 'Grayscale',
-        description: 'Convert colors to gray tones',
-        icon: Palette,
-        warning: 'Removes color information',
-      },
-      {
-        key: 'convertToMonochrome',
-        label: 'Monochrome',
-        description: '1-bit black & white',
-        icon: Square,
-        warning: 'Best for text/line art only',
-      },
-      {
-        key: 'pngToJpeg',
-        label: 'PNG to JPEG',
-        description: 'Convert photos to JPEG',
-        icon: FileImage,
-      },
-      {
-        key: 'removeAlphaChannels',
-        label: 'Remove Alpha',
-        description: 'Flatten transparency',
-        icon: Layers,
-      },
-      {
-        key: 'removeColorProfiles',
-        label: 'Remove ICC Profiles',
-        description: 'Strip color profiles',
-        icon: Palette,
-      },
-      {
-        key: 'cmykToRgb',
-        label: 'CMYK to RGB',
-        description: 'Convert print colors',
-        icon: Palette,
-        warning: 'Not for print use',
-      },
-    ],
+    key: 'stripMetadata',
+    label: 'Strip Metadata',
+    description: 'Remove basic document info',
+    impact: 'Removes author, title, and creation date. No effect on content.',
+    icon: Eraser,
   },
   {
-    name: 'Resources',
-    methods: [
-      {
-        key: 'removeThumbnails',
-        label: 'Remove Thumbnails',
-        description: 'Delete page previews',
-        icon: FileImage,
-      },
-      {
-        key: 'removeDuplicateResources',
-        label: 'Deduplicate',
-        description: 'Merge duplicate images',
-        icon: Copy,
-      },
-      {
-        key: 'removeUnusedFonts',
-        label: 'Remove Unused Fonts',
-        description: 'Delete unreferenced fonts',
-        icon: Type,
-      },
-      {
-        key: 'removeAttachments',
-        label: 'Remove Attachments',
-        description: 'Delete embedded files',
-        icon: Paperclip,
-      },
-    ],
+    key: 'deepCleanMetadata',
+    label: 'Deep Clean Metadata',
+    description: 'Remove XMP, tags, hidden data',
+    impact: 'Removes extended metadata streams. No visible change to the document.',
+    icon: Trash2,
   },
   {
-    name: 'Interactive',
-    methods: [
-      {
-        key: 'flattenForms',
-        label: 'Flatten Forms',
-        description: 'Convert forms to static',
-        icon: FileText,
-        warning: 'Makes forms non-editable',
-      },
-      {
-        key: 'flattenAnnotations',
-        label: 'Flatten Annotations',
-        description: 'Merge comments into pages',
-        icon: MessageSquare,
-        warning: 'Cannot undo',
-      },
-    ],
+    key: 'compressContentStreams',
+    label: 'Compress Streams',
+    description: 'Optimize content encoding',
+    impact: 'Re-encodes page data more efficiently. Zero quality loss.',
+    icon: Archive,
   },
   {
-    name: 'Cleanup',
-    methods: [
-      {
-        key: 'removeJavaScript',
-        label: 'Remove JavaScript',
-        description: 'Strip scripts (security)',
-        icon: Code,
-      },
-      {
-        key: 'removeBookmarks',
-        label: 'Remove Bookmarks',
-        description: 'Delete navigation',
-        icon: Bookmark,
-      },
-      {
-        key: 'removeNamedDestinations',
-        label: 'Remove Destinations',
-        description: 'Delete internal links',
-        icon: Link2,
-      },
-      {
-        key: 'removeArticleThreads',
-        label: 'Remove Article Threads',
-        description: 'Delete reading order',
-        icon: Newspaper,
-      },
-      {
-        key: 'removeWebCaptureInfo',
-        label: 'Remove Web Capture',
-        description: 'Delete web source info',
-        icon: Globe,
-      },
-      {
-        key: 'removeHiddenLayers',
-        label: 'Remove Hidden Layers',
-        description: 'Delete hidden content',
-        icon: EyeOff,
-      },
-      {
-        key: 'removePageLabels',
-        label: 'Remove Page Labels',
-        description: 'Delete custom numbering',
-        icon: Hash,
-      },
-    ],
+    key: 'removeOrphanObjects',
+    label: 'Remove Orphans',
+    description: 'Clean dead objects',
+    impact: 'Removes unreferenced internal objects. No effect on visible content.',
+    icon: Recycle,
   },
   {
-    name: 'Advanced',
-    methods: [
-      {
-        key: 'compressContentStreams',
-        label: 'Compress Streams',
-        description: 'Optimize content encoding',
-        icon: Archive,
-      },
-      {
-        key: 'removeOrphanObjects',
-        label: 'Remove Orphans',
-        description: 'Clean dead objects',
-        icon: Recycle,
-      },
-      {
-        key: 'inlineToXObject',
-        label: 'Inline to XObject',
-        description: 'Convert inline images',
-        icon: Boxes,
-      },
-      {
-        key: 'removeAlternateContent',
-        label: 'Remove Alternates',
-        description: 'Remove print/screen-only',
-        icon: SplitSquareHorizontal,
-      },
-      {
-        key: 'removeInvisibleText',
-        label: 'Remove Invisible Text',
-        description: 'Strip hidden OCR text',
-        icon: ScanEye,
-        warning: 'May affect searchability',
-      },
-    ],
+    key: 'removeDuplicateResources',
+    label: 'Deduplicate',
+    description: 'Merge duplicate images',
+    impact: 'Merges exact duplicate resources. No quality change whatsoever.',
+    icon: Copy,
+  },
+  {
+    key: 'removeThumbnails',
+    label: 'Remove Thumbnails',
+    description: 'Delete page previews',
+    impact: 'Removes embedded thumbnails. Viewers regenerate them automatically.',
+    icon: FileImage,
+  },
+  {
+    key: 'removeJavaScript',
+    label: 'Remove JavaScript',
+    description: 'Strip scripts (security)',
+    impact: 'Removes embedded scripts. Improves security, no visual change.',
+    icon: Code,
+  },
+  {
+    key: 'removeArticleThreads',
+    label: 'Remove Article Threads',
+    description: 'Delete reading order',
+    impact: 'Removes rarely-used reading order metadata. No visible change.',
+    icon: Newspaper,
+  },
+  {
+    key: 'removeWebCaptureInfo',
+    label: 'Remove Web Capture',
+    description: 'Delete web source info',
+    impact: 'Removes web capture origin data. No visible change.',
+    icon: Globe,
+  },
+  {
+    key: 'removeColorProfiles',
+    label: 'Remove ICC Profiles',
+    description: 'Strip color profiles',
+    impact: 'Strips ICC color profiles. Colors render fine using standard sRGB.',
+    icon: Palette,
+  },
+  {
+    key: 'removeUnusedFonts',
+    label: 'Remove Unused Fonts',
+    description: 'Delete unreferenced fonts',
+    impact: 'Removes fonts not used by any text. No visible change.',
+    icon: Type,
+  },
+  {
+    key: 'inlineToXObject',
+    label: 'Inline to XObject',
+    description: 'Convert inline images',
+    impact: 'Converts inline images to reusable objects. No quality change.',
+    icon: Boxes,
   },
 ];
 
-// Pre-compute the basic filtered view since both inputs are static
-const BASIC_CATEGORIES = CATEGORIES
-  .map(cat => ({
-    ...cat,
-    methods: cat.methods.filter(m => BASIC_METHOD_KEYS.has(m.key)),
-  }))
-  .filter(cat => cat.methods.length > 0);
+const MEDIUM_METHODS: MethodConfig[] = [
+  {
+    key: 'recompressImages',
+    label: 'Compress Images',
+    description: 'Re-encode at lower quality',
+    impact: 'Lossy recompression. Minor quality reduction depending on quality setting.',
+    icon: ImageIcon,
+    hasSettings: true,
+  },
+  {
+    key: 'downsampleImages',
+    label: 'Downsample',
+    description: 'Reduce image resolution',
+    impact: 'Lowers image DPI. Images may look slightly less sharp when zoomed in.',
+    icon: Minimize2,
+    hasSettings: true,
+  },
+  {
+    key: 'pngToJpeg',
+    label: 'PNG to JPEG',
+    description: 'Convert photos to JPEG',
+    impact: 'Converts lossless PNGs to lossy JPEG. Slight quality loss, transparency removed.',
+    icon: FileImage,
+  },
+  {
+    key: 'removeAlphaChannels',
+    label: 'Remove Alpha',
+    description: 'Flatten transparency',
+    impact: 'Flattens transparent areas to white. Transparent overlays will change.',
+    icon: Layers,
+  },
+  {
+    key: 'cmykToRgb',
+    label: 'CMYK to RGB',
+    description: 'Convert print colors',
+    impact: 'Converts CMYK colors to RGB. Not suitable for professional printing.',
+    icon: Palette,
+    warning: 'Not for print use',
+  },
+  {
+    key: 'removeBookmarks',
+    label: 'Remove Bookmarks',
+    description: 'Delete navigation',
+    impact: 'Removes table-of-contents navigation. Readers lose bookmark sidebar.',
+    icon: Bookmark,
+  },
+  {
+    key: 'removeNamedDestinations',
+    label: 'Remove Destinations',
+    description: 'Delete internal links',
+    impact: 'Removes internal link targets. Cross-references within the PDF will break.',
+    icon: Link2,
+  },
+  {
+    key: 'removePageLabels',
+    label: 'Remove Page Labels',
+    description: 'Delete custom numbering',
+    impact: 'Removes custom page labels (e.g. "i, ii, iii"). Pages show numeric index only.',
+    icon: Hash,
+  },
+  {
+    key: 'removeAttachments',
+    label: 'Remove Attachments',
+    description: 'Delete embedded files',
+    impact: 'Deletes all files embedded in the PDF. Attached spreadsheets, images, etc. are lost.',
+    icon: Paperclip,
+  },
+  {
+    key: 'removeAlternateContent',
+    label: 'Remove Alternates',
+    description: 'Remove print/screen-only',
+    impact: 'Removes alternate image versions. May affect print or screen-optimized rendering.',
+    icon: SplitSquareHorizontal,
+  },
+  {
+    key: 'removeHiddenLayers',
+    label: 'Remove Hidden Layers',
+    description: 'Delete hidden content',
+    impact: 'Permanently deletes hidden layers. Content on those layers cannot be recovered.',
+    icon: EyeOff,
+  },
+];
+
+const HIGH_METHODS: MethodConfig[] = [
+  {
+    key: 'convertToGrayscale',
+    label: 'Grayscale',
+    description: 'Convert colors to gray tones',
+    impact: 'All color information is permanently removed. The entire document becomes grayscale.',
+    icon: Palette,
+    warning: 'Removes all color',
+  },
+  {
+    key: 'convertToMonochrome',
+    label: 'Monochrome',
+    description: '1-bit black & white',
+    impact: 'Extreme quality reduction. All content becomes pure black or white — no shading.',
+    icon: Square,
+    warning: 'Best for text/line art only',
+  },
+  {
+    key: 'flattenForms',
+    label: 'Flatten Forms',
+    description: 'Convert forms to static',
+    impact: 'All form fields become non-editable. Users can no longer fill in the PDF.',
+    icon: FileText,
+    warning: 'Makes forms non-editable',
+  },
+  {
+    key: 'flattenAnnotations',
+    label: 'Flatten Annotations',
+    description: 'Merge comments into pages',
+    impact: 'Comments and annotations are permanently baked in. Cannot be edited or removed.',
+    icon: MessageSquare,
+    warning: 'Cannot undo',
+  },
+  {
+    key: 'removeInvisibleText',
+    label: 'Remove Invisible Text',
+    description: 'Strip hidden OCR text',
+    impact: 'Removes searchable text layer from scanned pages. PDF becomes non-searchable.',
+    icon: ScanEye,
+    warning: 'Breaks text search & accessibility',
+  },
+];
+
+const ALL_METHODS = [...SAFE_METHODS, ...MEDIUM_METHODS, ...HIGH_METHODS];
 
 // Separate adjustable methods (with settings panels) from simple toggles
-const ADJUSTABLE_METHODS = CATEGORIES.flatMap(cat => cat.methods.filter(m => m.hasSettings));
+const ADJUSTABLE_METHODS = ALL_METHODS.filter(m => m.hasSettings);
 
-const TOGGLE_CATEGORIES: MethodCategory[] = CATEGORIES
-  .map(cat => ({
-    ...cat,
-    methods: cat.methods.filter(m => !m.hasSettings),
-  }))
-  .filter(cat => cat.methods.length > 0);
+const SAFE_TOGGLE_METHODS = SAFE_METHODS.filter(m => !m.hasSettings);
+const MEDIUM_TOGGLE_METHODS = MEDIUM_METHODS.filter(m => !m.hasSettings);
+const HIGH_TOGGLE_METHODS = HIGH_METHODS.filter(m => !m.hasSettings);
 
 
 export const CompressionMethods = () => {
@@ -303,23 +283,7 @@ export const CompressionMethods = () => {
     return map;
   }, [methodResults]);
 
-  const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
-
-  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
-    'Structure': true,
-    'Images': true,
-    'Resources': false,
-    'Interactive': false,
-    'Cleanup': false,
-    'Advanced': false,
-  });
-
-  const toggleCategory = useCallback((category: string) => {
-    setExpandedCategories(prev => ({
-      ...prev,
-      [category]: !prev[category],
-    }));
-  }, []);
+  const [activeTab, setActiveTab] = useState<RiskLevel>('safe');
 
   const getMethodResult = useCallback((key: keyof CompressionOptions) => {
     return methodResultsMap.get(key);
@@ -402,15 +366,20 @@ export const CompressionMethods = () => {
     }
   }, [options, disabled, setOptions, imageSettings, setImageSettings]);
 
-  const getCategoryStats = useCallback((category: MethodCategory) => {
-    const enabled = category.methods.filter(m => options[m.key]).length;
-    const total = category.methods.length;
-    const savings = category.methods.reduce((sum, m) => {
-      const result = methodResultsMap.get(m.key);
-      return sum + (options[m.key] && result ? result.savedBytes : 0);
-    }, 0);
-    return { enabled, total, savings };
-  }, [options, methodResultsMap]);
+  const getTabMethods = useCallback((tab: RiskLevel): MethodConfig[] => {
+    switch (tab) {
+      case 'safe': return SAFE_TOGGLE_METHODS;
+      case 'medium': return MEDIUM_TOGGLE_METHODS;
+      case 'high': return HIGH_TOGGLE_METHODS;
+    }
+  }, []);
+
+  const getTabStats = useCallback((tab: RiskLevel) => {
+    const methods = getTabMethods(tab);
+    const enabled = methods.filter(m => options[m.key]).length;
+    const total = methods.length;
+    return { enabled, total };
+  }, [options, getTabMethods]);
 
   return (
     <div className="bg-white border rounded-lg shadow-sm w-full lg:max-w-xs h-fit self-start sticky top-8">
@@ -446,133 +415,58 @@ export const CompressionMethods = () => {
         </div>
       </div>
 
-      {/* Basic / Advanced tabs */}
+      {/* Risk-level tabs */}
       <div className="flex border-b">
-        <button
-          onClick={() => setActiveTab('basic')}
-          className={twMerge(
-            "flex-1 px-3 py-2 text-xs font-semibold transition-colors relative",
-            activeTab === 'basic'
-              ? "text-slate-900"
-              : "text-slate-400 hover:text-slate-600"
-          )}
-        >
-          Basic
-          {activeTab === 'basic' && (
-            <motion.div
-              layoutId="settings-tab-indicator"
-              className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900"
-            />
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('advanced')}
-          className={twMerge(
-            "flex-1 px-3 py-2 text-xs font-semibold transition-colors relative",
-            activeTab === 'advanced'
-              ? "text-slate-900"
-              : "text-slate-400 hover:text-slate-600"
-          )}
-        >
-          Advanced
-          {activeTab === 'advanced' && (
-            <motion.div
-              layoutId="settings-tab-indicator"
-              className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900"
-            />
-          )}
-        </button>
+        {([
+          { key: 'safe' as RiskLevel, label: 'Safe', color: 'text-emerald-700' },
+          { key: 'medium' as RiskLevel, label: 'Medium', color: 'text-amber-700' },
+          { key: 'high' as RiskLevel, label: 'High', color: 'text-red-700' },
+        ]).map(tab => {
+          const stats = getTabStats(tab.key);
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={twMerge(
+                "flex-1 px-2 py-2 text-xs font-semibold transition-colors relative",
+                activeTab === tab.key
+                  ? tab.color
+                  : "text-slate-400 hover:text-slate-600"
+              )}
+            >
+              <span>{tab.label}</span>
+              <span className="ml-1 text-[9px] opacity-70">{stats.enabled}/{stats.total}</span>
+              {activeTab === tab.key && (
+                <motion.div
+                  layoutId="settings-tab-indicator"
+                  className={twMerge(
+                    "absolute bottom-0 left-0 right-0 h-0.5",
+                    tab.key === 'safe' && "bg-emerald-600",
+                    tab.key === 'medium' && "bg-amber-500",
+                    tab.key === 'high' && "bg-red-500",
+                  )}
+                />
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="p-1.5 space-y-1 max-h-[70vh] overflow-y-auto">
-        {activeTab === 'basic' ? (
-          // Basic: flat list, no collapsible categories
-          <div className="space-y-0.5 p-1">
-            {BASIC_CATEGORIES.flatMap(cat => cat.methods).map(method => (
-              <MethodItem
-                key={method.key}
-                method={method}
-                isEnabled={options[method.key]}
-                disabled={disabled}
-                result={getMethodResult(method.key)}
-                onToggle={handleMethodToggle}
-                imageSettings={imageSettings}
-                onImageSettingsChange={setImageSettings}
-                imageStats={imageStats}
-                notApplicable={getMethodNotApplicable(method.key)}
-              />
-            ))}
-          </div>
-        ) : (
-          // Advanced: Quick toggles only (adjustable settings are in their own section above)
-          <div className="border rounded">
-            <div className="flex items-center gap-2 p-2 bg-slate-50/80 border-b">
-              <ToggleLeft className="w-3.5 h-3.5 text-slate-600" />
-              <span className="text-xs font-bold text-slate-800">Quick Toggles</span>
-              <span className="text-[10px] text-slate-500">Enable or disable</span>
-            </div>
-            <div className="p-0.5">
-              {TOGGLE_CATEGORIES.map((category) => {
-                const stats = getCategoryStats(category);
-                const isExpanded = expandedCategories[category.name];
-
-                return (
-                  <div key={category.name} className="border-b last:border-b-0">
-                    <button
-                      onClick={() => toggleCategory(category.name)}
-                      className="w-full flex items-center justify-between p-2 text-left hover:bg-slate-50 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        {isExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-slate-600" />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-slate-600" />
-                        )}
-                        <span className="text-xs font-bold text-slate-800">{category.name}</span>
-                        <span className="text-[10px] text-slate-600">
-                          {stats.enabled}/{stats.total}
-                        </span>
-                      </div>
-                      {stats.savings > 0 && (
-                        <span className="text-[9px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">
-                          -{formatBytes(stats.savings)}
-                        </span>
-                      )}
-                    </button>
-
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <div className="p-1.5 pt-0 space-y-0.5">
-                            {category.methods.map(method => (
-                              <MethodItem
-                                key={method.key}
-                                method={method}
-                                isEnabled={options[method.key]}
-                                disabled={disabled}
-                                result={getMethodResult(method.key)}
-                                onToggle={handleMethodToggle}
-                                imageSettings={imageSettings}
-                                onImageSettingsChange={setImageSettings}
-                                imageStats={imageStats}
-                                notApplicable={getMethodNotApplicable(method.key)}
-                              />
-                            ))}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+      <div className="p-1.5 space-y-0.5 max-h-[70vh] overflow-y-auto">
+        {getTabMethods(activeTab).map(method => (
+          <MethodItem
+            key={method.key}
+            method={method}
+            isEnabled={options[method.key]}
+            disabled={disabled}
+            result={getMethodResult(method.key)}
+            onToggle={handleMethodToggle}
+            imageSettings={imageSettings}
+            onImageSettingsChange={setImageSettings}
+            imageStats={imageStats}
+            notApplicable={getMethodNotApplicable(method.key)}
+          />
+        ))}
       </div>
 
       {isUpdating && (
