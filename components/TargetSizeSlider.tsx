@@ -3,9 +3,10 @@
 import { memo, useState, useMemo, useRef } from 'react';
 import { usePdf } from '@/context/PdfContext';
 import { settingsForTargetPercent, TARGET_SIZE_STEPS } from '@/lib/target-size';
+import { calculateCompressionPotential, selectMethodsForTarget } from '@/lib/compression-potential';
 import { formatBytes } from '@/lib/utils';
 import { IMAGE_COMPRESSION, DPI_OPTIONS } from '@/lib/constants';
-import { Target, ImageIcon, Minimize2 } from 'lucide-react';
+import { Target, ImageIcon, Minimize2, Shield, AlertTriangle, Zap } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 
 export const TargetSizeSlider = memo(() => {
@@ -37,10 +38,35 @@ export const TargetSizeSlider = memo(() => {
     return methodResults?.find(r => r.key === 'downsampleImages')?.savedBytes ?? 0;
   }, [methodResults]);
 
+  // Calculate compression potential from measured method results
+  const potential = useMemo(() => {
+    if (!methodResults || originalSize === 0) return null;
+    return calculateCompressionPotential(originalSize, methodResults);
+  }, [methodResults, originalSize]);
+
+  // Convert floor sizes to slider percentages
+  const potentialPercents = useMemo(() => {
+    if (!potential || originalSize === 0) return null;
+    return {
+      safePercent: Math.max(TARGET_SIZE_STEPS.min, Math.round((potential.safeFloor / originalSize) * 100)),
+      mediumPercent: Math.max(TARGET_SIZE_STEPS.min, Math.round((potential.mediumFloor / originalSize) * 100)),
+      absolutePercent: Math.max(TARGET_SIZE_STEPS.min, Math.round((potential.absoluteFloor / originalSize) * 100)),
+    };
+  }, [potential, originalSize]);
+
   // Don't render if no file has been compressed yet
   if (!analysis || originalSize === 0) return null;
 
   const targetBytes = Math.round(originalSize * (targetPercent / 100));
+
+  // Determine if target is achievable and at what risk level
+  const targetFeasibility = (() => {
+    if (!potentialPercents) return null;
+    if (targetPercent >= potentialPercents.safePercent) return 'safe';
+    if (targetPercent >= potentialPercents.mediumPercent) return 'medium';
+    if (targetPercent >= potentialPercents.absolutePercent) return 'reachable';
+    return 'unreachable';
+  })();
 
   const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPercent = Number(e.target.value);
@@ -51,10 +77,28 @@ export const TargetSizeSlider = memo(() => {
     // Debounce settings update to avoid rapid recompressions
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const { options, imageSettings } = settingsForTargetPercent(newPercent);
-      setOptions(options);
-      setImageSettings(imageSettings);
-      // Pass target percent so worker can iterate toward it
+      // Use measured savings to pick methods progressively when we have data
+      if (methodResults && methodResults.length > 0) {
+        const needed = selectMethodsForTarget(originalSize, Math.round(originalSize * (newPercent / 100)), methodResults);
+
+        // Start from the zone-based settings as a baseline for image quality/DPI
+        const baseline = settingsForTargetPercent(newPercent);
+
+        // Merge: enable all methods the progressive selector chose,
+        // but keep zone-based image quality/DPI settings
+        const mergedOptions = { ...baseline.options };
+        for (const key of needed) {
+          (mergedOptions as Record<string, boolean>)[key] = true;
+        }
+
+        setOptions(mergedOptions);
+        setImageSettings(baseline.imageSettings);
+      } else {
+        // Fallback: no measurements yet, use zone-based heuristics
+        const { options, imageSettings } = settingsForTargetPercent(newPercent);
+        setOptions(options);
+        setImageSettings(imageSettings);
+      }
       setContextTargetPercent(newPercent);
     }, 300);
   };
@@ -63,7 +107,6 @@ export const TargetSizeSlider = memo(() => {
     const quality = parseInt(e.target.value, 10);
     const newSettings = { ...imageSettings, quality };
     setImageSettings(newSettings);
-    // Also ensure recompressImages is enabled when quality is adjusted
     if (!options.recompressImages) {
       setOptions({ ...options, recompressImages: true });
     }
@@ -73,13 +116,11 @@ export const TargetSizeSlider = memo(() => {
     const targetDpi = parseInt(e.target.value, 10);
     const newSettings = { ...imageSettings, targetDpi, enableDownsampling: true };
     setImageSettings(newSettings);
-    // Also ensure downsampleImages and recompressImages are enabled
     if (!options.downsampleImages) {
       setOptions({ ...options, downsampleImages: true, recompressImages: true });
     }
   };
 
-  // Check if target DPI is at or above original - downsampling won't help
   const dpiAboveOriginal = imageStats && imageStats.avgDpi > 0 && imageSettings.targetDpi >= imageStats.avgDpi;
 
   // Label for current zone
@@ -106,7 +147,10 @@ export const TargetSizeSlider = memo(() => {
 
   const fillPercent = ((targetPercent - TARGET_SIZE_STEPS.min) / (TARGET_SIZE_STEPS.max - TARGET_SIZE_STEPS.min)) * 100;
 
-  // Quality fill for the secondary slider
+  // Helper to convert a size-percent (10-100) to slider track position (0-100%)
+  const toTrackPosition = (pct: number) =>
+    ((pct - TARGET_SIZE_STEPS.min) / (TARGET_SIZE_STEPS.max - TARGET_SIZE_STEPS.min)) * 100;
+
   const qualityFillPercent = ((imageSettings.quality - IMAGE_COMPRESSION.MIN_QUALITY) / (IMAGE_COMPRESSION.MAX_QUALITY - IMAGE_COMPRESSION.MIN_QUALITY)) * 100;
 
   return (
@@ -136,9 +180,69 @@ export const TargetSizeSlider = memo(() => {
           </span>
         </div>
 
-        {/* Main slider */}
+        {/* Main slider with potential markers */}
         <div className="relative mt-2 mb-1">
+          {/* Track background */}
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-2 bg-slate-100 rounded-full border border-slate-200" />
+
+          {/* Compression potential zone overlays on the track */}
+          {potentialPercents && (
+            <>
+              {/* High-risk zone: absolutePercent → mediumPercent (red tint) */}
+              {potentialPercents.absolutePercent < potentialPercents.mediumPercent && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 h-2 bg-red-200/60 rounded-full"
+                  style={{
+                    left: `${toTrackPosition(potentialPercents.absolutePercent)}%`,
+                    width: `${toTrackPosition(potentialPercents.mediumPercent) - toTrackPosition(potentialPercents.absolutePercent)}%`,
+                  }}
+                />
+              )}
+              {/* Medium-risk zone: mediumPercent → safePercent (amber tint) */}
+              {potentialPercents.mediumPercent < potentialPercents.safePercent && (
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 h-2 bg-amber-200/60 rounded-full"
+                  style={{
+                    left: `${toTrackPosition(potentialPercents.mediumPercent)}%`,
+                    width: `${toTrackPosition(potentialPercents.safePercent) - toTrackPosition(potentialPercents.mediumPercent)}%`,
+                  }}
+                />
+              )}
+              {/* Safe zone: safePercent → 100% (green tint) */}
+              <div
+                className="absolute top-1/2 -translate-y-1/2 h-2 bg-emerald-200/60 rounded-full"
+                style={{
+                  left: `${toTrackPosition(potentialPercents.safePercent)}%`,
+                  width: `${100 - toTrackPosition(potentialPercents.safePercent)}%`,
+                }}
+              />
+
+              {/* Marker: safe floor */}
+              <div
+                className="absolute top-1/2 -translate-y-[7px] w-0.5 h-3.5 bg-emerald-500 z-[5] rounded-full"
+                style={{ left: `${toTrackPosition(potentialPercents.safePercent)}%` }}
+                title={`Safe methods: ${formatBytes(potential!.safeFloor)} (${potentialPercents.safePercent}%)`}
+              />
+              {/* Marker: medium floor */}
+              {potentialPercents.mediumPercent < potentialPercents.safePercent && (
+                <div
+                  className="absolute top-1/2 -translate-y-[7px] w-0.5 h-3.5 bg-amber-500 z-[5] rounded-full"
+                  style={{ left: `${toTrackPosition(potentialPercents.mediumPercent)}%` }}
+                  title={`+ Medium methods: ${formatBytes(potential!.mediumFloor)} (${potentialPercents.mediumPercent}%)`}
+                />
+              )}
+              {/* Marker: absolute floor */}
+              {potentialPercents.absolutePercent < potentialPercents.mediumPercent && (
+                <div
+                  className="absolute top-1/2 -translate-y-[7px] w-0.5 h-3.5 bg-red-500 z-[5] rounded-full"
+                  style={{ left: `${toTrackPosition(potentialPercents.absolutePercent)}%` }}
+                  title={`+ All methods: ${formatBytes(potential!.absoluteFloor)} (${potentialPercents.absolutePercent}%)`}
+                />
+              )}
+            </>
+          )}
+
+          {/* Active fill */}
           <div
             className={twMerge("absolute left-0 top-1/2 -translate-y-1/2 h-2 rounded-full transition-colors duration-200", fillColor)}
             style={{ width: `${fillPercent}%` }}
@@ -181,6 +285,52 @@ export const TargetSizeSlider = memo(() => {
           <span>Smallest</span>
           <span>Original</span>
         </div>
+
+        {/* Compression potential legend */}
+        {potentialPercents && potential && (
+          <div className="mt-3 space-y-1.5">
+            {/* Feasibility indicator for the current target */}
+            {isActive && targetFeasibility && (
+              <div className={twMerge(
+                "flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded",
+                targetFeasibility === 'safe' && "bg-emerald-50 text-emerald-700",
+                targetFeasibility === 'medium' && "bg-amber-50 text-amber-700",
+                targetFeasibility === 'reachable' && "bg-red-50 text-red-700",
+                targetFeasibility === 'unreachable' && "bg-slate-100 text-slate-500",
+              )}>
+                {targetFeasibility === 'safe' && <><Shield className="w-3 h-3" /> Achievable with safe methods only</>}
+                {targetFeasibility === 'medium' && <><AlertTriangle className="w-3 h-3" /> Requires medium-risk methods</>}
+                {targetFeasibility === 'reachable' && <><Zap className="w-3 h-3" /> Requires aggressive methods</>}
+                {targetFeasibility === 'unreachable' && <><AlertTriangle className="w-3 h-3" /> Below measurable limit — may not be reachable</>}
+              </div>
+            )}
+
+            {/* Tier legend */}
+            <div className="flex items-center gap-3 text-[9px] text-slate-400 font-medium">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                Safe {formatBytes(potential.safeFloor)}
+              </span>
+              {potential.mediumSavings > potential.safeSavings && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  +Medium {formatBytes(potential.mediumFloor)}
+                </span>
+              )}
+              {potential.totalSavings > potential.mediumSavings && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+                  +All {formatBytes(potential.absoluteFloor)}
+                </span>
+              )}
+              {potential.hasPending && (
+                <span className="text-slate-300 animate-pulse">
+                  measuring...
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* === Divider === */}
@@ -283,7 +433,6 @@ export const TargetSizeSlider = memo(() => {
               cursor-pointer hover:bg-slate-100 transition-colors"
           >
             {DPI_OPTIONS.PRESETS.map((preset) => {
-              // Mark the option closest to the original average DPI
               const isOriginal = imageStats && imageStats.avgDpi > 0 &&
                 Math.abs(preset.value - imageStats.avgDpi) <=
                   Math.min(...DPI_OPTIONS.PRESETS.map(p => Math.abs(p.value - (imageStats?.avgDpi ?? 0))));
