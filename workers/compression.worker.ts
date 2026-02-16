@@ -130,7 +130,11 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       }
     }
 
-    const buffer = analysis.fullCompressedBytes.slice().buffer as ArrayBuffer;
+    // Avoid unnecessary copy: only slice if the Uint8Array is a view into a larger buffer
+    const arr = analysis.fullCompressedBytes;
+    const buffer = (arr.byteOffset === 0 && arr.byteLength === arr.buffer.byteLength)
+      ? arr.buffer as ArrayBuffer
+      : arr.slice().buffer as ArrayBuffer;
 
     postResponse({
       type: 'success',

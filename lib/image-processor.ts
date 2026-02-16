@@ -877,6 +877,7 @@ const analyzeImageType = (imageData: ImageData): { isPhoto: boolean; score: numb
 /**
  * Check if an image has meaningful transparency that should be preserved.
  * Returns true if the image has non-trivial alpha values.
+ * Uses context.lookup with PDFRef.of() for O(1) access instead of enumerating all objects.
  */
 const hasSignificantTransparency = (
   pdfDoc: PDFDocument,
@@ -885,25 +886,14 @@ const hasSignificantTransparency = (
   const context = pdfDoc.context;
   const [objNum, genNum] = imageRef.split('-').map(Number);
 
-  // Find the image object
-  const allRefs = context.enumerateIndirectObjects();
-  for (const [ref, obj] of allRefs) {
-    if (ref.objectNumber === objNum && ref.generationNumber === genNum) {
-      if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) {
-        continue;
-      }
-      const dict = obj.dict;
+  // Direct lookup by ref — O(1) instead of iterating all objects
+  const ref = PDFRef.of(objNum, genNum);
+  const obj = context.lookup(ref);
 
-      // Check for SMask (soft mask - alpha channel)
-      const smask = dict.get(PDFName.of('SMask'));
-      if (smask) return true;
-
-      // Check for Mask (hard mask)
-      const mask = dict.get(PDFName.of('Mask'));
-      if (mask) return true;
-
-      break;
-    }
+  if (obj instanceof PDFRawStream || obj instanceof PDFStream) {
+    const dict = obj.dict;
+    if (dict.get(PDFName.of('SMask'))) return true;
+    if (dict.get(PDFName.of('Mask'))) return true;
   }
 
   return false;
@@ -1180,11 +1170,10 @@ export const convertCmykToRgb = async (
   };
 
   const context = pdfDoc.context;
-  const allRefs = Array.from(context.enumerateIndirectObjects());
   const cmykImages: Array<{ ref: PDFRef; stream: PDFRawStream | PDFStream; dict: PDFDict }> = [];
 
-  // Find all CMYK images
-  for (const [ref, obj] of allRefs) {
+  // Find all CMYK images — iterate directly without materializing full array
+  for (const [ref, obj] of context.enumerateIndirectObjects()) {
     if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) {
       continue;
     }

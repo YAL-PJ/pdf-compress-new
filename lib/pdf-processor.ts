@@ -204,9 +204,8 @@ export const analyzePdf = async (
 
   // Load PDF ONCE for info, baseline, and image extraction
   const { pdfDoc: baseDoc, info } = await loadPdf(arrayBuffer);
-  // Establish baseline size
-  const baselineBytes = await baseDoc.save({ useObjectStreams: false });
-  const baselineSize = baselineBytes.byteLength;
+  // Use original buffer size as baseline — avoids an expensive full serialization
+  const baselineSize = originalSize;
 
   // Detect PDF features (will be enriched with image stats later)
   let pdfFeatures: PdfFeatures | undefined;
@@ -346,21 +345,29 @@ export const analyzePdf = async (
   }
 
   // Working buffer for further processing
-  // IMPORTANT: Use .slice().buffer to avoid reading garbage data from larger underlying ArrayBuffers
-  let workingBuffer = recompressedImageBytes
-    ? recompressedImageBytes.slice().buffer as ArrayBuffer
-    : arrayBuffer;
+  // Use the Uint8Array's underlying buffer directly if it covers the full range,
+  // otherwise create a minimal copy to avoid reading garbage from oversized ArrayBuffers.
+  let workingBuffer: ArrayBuffer;
+  if (recompressedImageBytes) {
+    const arr = recompressedImageBytes;
+    workingBuffer = (arr.byteOffset === 0 && arr.byteLength === arr.buffer.byteLength)
+      ? arr.buffer as ArrayBuffer
+      : arr.slice().buffer as ArrayBuffer;
+  } else {
+    workingBuffer = arrayBuffer;
+  }
 
   // Load document ONCE for all in-place mutation methods
   // (alpha, ICC, CMYK, dedup, fonts, inline, streams, orphans, alternate, invisible, structure)
   // This eliminates 12+ redundant PDFDocument.load() calls
   onProgress?.('Applying optimizations...');
   let workDoc: PDFDocument;
+  // Use the working buffer size as lastSize — avoids an expensive intermediate save
   let lastSize: number;
   try {
     const loaded = await loadPdf(workingBuffer);
     workDoc = loaded.pdfDoc;
-    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
+    lastSize = workingBuffer.byteLength;
   } catch (err) {
     // If recompressed image buffer is corrupt, fall back to original
     const msg = err instanceof Error ? err.message : String(err);
@@ -368,16 +375,22 @@ export const analyzePdf = async (
     report.errors.push('loadWorkingBuffer');
     const loaded = await loadPdf(arrayBuffer);
     workDoc = loaded.pdfDoc;
-    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
+    lastSize = arrayBuffer.byteLength;
   }
+
+  // Release extracted image data — no longer needed after embedding
+  images.length = 0;
+  jpegImages.length = 0;
+  pngImages.length = 0;
+  recompressedImageBytes = null;
 
   // Helper: apply a method on the shared document WITHOUT intermediate save.
   // We batch all methods and do a single save at the end for massive speedup.
+  // Orphan cleanup is deferred to a single pass after ALL methods complete.
   const applyMethod = async (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number | Promise<void | { savedBytes: number; [k: string]: unknown }>,
-    cleanOrphans: boolean = false,
   ) => {
     if (!enabled) {
       savings[key] = 0;
@@ -386,9 +399,6 @@ export const analyzePdf = async (
     report.methodsUsed.push(key);
     try {
       const result = await apply(workDoc);
-      if (cleanOrphans) {
-        await removeOrphanObjects(workDoc);
-      }
       report.methodsSuccessful.push(key);
       return result;
     } catch (err) {
@@ -409,25 +419,26 @@ export const analyzePdf = async (
   }
 
   // Image-related in-place mutations
+  // NOTE: orphan cleanup is deferred to a single pass after ALL methods (massive speedup)
   if (options.removeAlphaChannels) {
     await applyMethod('removeAlphaChannels', true, (doc) => {
       const r = removeAlphaChannels(doc);
       if (r.processed > 0) log('success', `Removed alpha channels from ${r.processed} images`);
-    }, true);
+    });
   }
 
   if (options.removeColorProfiles) {
     await applyMethod('removeColorProfiles', true, (doc) => {
       const r = removeIccProfiles(doc);
       if (r.removed > 0) log('success', `Removed ${r.removed} ICC profiles`);
-    }, true);
+    });
   }
 
   if (options.cmykToRgb) {
     await applyMethod('cmykToRgb', true, async (doc) => {
       const r = await convertCmykToRgb(doc, settings.quality, onProgress);
       if (r.converted > 0) log('success', `Converted ${r.converted} CMYK images to RGB`);
-    }, true);
+    });
   }
 
   // Resource optimization
@@ -440,7 +451,7 @@ export const analyzePdf = async (
       } else {
         log('info', 'No duplicate resources found');
       }
-    }, true);
+    });
   }
 
   if (options.removeUnusedFonts) {
@@ -452,7 +463,7 @@ export const analyzePdf = async (
       } else {
         log('info', 'No unused fonts found');
       }
-    }, true);
+    });
   }
 
   // Content stream optimization
@@ -476,7 +487,7 @@ export const analyzePdf = async (
       if (r.alternatesRemoved > 0 || r.printOnlyRemoved > 0 || r.screenOnlyRemoved > 0) {
         log('success', 'Removed alternate content objects');
       }
-    }, true);
+    });
   }
 
   if (options.removeInvisibleText) {
@@ -550,32 +561,25 @@ export const analyzePdf = async (
   }
 
   // Single final save — this replaces ~20+ intermediate saves
+  // Only serialize ONCE (avoid previous double-save for object stream measurement)
   let fullCompressedBytes: Uint8Array;
-  let withoutOsBytes: Uint8Array | undefined;
+  let osSaved = 0;
   try {
-    // If object streams enabled, save once without to measure its contribution
-    if (options.useObjectStreams) {
-      withoutOsBytes = await structDoc.save({ useObjectStreams: false });
-    }
     fullCompressedBytes = await structDoc.save({
       useObjectStreams: options.useObjectStreams,
     });
   } catch (err) {
-    // If the mutated document can't be saved, fall back to baseline
+    // If the mutated document can't be saved, fall back to original
     const msg = err instanceof Error ? err.message : String(err);
-    log('warning', `Final save failed, returning baseline: ${msg}`);
+    log('warning', `Final save failed, returning original: ${msg}`);
     report.errors.push('finalSave');
-    fullCompressedBytes = baselineBytes;
+    fullCompressedBytes = new Uint8Array(arrayBuffer);
   }
 
-  const osSaved = (options.useObjectStreams && withoutOsBytes)
-    ? Math.max(0, withoutOsBytes.byteLength - fullCompressedBytes.byteLength)
-    : 0;
-
-  if (options.useObjectStreams && osSaved > 0) {
+  if (options.useObjectStreams) {
     report.methodsUsed.push('useObjectStreams');
     report.methodsSuccessful.push('useObjectStreams');
-    log('success', 'Applied Object Streams compression', { saved: osSaved });
+    log('success', 'Applied Object Streams compression');
   }
 
   // Calculate total non-image savings and distribute proportionally across methods
@@ -583,9 +587,8 @@ export const analyzePdf = async (
   // without the expensive per-method save. Instead, attribute total structural savings
   // to the combined set of applied methods.
   const totalFinalSize = fullCompressedBytes.byteLength;
-  const imageRelatedSavings = (savings.recompressImages ?? 0) + (savings.downsampleImages ?? 0) + (savings.pngToJpeg ?? 0);
   const sizeAfterImages = lastSize; // lastSize was set after loading workDoc
-  const totalStructSavings = Math.max(0, sizeAfterImages - (totalFinalSize + osSaved));
+  const totalStructSavings = Math.max(0, sizeAfterImages - totalFinalSize);
 
   // Collect all applied non-image method keys for proportional attribution
   const appliedMethodKeys = report.methodsSuccessful.filter(
