@@ -81,6 +81,10 @@ export function settingsForTargetPercent(targetPercent: number): TargetSizeResul
     flattenForms: enableMaxCompression,
     flattenAnnotations: enableMaxCompression,
     cmykToRgb: enableMaxCompression,
+    // Vector optimization (safe methods always on, precision at aggressive)
+    deduplicateShadings: true,
+    removeUnusedShadings: true,
+    reduceVectorPrecision: enableAggressiveMethods,
   };
 
   const imageSettings: ImageCompressionSettings = {
@@ -125,6 +129,9 @@ export function getEscalationTier(
           removeUnusedFonts: true,
           deepCleanMetadata: true,
           downsampleImages: true,
+          deduplicateShadings: true,
+          removeUnusedShadings: true,
+          reduceVectorPrecision: true,
         },
         imageSettings: {
           ...baseImageSettings,
@@ -167,6 +174,10 @@ export function getEscalationTier(
           // Flatten everything
           flattenForms: true,
           flattenAnnotations: true,
+          // Vector optimization
+          deduplicateShadings: true,
+          removeUnusedShadings: true,
+          reduceVectorPrecision: true,
         },
         imageSettings: {
           ...baseImageSettings,
@@ -211,6 +222,9 @@ export function getEscalationTier(
           removeOrphanObjects: true,
           removeAlternateContent: true,
           removeInvisibleText: true,
+          deduplicateShadings: true,
+          removeUnusedShadings: true,
+          reduceVectorPrecision: true,
         },
         imageSettings: {
           quality: 5,

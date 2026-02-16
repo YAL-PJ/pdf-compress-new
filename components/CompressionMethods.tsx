@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package, Eraser, Image as ImageIcon, Settings2, Minimize2, Palette, FileImage, Square, Layers,
   Bookmark, Link2, Newspaper, Globe, EyeOff, Hash, Trash2, FileText, MessageSquare, Code, Copy, Type,
-  Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye,
+  Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye, Blend, Scissors, Spline,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useState, useMemo, useCallback } from 'react';
@@ -118,6 +118,20 @@ const SAFE_METHODS: MethodConfig[] = [
     impact: 'Converts inline images to reusable objects. No quality change.',
     icon: Boxes,
   },
+  {
+    key: 'deduplicateShadings',
+    label: 'Dedup Gradients',
+    description: 'Merge identical gradient defs',
+    impact: 'Merges duplicate shading/gradient objects. No visual change.',
+    icon: Blend,
+  },
+  {
+    key: 'removeUnusedShadings',
+    label: 'Remove Unused Gradients',
+    description: 'Delete orphan shadings',
+    impact: 'Removes gradient definitions not referenced in page content. No visual change.',
+    icon: Spline,
+  },
 ];
 
 const MEDIUM_METHODS: MethodConfig[] = [
@@ -200,6 +214,14 @@ const MEDIUM_METHODS: MethodConfig[] = [
     description: 'Delete hidden content',
     impact: 'Permanently deletes hidden layers. Content on those layers cannot be recovered.',
     icon: EyeOff,
+  },
+  {
+    key: 'reduceVectorPrecision',
+    label: 'Reduce Vector Precision',
+    description: 'Simplify path coordinates',
+    impact: 'Reduces decimal precision in vector paths. May cause sub-pixel shifts in detailed artwork.',
+    icon: Scissors,
+    warning: 'May affect detailed vector art',
   },
 ];
 
@@ -329,6 +351,12 @@ export const CompressionMethods = () => {
         return !pdfFeatures.hasAttachments ? 'No attachments found' : undefined;
       case 'removeThumbnails':
         return !pdfFeatures.hasThumbnails ? 'No thumbnails found' : undefined;
+      // Vector methods
+      case 'deduplicateShadings':
+      case 'removeUnusedShadings':
+        return !pdfFeatures.hasShadings ? 'No gradients/shadings found' : undefined;
+      case 'reduceVectorPrecision':
+        return !pdfFeatures.hasComplexPaths ? 'No complex vector paths' : undefined;
       default:
         return undefined;
     }

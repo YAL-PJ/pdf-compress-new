@@ -45,6 +45,11 @@ export interface CompressionOptions {
   removeOrphanObjects: boolean;   // 2.4 Remove unreferenced objects
   removeAlternateContent: boolean; // 2.5 Remove alternate images, print/screen-only
   removeInvisibleText: boolean;   // 2.6 Remove invisible OCR text
+
+  // Vector Optimization (Phase 3)
+  deduplicateShadings: boolean;   // 3.1 Deduplicate identical gradient/shading objects
+  removeUnusedShadings: boolean;  // 3.2 Remove shadings not referenced in content streams
+  reduceVectorPrecision: boolean; // 3.3 Reduce decimal precision in vector path coordinates
 }
 
 export interface ImageCompressionSettings {
@@ -97,6 +102,11 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   removeOrphanObjects: true,     // On - safe cleanup
   removeAlternateContent: false, // Off - may affect print quality
   removeInvisibleText: false,    // Off - may affect searchability/accessibility
+
+  // Vector Optimization (Phase 3)
+  deduplicateShadings: true,     // On - safe, merges identical gradient definitions
+  removeUnusedShadings: true,    // On - safe, removes unreferenced shading objects
+  reduceVectorPrecision: false,  // Off - may cause sub-pixel shifts in vector art
 };
 
 export const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
@@ -134,6 +144,9 @@ export interface PdfFeatures {
   hasAttachments: boolean;
   hasThumbnails: boolean;
   hasMetadata: boolean;
+  // Vector features
+  hasShadings: boolean;
+  hasComplexPaths: boolean;
 }
 
 /** Result for a single compression method */
