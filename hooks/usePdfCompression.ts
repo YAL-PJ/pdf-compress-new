@@ -211,6 +211,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
   ) => {
     const imageSettings = settings.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
     const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
+    const targetPercent = settings.targetPercent;
 
     // Generate new Job ID
     const jobId = generateJobId();
@@ -265,7 +266,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       workerRef.current?.postMessage(
         {
           type: 'start',
-          payload: { arrayBuffer, fileName, imageSettings, options, jobId }
+          payload: { arrayBuffer, fileName, imageSettings, options, targetPercent, jobId }
         },
         [arrayBuffer]
       );

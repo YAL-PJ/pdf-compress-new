@@ -1,38 +1,55 @@
 /**
  * PDF Compression Web Worker
  * Supports all Phase 2 compression methods
- * Sends fast result immediately, then measures per-method savings in background
+ * - Fast result delivery
+ * - Iterative escalation to meet target size
+ * - Background per-method measurement
+ * - Safe job cancellation handling
  */
 
-import { analyzePdf, measureMethodSavings, type ExtendedProcessingSettings } from '../lib/pdf-processor';
+import {
+  analyzePdf,
+  measureMethodSavings,
+  type ExtendedProcessingSettings,
+} from '../lib/pdf-processor';
+
+import { getEscalationTier, MAX_ESCALATION_TIERS } from '../lib/target-size';
 import { isPdfError } from '@/lib/errors';
 import {
   DEFAULT_COMPRESSION_OPTIONS,
   DEFAULT_IMAGE_SETTINGS,
 } from '@/lib/types';
-import type { WorkerMessage, WorkerResponse, ImageCompressionSettings, CompressionOptions } from '@/lib/types';
+
+import type {
+  WorkerMessage,
+  WorkerResponse,
+  ImageCompressionSettings,
+  CompressionOptions,
+} from '@/lib/types';
 
 // Track the active job so background measurement can abort when a new job starts
 let activeJobId: string | null = null;
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   const { type, payload } = event.data;
-
   if (type !== 'start') return;
 
-  const imageSettings: ImageCompressionSettings = payload.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
-  const options: CompressionOptions = payload.options ?? DEFAULT_COMPRESSION_OPTIONS;
+  const imageSettings: ImageCompressionSettings =
+    payload.imageSettings ?? DEFAULT_IMAGE_SETTINGS;
 
-  const extendedSettings: ExtendedProcessingSettings = {
-    ...imageSettings,
-    options,
-  };
+  const options: CompressionOptions =
+    payload.options ?? DEFAULT_COMPRESSION_OPTIONS;
 
+  const targetPercent = payload.targetPercent;
   const { jobId } = payload;
+
   activeJobId = jobId;
 
-  const postResponse = (response: WorkerResponse, transfer?: Transferable[]) => {
-    self.postMessage({ ...response, jobId }, { transfer: transfer ?? [] });
+  const postResponse = (
+    response: WorkerResponse,
+    transfer?: Transferable[]
+  ) => {
+    self.postMessage({ ...response, jobId }, transfer ?? []);
   };
 
   const postProgress = (message: string, percent?: number) => {
@@ -44,69 +61,196 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   };
 
   try {
-    const analysis = await analyzePdf(
-      payload.arrayBuffer,
+    // SAFETY: clone original buffer immediately (analyzePdf may transfer it)
+    const originalBuffer = payload.arrayBuffer;
+    const safeOriginalBuffer = originalBuffer.slice(0);
+
+    const originalSize = safeOriginalBuffer.byteLength;
+    const targetBytes =
+      targetPercent && targetPercent < 100
+        ? Math.round(originalSize * (targetPercent / 100))
+        : 0;
+
+    const hasTarget =
+      targetPercent !== undefined && targetPercent < 100;
+
+    // === PASS 0: Initial compression ===
+    let currentOptions = options;
+    let currentImageSettings = imageSettings;
+
+    let extendedSettings: ExtendedProcessingSettings = {
+      ...currentImageSettings,
+      options: currentOptions,
+    };
+
+    let analysis = await analyzePdf(
+      safeOriginalBuffer,
       postProgress,
       extendedSettings
     );
 
-    // If a newer job started while we were compressing, don't send stale results
+    // Abort if job superseded
     if (activeJobId !== jobId) return;
 
-    const buffer = analysis.fullCompressedBytes.slice().buffer as ArrayBuffer;
+    // === ITERATIVE ESCALATION ===
+    if (
+      hasTarget &&
+      analysis.fullCompressedBytes.byteLength > targetBytes
+    ) {
+      for (let tier = 1; tier <= MAX_ESCALATION_TIERS; tier++) {
+        if (activeJobId !== jobId) return;
 
-    // Send fast result immediately — user gets their compressed file right away
-    // Non-image method savings are marked as pending
-    postResponse({
-      type: 'success',
-      payload: {
-        originalSize: analysis.originalSize,
-        pageCount: analysis.pageCount,
-        baselineSize: analysis.baselineSize,
-        fullCompressedBuffer: buffer,
-        methodResults: analysis.methodResults,
-        imageStats: analysis.imageStats,
-        pdfFeatures: analysis.pdfFeatures,
-        report: analysis.report,
+        const compressedSize =
+          analysis.fullCompressedBytes.byteLength;
+
+        const currentPercent = Math.round(
+          (compressedSize / originalSize) * 100
+        );
+
+        postProgress(
+          `Target not met (${currentPercent}% > ${targetPercent}%). Escalating to tier ${tier}/${MAX_ESCALATION_TIERS}...`
+        );
+
+        const escalated = getEscalationTier(
+          tier,
+          currentOptions,
+          currentImageSettings
+        );
+
+        currentOptions = escalated.options;
+        currentImageSettings = escalated.imageSettings;
+
+        extendedSettings = {
+          ...currentImageSettings,
+          options: currentOptions,
+        };
+
+        const escalatedAnalysis = await analyzePdf(
+          safeOriginalBuffer.slice(0),
+          (msg, pct) =>
+            postProgress(`[Tier ${tier}] ${msg}`, pct),
+          extendedSettings
+        );
+
+        if (activeJobId !== jobId) return;
+
+        // Only adopt if actually smaller
+        if (
+          escalatedAnalysis.fullCompressedBytes.byteLength <
+          analysis.fullCompressedBytes.byteLength
+        ) {
+          if (escalatedAnalysis.report && analysis.report) {
+            escalatedAnalysis.report.logs = [
+              ...analysis.report.logs,
+              {
+                timestamp: Date.now(),
+                level: 'info' as const,
+                message: `Escalated to tier ${tier} (target: ${targetPercent}%)`,
+              },
+              ...escalatedAnalysis.report.logs,
+            ];
+          }
+
+          analysis = escalatedAnalysis;
+        }
+
+        if (
+          analysis.fullCompressedBytes.byteLength <=
+          targetBytes
+        ) {
+          postProgress(`Target met at tier ${tier}!`);
+          break;
+        }
+      }
+
+      // If still not met
+      if (
+        analysis.fullCompressedBytes.byteLength >
+        targetBytes
+      ) {
+        const finalPercent = Math.round(
+          (analysis.fullCompressedBytes.byteLength /
+            originalSize) *
+            100
+        );
+
+        if (analysis.report) {
+          analysis.report.logs.push({
+            timestamp: Date.now(),
+            level: 'warning',
+            message: `Could not reach target of ${targetPercent}% after ${MAX_ESCALATION_TIERS} tiers. Best result: ${finalPercent}%`,
+          });
+        }
+
+        postProgress(
+          `Best compression: ${finalPercent}% (target was ${targetPercent}%).`
+        );
+      }
+    }
+
+    // === FAST RESULT DELIVERY ===
+    const buffer = analysis.fullCompressedBytes
+      .slice()
+      .buffer as ArrayBuffer;
+
+    postResponse(
+      {
+        type: 'success',
+        payload: {
+          originalSize: analysis.originalSize,
+          pageCount: analysis.pageCount,
+          baselineSize: analysis.baselineSize,
+          fullCompressedBuffer: buffer,
+          methodResults: analysis.methodResults,
+          imageStats: analysis.imageStats,
+          pdfFeatures: analysis.pdfFeatures,
+          report: analysis.report,
+        },
+        jobId,
       },
-      jobId,
-    }, [buffer]); // Transfer ArrayBuffer instead of copying
+      [buffer]
+    );
 
-    // Background: measure exact per-method savings without blocking the user.
-    // The workingBuffer (post-image processing) is used so each method is
-    // measured independently against the same baseline.
-    // The shouldAbort callback checks if a new job has started — if so, the
-    // measurement loop aborts immediately so the new job can proceed.
+    // === BACKGROUND METHOD MEASUREMENT ===
     try {
       await measureMethodSavings(
         analysis.workingBuffer,
         extendedSettings,
         (updatedResults) => {
-          // Don't send updates if a new job superseded this one
           if (activeJobId !== jobId) return;
+
           postResponse({
             type: 'method-update',
             payload: { methodResults: updatedResults },
             jobId,
           });
         },
-        () => activeJobId !== jobId, // shouldAbort
+        () => activeJobId !== jobId
       );
     } catch {
-      // Background measurement failed silently — user already has their result
+      // Silent failure — user already received file
     }
   } catch (error) {
-    // If a newer job started, don't send stale errors
     if (activeJobId !== jobId) return;
 
-    const message = error instanceof Error ? error.message : 'Unknown error';
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Unknown error';
 
     let code = 'PROCESSING_FAILED';
+
     if (isPdfError(error)) {
       code = error.code;
-    } else if (message.includes('encrypt') || message.includes('password')) {
+    } else if (
+      message.includes('encrypt') ||
+      message.includes('password')
+    ) {
       code = 'ENCRYPTED_PDF';
-    } else if (message.includes('Invalid') || message.includes('corrupt')) {
+    } else if (
+      message.includes('Invalid') ||
+      message.includes('corrupt')
+    ) {
       code = 'CORRUPTED_PDF';
     }
 

@@ -17,8 +17,10 @@ interface PdfContextType {
     state: CompressionState;
     options: CompressionOptions;
     imageSettings: ImageCompressionSettings;
+    targetPercent: number | undefined;
     setOptions: (options: CompressionOptions) => void;
     setImageSettings: (settings: ImageCompressionSettings) => void;
+    setTargetPercent: (percent: number | undefined) => void;
     processFile: (file: File) => void;
     reset: () => void;
     isProcessing: boolean;
@@ -47,6 +49,7 @@ export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps
 
     const [options, setOptions] = useState<CompressionOptions>(PRESETS.balanced.options);
     const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(PRESETS.balanced.imageSettings);
+    const [targetPercent, setTargetPercent] = useState<number | undefined>(undefined);
 
     // Refs for tracking previous settings for auto-recompression
     const prevSettingsRef = useRef<ImageCompressionSettings>(PRESETS.balanced.imageSettings);
@@ -65,13 +68,14 @@ export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps
     const processFile = useCallback((file: File) => {
         prevSettingsRef.current = imageSettings;
         prevOptionsRef.current = options;
-        processFileInternal(file, { imageSettings, options });
-    }, [processFileInternal, imageSettings, options]);
+        processFileInternal(file, { imageSettings, options, targetPercent });
+    }, [processFileInternal, imageSettings, options, targetPercent]);
 
     const reset = useCallback(() => {
         resetInternal();
         setOptions(PRESETS.balanced.options);
         setImageSettings(PRESETS.balanced.imageSettings);
+        setTargetPercent(undefined);
         prevSettingsRef.current = PRESETS.balanced.imageSettings;
         prevOptionsRef.current = PRESETS.balanced.options;
         initialFileProcessed.current = false;
@@ -93,11 +97,11 @@ export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps
         const timer = setTimeout(() => {
             prevSettingsRef.current = imageSettings;
             prevOptionsRef.current = options;
-            processFileInternal(fileToProcess, { imageSettings, options }, true);
+            processFileInternal(fileToProcess, { imageSettings, options, targetPercent }, true);
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [imageSettings, options, state, processFileInternal]);
+    }, [imageSettings, options, targetPercent, state, processFileInternal]);
 
     const isProcessing = state.status === 'processing' || state.status === 'validating';
     const isUpdating = state.status === 'done' ? !!state.isUpdating : false;
@@ -108,14 +112,16 @@ export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps
         state,
         options,
         imageSettings,
+        targetPercent,
         setOptions,
         setImageSettings,
+        setTargetPercent,
         processFile,
         reset,
         isProcessing,
         isUpdating,
         analysis,
-    }), [state, options, imageSettings, processFile, reset, isProcessing, isUpdating, analysis]);
+    }), [state, options, imageSettings, targetPercent, processFile, reset, isProcessing, isUpdating, analysis]);
 
     return (
         <PdfContext.Provider value={value}>
