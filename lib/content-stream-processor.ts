@@ -279,12 +279,12 @@ export const compressContentStreams = async (
   };
 
   const context = pdfDoc.context;
-  const allRefs = Array.from(context.enumerateIndirectObjects());
+  // Iterate directly instead of materializing into array (saves memory for large PDFs)
+  const allRefs = context.enumerateIndirectObjects();
 
   onProgress?.('Analyzing content streams...', 0);
 
   let processed = 0;
-  const total = allRefs.length;
 
   for (const [ref, obj] of allRefs) {
     if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) {
@@ -373,8 +373,7 @@ export const compressContentStreams = async (
 
     processed++;
     if (processed % 100 === 0) {
-      const progress = Math.round((processed / total) * 100);
-      onProgress?.(`Compressed ${result.streamsCompressed} streams`, progress);
+      onProgress?.(`Compressed ${result.streamsCompressed} streams (${processed} objects scanned)`);
     }
   }
 
@@ -417,15 +416,38 @@ function decompressStream(data: Uint8Array, filter: PDFName | PDFArray): Uint8Ar
 }
 
 /**
- * Basic LZW decoder for PDF streams
+ * Basic LZW decoder for PDF streams.
+ * Uses chunked output to avoid stack overflow from spread operator on large entries
+ * and reduces intermediate array allocations.
  */
 function decodeLzw(data: Uint8Array): Uint8Array {
-  const output: number[] = [];
-  const dictionary: number[][] = [];
+  // Use chunked output buffer to avoid push(...entry) stack overflow
+  const chunks: Uint8Array[] = [];
+  let currentChunk = new Uint8Array(65536);
+  let chunkOffset = 0;
 
-  // Initialize dictionary with single-byte entries
+  const writeBytes = (entry: Uint8Array) => {
+    let srcOffset = 0;
+    let remaining = entry.length;
+    while (remaining > 0) {
+      const space = currentChunk.length - chunkOffset;
+      const toCopy = Math.min(remaining, space);
+      currentChunk.set(entry.subarray(srcOffset, srcOffset + toCopy), chunkOffset);
+      chunkOffset += toCopy;
+      srcOffset += toCopy;
+      remaining -= toCopy;
+      if (chunkOffset === currentChunk.length) {
+        chunks.push(currentChunk);
+        currentChunk = new Uint8Array(65536);
+        chunkOffset = 0;
+      }
+    }
+  };
+
+  // Use Uint8Array for dictionary entries to reduce memory overhead
+  const dictionary: Uint8Array[] = [];
   for (let i = 0; i < 256; i++) {
-    dictionary[i] = [i];
+    dictionary[i] = new Uint8Array([i]);
   }
 
   const CLEAR_CODE = 256;
@@ -447,7 +469,7 @@ function decodeLzw(data: Uint8Array): Uint8Array {
     return (bitBuffer >> bitsInBuffer) & ((1 << codeSize) - 1);
   };
 
-  let prevEntry: number[] | null = null;
+  let prevEntry: Uint8Array | null = null;
 
   while (true) {
     const code = readCode();
@@ -455,7 +477,6 @@ function decodeLzw(data: Uint8Array): Uint8Array {
     if (code === EOD_CODE) break;
 
     if (code === CLEAR_CODE) {
-      // Reset dictionary
       dictionary.length = 258;
       nextCode = 258;
       codeSize = 9;
@@ -463,23 +484,26 @@ function decodeLzw(data: Uint8Array): Uint8Array {
       continue;
     }
 
-    let entry: number[];
+    let entry: Uint8Array;
 
     if (code < dictionary.length) {
       entry = dictionary[code];
     } else if (code === nextCode && prevEntry) {
-      entry = [...prevEntry, prevEntry[0]];
+      entry = new Uint8Array(prevEntry.length + 1);
+      entry.set(prevEntry);
+      entry[prevEntry.length] = prevEntry[0];
     } else {
-      // Invalid code
       break;
     }
 
-    output.push(...entry);
+    writeBytes(entry);
 
     if (prevEntry) {
-      dictionary[nextCode++] = [...prevEntry, entry[0]];
+      const newEntry = new Uint8Array(prevEntry.length + 1);
+      newEntry.set(prevEntry);
+      newEntry[prevEntry.length] = entry[0];
+      dictionary[nextCode++] = newEntry;
 
-      // Increase code size when needed
       if (nextCode >= (1 << codeSize) && codeSize < 12) {
         codeSize++;
       }
@@ -488,7 +512,19 @@ function decodeLzw(data: Uint8Array): Uint8Array {
     prevEntry = entry;
   }
 
-  return new Uint8Array(output);
+  // Flush remaining bytes and concatenate chunks
+  if (chunkOffset > 0) {
+    chunks.push(currentChunk.subarray(0, chunkOffset));
+  }
+
+  const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
 }
 
 // ============================================================================

@@ -692,6 +692,61 @@ export const calculateImageSavings = (recompressedImages: RecompressedImage[]): 
 };
 
 /**
+ * Estimate image compression savings range by sampling a few images at
+ * boundary quality levels (low=25, high=95) and extrapolating.
+ * Returns { min, max } representing the savings range across quality settings.
+ */
+export const estimateImageSavingsRange = async (
+  images: ExtractedImage[],
+  currentSettings: ImageCompressionSettings,
+  currentSavings: number,
+): Promise<{ min: number; max: number }> => {
+  if (images.length === 0 || currentSavings <= 0) {
+    return { min: 0, max: 0 };
+  }
+
+  // Sample up to 3 images for range estimation
+  const sampleSize = Math.min(3, images.length);
+  const step = Math.max(1, Math.floor(images.length / sampleSize));
+  const samples: ExtractedImage[] = [];
+  for (let i = 0; i < images.length && samples.length < sampleSize; i += step) {
+    samples.push(images[i]);
+  }
+
+  let lowRatio = 1;
+  let highRatio = 1;
+  let sampleCurrentSavings = 0;
+  let sampleLowSavings = 0;
+  let sampleHighSavings = 0;
+
+  for (const img of samples) {
+    // Current quality
+    const currentResult = await recompressJpeg(img, currentSettings);
+    const currentSaved = currentResult?.savedBytes ?? 0;
+    sampleCurrentSavings += currentSaved;
+
+    // Low quality (aggressive - more savings)
+    const lowResult = await recompressJpeg(img, { ...currentSettings, quality: 25 });
+    sampleLowSavings += lowResult?.savedBytes ?? 0;
+
+    // High quality (minimal - less savings)
+    const highResult = await recompressJpeg(img, { ...currentSettings, quality: 95 });
+    sampleHighSavings += highResult?.savedBytes ?? 0;
+  }
+
+  // Calculate ratios from samples, then apply to total savings
+  if (sampleCurrentSavings > 0) {
+    lowRatio = sampleLowSavings / sampleCurrentSavings;
+    highRatio = sampleHighSavings / sampleCurrentSavings;
+  }
+
+  return {
+    min: Math.round(currentSavings * Math.min(highRatio, lowRatio)),
+    max: Math.round(currentSavings * Math.max(highRatio, lowRatio)),
+  };
+};
+
+/**
  * Decode PNG/FlateDecode image data to raw pixels
  */
 const decodePngImage = (
@@ -877,6 +932,7 @@ const analyzeImageType = (imageData: ImageData): { isPhoto: boolean; score: numb
 /**
  * Check if an image has meaningful transparency that should be preserved.
  * Returns true if the image has non-trivial alpha values.
+ * Uses context.lookup with PDFRef.of() for O(1) access instead of enumerating all objects.
  */
 const hasSignificantTransparency = (
   pdfDoc: PDFDocument,
@@ -885,25 +941,14 @@ const hasSignificantTransparency = (
   const context = pdfDoc.context;
   const [objNum, genNum] = imageRef.split('-').map(Number);
 
-  // Find the image object
-  const allRefs = context.enumerateIndirectObjects();
-  for (const [ref, obj] of allRefs) {
-    if (ref.objectNumber === objNum && ref.generationNumber === genNum) {
-      if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) {
-        continue;
-      }
-      const dict = obj.dict;
+  // Direct lookup by ref — O(1) instead of iterating all objects
+  const ref = PDFRef.of(objNum, genNum);
+  const obj = context.lookup(ref);
 
-      // Check for SMask (soft mask - alpha channel)
-      const smask = dict.get(PDFName.of('SMask'));
-      if (smask) return true;
-
-      // Check for Mask (hard mask)
-      const mask = dict.get(PDFName.of('Mask'));
-      if (mask) return true;
-
-      break;
-    }
+  if (obj instanceof PDFRawStream || obj instanceof PDFStream) {
+    const dict = obj.dict;
+    if (dict.get(PDFName.of('SMask'))) return true;
+    if (dict.get(PDFName.of('Mask'))) return true;
   }
 
   return false;
@@ -1180,11 +1225,10 @@ export const convertCmykToRgb = async (
   };
 
   const context = pdfDoc.context;
-  const allRefs = Array.from(context.enumerateIndirectObjects());
   const cmykImages: Array<{ ref: PDFRef; stream: PDFRawStream | PDFStream; dict: PDFDict }> = [];
 
-  // Find all CMYK images
-  for (const [ref, obj] of allRefs) {
+  // Find all CMYK images — iterate directly without materializing full array
+  for (const [ref, obj] of context.enumerateIndirectObjects()) {
     if (!(obj instanceof PDFRawStream) && !(obj instanceof PDFStream)) {
       continue;
     }

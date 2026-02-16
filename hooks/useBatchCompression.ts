@@ -112,10 +112,13 @@ export const useBatchCompression = () => {
                 resolve();
             }, WORKER_TIMEOUT_MS);
 
-            workerRef.current?.terminate();
-            workerRef.current = new Worker(
-                new URL('../workers/compression.worker.ts', import.meta.url)
-            );
+            // Reuse existing worker if available — avoids JIT warmup cost per file.
+            // Only create a new worker if one doesn't exist (first file or after error termination).
+            if (!workerRef.current) {
+                workerRef.current = new Worker(
+                    new URL('../workers/compression.worker.ts', import.meta.url)
+                );
+            }
 
             workerRef.current.onmessage = (event: MessageEvent<WorkerResponse>) => {
                 const { type, payload } = event.data;
@@ -176,6 +179,9 @@ export const useBatchCompression = () => {
 
             workerRef.current.onerror = (error) => {
                 clearTimeout(timeout);
+                // Terminate broken worker so next file gets a fresh one
+                workerRef.current?.terminate();
+                workerRef.current = null;
                 setQueue(prev => prev.map(i =>
                     i.id === item.id ? {
                         ...i,

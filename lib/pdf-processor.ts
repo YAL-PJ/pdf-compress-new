@@ -16,6 +16,7 @@ import {
   removeAlphaChannels,
   removeIccProfiles,
   convertCmykToRgb,
+  estimateImageSavingsRange,
   type ImageStats,
   type ExtendedImageSettings,
 } from './image-processor';
@@ -200,6 +201,8 @@ export const analyzePdf = async (
   imageStats?: ImageStats;
   pdfFeatures?: PdfFeatures;
   report: CompressionReport;
+  /** The working buffer (post-image, pre-structural methods) for background measurement */
+  workingBuffer: ArrayBuffer;
 }> => {
   const originalSize = arrayBuffer.byteLength;
   const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
@@ -208,9 +211,8 @@ export const analyzePdf = async (
 
   // Load PDF ONCE for info, baseline, and image extraction
   const { pdfDoc: baseDoc, info } = await loadPdf(arrayBuffer);
-  // Establish baseline size
-  const baselineBytes = await baseDoc.save({ useObjectStreams: false });
-  const baselineSize = baselineBytes.byteLength;
+  // Use original buffer size as baseline — avoids an expensive full serialization
+  const baselineSize = originalSize;
 
   // Detect PDF features (will be enriched with image stats later)
   let pdfFeatures: PdfFeatures | undefined;
@@ -250,6 +252,7 @@ export const analyzePdf = async (
   const savings: Record<string, number> = {};
 
   let recompressedImageBytes: Uint8Array | null = null;
+  let imageSavingsRange: { min: number; max: number } | undefined;
   let imagesProcessed = 0;
   let imagesSkipped = 0;
   let imagesDownsampled = 0;
@@ -309,6 +312,17 @@ export const analyzePdf = async (
       }
 
       allRecompressedImages.push(...recompressedImages);
+
+      // Estimate savings range at boundary quality levels (for UI display)
+      if (totalSavings > 0) {
+        try {
+          imageSavingsRange = await estimateImageSavingsRange(
+            jpegImages, settings, totalSavings
+          );
+        } catch {
+          // Non-critical, skip range estimation
+        }
+      }
     }
 
     // Convert PNG to JPEG
@@ -350,21 +364,27 @@ export const analyzePdf = async (
   }
 
   // Working buffer for further processing
-  // IMPORTANT: Use .slice().buffer to avoid reading garbage data from larger underlying ArrayBuffers
-  let workingBuffer = recompressedImageBytes
-    ? recompressedImageBytes.slice().buffer as ArrayBuffer
-    : arrayBuffer;
+  // Use the Uint8Array's underlying buffer directly if it covers the full range,
+  // otherwise create a minimal copy to avoid reading garbage from oversized ArrayBuffers.
+  let workingBuffer: ArrayBuffer;
+  if (recompressedImageBytes) {
+    const arr = recompressedImageBytes;
+    workingBuffer = (arr.byteOffset === 0 && arr.byteLength === arr.buffer.byteLength)
+      ? arr.buffer as ArrayBuffer
+      : arr.slice().buffer as ArrayBuffer;
+  } else {
+    workingBuffer = arrayBuffer;
+  }
 
   // Load document ONCE for all in-place mutation methods
   // (alpha, ICC, CMYK, dedup, fonts, inline, streams, orphans, alternate, invisible, structure)
   // This eliminates 12+ redundant PDFDocument.load() calls
   onProgress?.('Applying optimizations...');
   let workDoc: PDFDocument;
-  let lastSize: number;
+  // Use the working buffer size as lastSize — avoids an expensive intermediate save
   try {
     const loaded = await loadPdf(workingBuffer);
     workDoc = loaded.pdfDoc;
-    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
   } catch (err) {
     // If recompressed image buffer is corrupt, fall back to original
     const msg = err instanceof Error ? err.message : String(err);
@@ -372,16 +392,21 @@ export const analyzePdf = async (
     report.errors.push('loadWorkingBuffer');
     const loaded = await loadPdf(arrayBuffer);
     workDoc = loaded.pdfDoc;
-    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
   }
+
+  // Release extracted image data — no longer needed after embedding
+  images.length = 0;
+  jpegImages.length = 0;
+  pngImages.length = 0;
+  recompressedImageBytes = null;
 
   // Helper: apply a method on the shared document WITHOUT intermediate save.
   // We batch all methods and do a single save at the end for massive speedup.
+  // Orphan cleanup is deferred to a single pass after all methods complete.
   const applyMethod = async (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number | Promise<void | { savedBytes: number; [k: string]: unknown }>,
-    cleanOrphans: boolean = false,
   ) => {
     if (!enabled) {
       savings[key] = 0;
@@ -390,9 +415,6 @@ export const analyzePdf = async (
     report.methodsUsed.push(key);
     try {
       const result = await apply(workDoc);
-      if (cleanOrphans) {
-        await removeOrphanObjects(workDoc);
-      }
       report.methodsSuccessful.push(key);
       return result;
     } catch (err) {
@@ -413,25 +435,26 @@ export const analyzePdf = async (
   }
 
   // Image-related in-place mutations
+  // NOTE: orphan cleanup is deferred to a single pass after ALL methods (massive speedup)
   if (options.removeAlphaChannels) {
     await applyMethod('removeAlphaChannels', true, (doc) => {
       const r = removeAlphaChannels(doc);
       if (r.processed > 0) log('success', `Removed alpha channels from ${r.processed} images`);
-    }, true);
+    });
   }
 
   if (options.removeColorProfiles) {
     await applyMethod('removeColorProfiles', true, (doc) => {
       const r = removeIccProfiles(doc);
       if (r.removed > 0) log('success', `Removed ${r.removed} ICC profiles`);
-    }, true);
+    });
   }
 
   if (options.cmykToRgb) {
     await applyMethod('cmykToRgb', true, async (doc) => {
       const r = await convertCmykToRgb(doc, settings.quality, onProgress);
       if (r.converted > 0) log('success', `Converted ${r.converted} CMYK images to RGB`);
-    }, true);
+    });
   }
 
   // Resource optimization
@@ -444,7 +467,7 @@ export const analyzePdf = async (
       } else {
         log('info', 'No duplicate resources found');
       }
-    }, true);
+    });
   }
 
   if (options.removeUnusedFonts) {
@@ -456,7 +479,7 @@ export const analyzePdf = async (
       } else {
         log('info', 'No unused fonts found');
       }
-    }, true);
+    });
   }
 
   // Content stream optimization
@@ -480,7 +503,7 @@ export const analyzePdf = async (
       if (r.alternatesRemoved > 0 || r.printOnlyRemoved > 0 || r.screenOnlyRemoved > 0) {
         log('success', 'Removed alternate content objects');
       }
-    }, true);
+    });
   }
 
   if (options.removeInvisibleText) {
@@ -496,12 +519,12 @@ export const analyzePdf = async (
   let structAttachmentsRemoved = 0;
   const structDoc = workDoc; // Alias for clarity — same document instance
 
-  // Helper: apply a structure method without saving (batched)
+  // Helper: apply a structure method without saving (batched).
+  // Orphan cleanup is deferred to a single pass after all struct methods.
   const applyStructMethod = (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number,
-    cleanOrphans: boolean = false,
   ): number | void => {
     if (!enabled) {
       return;
@@ -509,7 +532,6 @@ export const analyzePdf = async (
     report.methodsUsed.push(key);
     try {
       const result = apply(structDoc);
-      // Note: orphan cleanup is deferred to a single pass after all struct methods
       report.methodsSuccessful.push(key);
       return result;
     } catch (err) {
@@ -534,7 +556,9 @@ export const analyzePdf = async (
   applyStructMethod('flattenForms', options.flattenForms, flattenFM);
   applyStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
 
-  // Single orphan cleanup pass after all structure methods
+  // Single orphan cleanup pass after ALL methods (non-struct + struct).
+  // Per-method orphan cleanup is only needed in background measurement
+  // where each method is tested independently on a fresh document.
   await removeOrphanObjects(structDoc);
 
   onProgress?.('Creating final compressed file...');
@@ -554,91 +578,82 @@ export const analyzePdf = async (
   }
 
   // Single final save — this replaces ~20+ intermediate saves
+  // Only serialize ONCE (avoid previous double-save for object stream measurement)
   let fullCompressedBytes: Uint8Array;
-  let withoutOsBytes: Uint8Array | undefined;
+  let osSaved = 0;
   try {
-    // If object streams enabled, save once without to measure its contribution
-    if (options.useObjectStreams) {
-      withoutOsBytes = await structDoc.save({ useObjectStreams: false });
-    }
     fullCompressedBytes = await structDoc.save({
       useObjectStreams: options.useObjectStreams,
     });
   } catch (err) {
-    // If the mutated document can't be saved, fall back to baseline
+    // If the mutated document can't be saved, fall back to original
     const msg = err instanceof Error ? err.message : String(err);
-    log('warning', `Final save failed, returning baseline: ${msg}`);
+    log('warning', `Final save failed, returning original: ${msg}`);
     report.errors.push('finalSave');
-    fullCompressedBytes = baselineBytes;
+    fullCompressedBytes = new Uint8Array(arrayBuffer);
   }
 
-  const osSaved = (options.useObjectStreams && withoutOsBytes)
-    ? Math.max(0, withoutOsBytes.byteLength - fullCompressedBytes.byteLength)
-    : 0;
-
-  if (options.useObjectStreams && osSaved > 0) {
+  if (options.useObjectStreams) {
     report.methodsUsed.push('useObjectStreams');
     report.methodsSuccessful.push('useObjectStreams');
-    log('success', 'Applied Object Streams compression', { saved: osSaved });
+    log('success', 'Applied Object Streams compression');
   }
 
-  // Calculate total non-image savings and distribute proportionally across methods
-  // Since we batch all methods into a single save, we can't measure individual deltas
-  // without the expensive per-method save. Instead, attribute total structural savings
-  // to the combined set of applied methods.
-  const totalFinalSize = fullCompressedBytes.byteLength;
-  const imageRelatedSavings = (savings.recompressImages ?? 0) + (savings.downsampleImages ?? 0) + (savings.pngToJpeg ?? 0);
-  const sizeAfterImages = lastSize; // lastSize was set after loading workDoc
-  const totalStructSavings = Math.max(0, sizeAfterImages - (totalFinalSize + osSaved));
-
-  // Collect all applied non-image method keys for proportional attribution
-  const appliedMethodKeys = report.methodsSuccessful.filter(
-    k => !['recompressImages', 'downsampleImages', 'pngToJpeg', 'useObjectStreams'].includes(k)
-  );
-
-  // Distribute structural savings equally among applied methods
-  if (appliedMethodKeys.length > 0 && totalStructSavings > 0) {
-    const perMethodSavings = Math.floor(totalStructSavings / appliedMethodKeys.length);
-    const remainder = totalStructSavings - (perMethodSavings * appliedMethodKeys.length);
-    for (let i = 0; i < appliedMethodKeys.length; i++) {
-      savings[appliedMethodKeys[i]] = perMethodSavings + (i === 0 ? remainder : 0);
-    }
-  }
-
-  // Helper to get savings for a method key
+  // Image methods have real savings from the fast pass.
+  // Non-image methods are marked as pending — exact per-method savings will
+  // be calculated in the background by measureMethodSavings() without
+  // blocking the user.
   const s = (key: string) => savings[key] ?? 0;
 
-  // Build method results with actual measured savings
+  // Keys whose savings we already know (image-related + object streams)
+  // These keys have real savings from the fast pass (image pipeline or measured directly).
+  // convertToGrayscale/convertToMonochrome are applied inside recompressJpeg, not standalone methods.
+  const knownKeys = new Set([
+    'recompressImages', 'downsampleImages', 'pngToJpeg', 'useObjectStreams',
+    'convertToGrayscale', 'convertToMonochrome',
+  ]);
+
+  const mkResult = (key: keyof CompressionOptions, extra?: Partial<MethodResult>): MethodResult => {
+    const known = knownKeys.has(key);
+    return {
+      key,
+      savedBytes: known ? (s(key)) : 0,
+      compressedSize: known ? (baselineSize - s(key)) : baselineSize,
+      pending: !known, // non-image methods will be measured in background
+      ...extra,
+    };
+  };
+
   const methodResults: MethodResult[] = [
-    { key: 'useObjectStreams', savedBytes: osSaved, compressedSize: originalSize - osSaved },
-    { key: 'stripMetadata', savedBytes: s('stripMetadata'), compressedSize: originalSize - s('stripMetadata') },
-    { key: 'recompressImages', savedBytes: s('recompressImages'), compressedSize: baselineSize - s('recompressImages'), details: { imagesProcessed, imagesSkipped } },
-    { key: 'downsampleImages', savedBytes: s('downsampleImages'), compressedSize: baselineSize - s('downsampleImages'), details: { imagesProcessed: imagesDownsampled, imagesSkipped: imagesProcessed - imagesDownsampled } },
-    { key: 'convertToGrayscale', savedBytes: 0, compressedSize: baselineSize },
-    { key: 'pngToJpeg', savedBytes: s('pngToJpeg'), compressedSize: baselineSize - s('pngToJpeg'), details: { imagesProcessed: pngsConverted, imagesSkipped: pngImages.length - pngsConverted } },
-    { key: 'convertToMonochrome', savedBytes: 0, compressedSize: baselineSize },
-    { key: 'removeAlphaChannels', savedBytes: s('removeAlphaChannels'), compressedSize: baselineSize - s('removeAlphaChannels') },
-    { key: 'removeColorProfiles', savedBytes: s('removeColorProfiles'), compressedSize: baselineSize - s('removeColorProfiles') },
-    { key: 'cmykToRgb', savedBytes: s('cmykToRgb'), compressedSize: baselineSize - s('cmykToRgb') },
-    { key: 'removeThumbnails', savedBytes: s('removeThumbnails'), compressedSize: baselineSize - s('removeThumbnails') },
-    { key: 'removeDuplicateResources', savedBytes: s('removeDuplicateResources'), compressedSize: baselineSize - s('removeDuplicateResources') },
-    { key: 'removeUnusedFonts', savedBytes: s('removeUnusedFonts'), compressedSize: baselineSize - s('removeUnusedFonts') },
-    { key: 'removeAttachments', savedBytes: s('removeAttachments'), compressedSize: baselineSize - s('removeAttachments'), details: { imagesProcessed: structAttachmentsRemoved } },
-    { key: 'flattenForms', savedBytes: s('flattenForms'), compressedSize: baselineSize - s('flattenForms') },
-    { key: 'flattenAnnotations', savedBytes: s('flattenAnnotations'), compressedSize: baselineSize - s('flattenAnnotations') },
-    { key: 'removeJavaScript', savedBytes: s('removeJavaScript'), compressedSize: baselineSize - s('removeJavaScript') },
-    { key: 'removeBookmarks', savedBytes: s('removeBookmarks'), compressedSize: baselineSize - s('removeBookmarks') },
-    { key: 'removeNamedDestinations', savedBytes: s('removeNamedDestinations'), compressedSize: baselineSize - s('removeNamedDestinations') },
-    { key: 'removeArticleThreads', savedBytes: s('removeArticleThreads'), compressedSize: baselineSize - s('removeArticleThreads') },
-    { key: 'removeWebCaptureInfo', savedBytes: s('removeWebCaptureInfo'), compressedSize: baselineSize - s('removeWebCaptureInfo') },
-    { key: 'removeHiddenLayers', savedBytes: s('removeHiddenLayers'), compressedSize: baselineSize - s('removeHiddenLayers') },
-    { key: 'removePageLabels', savedBytes: s('removePageLabels'), compressedSize: baselineSize - s('removePageLabels') },
-    { key: 'deepCleanMetadata', savedBytes: s('deepCleanMetadata'), compressedSize: baselineSize - s('deepCleanMetadata') },
-    { key: 'inlineToXObject', savedBytes: s('inlineToXObject'), compressedSize: baselineSize - s('inlineToXObject') },
-    { key: 'compressContentStreams', savedBytes: s('compressContentStreams'), compressedSize: baselineSize - s('compressContentStreams') },
-    { key: 'removeOrphanObjects', savedBytes: s('removeOrphanObjects'), compressedSize: baselineSize - s('removeOrphanObjects') },
-    { key: 'removeAlternateContent', savedBytes: s('removeAlternateContent'), compressedSize: baselineSize - s('removeAlternateContent') },
-    { key: 'removeInvisibleText', savedBytes: s('removeInvisibleText'), compressedSize: baselineSize - s('removeInvisibleText') },
+    mkResult('useObjectStreams', { savedBytes: osSaved, compressedSize: originalSize - osSaved, pending: false }),
+    mkResult('stripMetadata'),
+    mkResult('recompressImages', { details: { imagesProcessed, imagesSkipped }, savingsRange: imageSavingsRange }),
+    mkResult('downsampleImages', { details: { imagesProcessed: imagesDownsampled, imagesSkipped: imagesProcessed - imagesDownsampled } }),
+    mkResult('convertToGrayscale'),
+    mkResult('pngToJpeg', { details: { imagesProcessed: pngsConverted, imagesSkipped: pngImages.length - pngsConverted } }),
+    mkResult('convertToMonochrome'),
+    mkResult('removeAlphaChannels'),
+    mkResult('removeColorProfiles'),
+    mkResult('cmykToRgb'),
+    mkResult('removeThumbnails'),
+    mkResult('removeDuplicateResources'),
+    mkResult('removeUnusedFonts'),
+    mkResult('removeAttachments', { details: { imagesProcessed: structAttachmentsRemoved } }),
+    mkResult('flattenForms'),
+    mkResult('flattenAnnotations'),
+    mkResult('removeJavaScript'),
+    mkResult('removeBookmarks'),
+    mkResult('removeNamedDestinations'),
+    mkResult('removeArticleThreads'),
+    mkResult('removeWebCaptureInfo'),
+    mkResult('removeHiddenLayers'),
+    mkResult('removePageLabels'),
+    mkResult('deepCleanMetadata'),
+    mkResult('inlineToXObject'),
+    mkResult('compressContentStreams'),
+    mkResult('removeOrphanObjects'),
+    mkResult('removeAlternateContent'),
+    mkResult('removeInvisibleText'),
   ];
 
   onProgress?.('Done!');
@@ -664,6 +679,7 @@ export const analyzePdf = async (
     imageStats,
     pdfFeatures,
     report,
+    workingBuffer,
   };
 };
 
@@ -699,6 +715,8 @@ export const analyzePdfIncremental = async (
   imageStats?: ImageStats;
   pdfFeatures?: PdfFeatures;
   report: CompressionReport;
+  /** The working buffer (post-image, pre-structural methods) for background measurement */
+  workingBuffer: ArrayBuffer;
 }> => {
   // If no target, fall back to standard processing
   if (!targetBytes || targetBytes <= 0) {
@@ -711,8 +729,8 @@ export const analyzePdfIncremental = async (
   onProgress?.('Reading PDF...');
 
   const { pdfDoc: baseDoc, info } = await loadPdf(arrayBuffer);
-  const baselineBytes = await baseDoc.save({ useObjectStreams: false });
-  const baselineSize = baselineBytes.byteLength;
+  // Use original buffer size as baseline — avoids an expensive full serialization
+  const baselineSize = originalSize;
 
   let pdfFeatures: PdfFeatures | undefined;
 
@@ -839,33 +857,43 @@ export const analyzePdfIncremental = async (
     report.errors.push('imageProcessing');
   }
 
-  // === Apply structural optimizations (same as analyzePdf) ===
-  let workingBuffer = recompressedImageBytes
-    ? recompressedImageBytes.slice().buffer as ArrayBuffer
-    : arrayBuffer;
+  // Working buffer for further processing and background measurement
+  let workingBuffer: ArrayBuffer;
+  if (recompressedImageBytes) {
+    const arr = recompressedImageBytes;
+    workingBuffer = (arr.byteOffset === 0 && arr.byteLength === arr.buffer.byteLength)
+      ? arr.buffer as ArrayBuffer
+      : arr.slice().buffer as ArrayBuffer;
+  } else {
+    workingBuffer = arrayBuffer;
+  }
 
+  // Load document ONCE for all in-place mutation methods
   onProgress?.('Applying optimizations...');
   let workDoc: PDFDocument;
-  let lastSize: number;
   try {
     const loaded = await loadPdf(workingBuffer);
     workDoc = loaded.pdfDoc;
-    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log('warning', `Failed to load working buffer, falling back to original: ${msg}`);
     report.errors.push('loadWorkingBuffer');
     const loaded = await loadPdf(arrayBuffer);
     workDoc = loaded.pdfDoc;
-    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
   }
 
-  // Helper: apply a method on the shared document
+  // Release extracted image data — no longer needed after embedding
+  images.length = 0;
+  jpegImages.length = 0;
+  pngImages.length = 0;
+  recompressedImageBytes = null;
+
+  // Helper: apply a method on the shared document WITHOUT intermediate save.
+  // Orphan cleanup is deferred to a single pass after all methods complete.
   const applyMethod = async (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number | Promise<void | { savedBytes: number; [k: string]: unknown }>,
-    cleanOrphans: boolean = false,
   ) => {
     if (!enabled) {
       savings[key] = 0;
@@ -874,9 +902,6 @@ export const analyzePdfIncremental = async (
     report.methodsUsed.push(key);
     try {
       const result = await apply(workDoc);
-      if (cleanOrphans) {
-        await removeOrphanObjects(workDoc);
-      }
       report.methodsSuccessful.push(key);
       return result;
     } catch (err) {
@@ -887,7 +912,7 @@ export const analyzePdfIncremental = async (
     }
   };
 
-  // Run orphan removal first
+  // Run orphan removal FIRST to clean pre-existing orphans before other methods
   if (options.removeOrphanObjects) {
     onProgress?.('Removing orphan objects...');
     await applyMethod('removeOrphanObjects', true, async (doc) => {
@@ -901,21 +926,21 @@ export const analyzePdfIncremental = async (
     await applyMethod('removeAlphaChannels', true, (doc) => {
       const r = removeAlphaChannels(doc);
       if (r.processed > 0) log('success', `Removed alpha channels from ${r.processed} images`);
-    }, true);
+    });
   }
 
   if (options.removeColorProfiles) {
     await applyMethod('removeColorProfiles', true, (doc) => {
       const r = removeIccProfiles(doc);
       if (r.removed > 0) log('success', `Removed ${r.removed} ICC profiles`);
-    }, true);
+    });
   }
 
   if (options.cmykToRgb) {
     await applyMethod('cmykToRgb', true, async (doc) => {
       const r = await convertCmykToRgb(doc, settings.quality, onProgress);
       if (r.converted > 0) log('success', `Converted ${r.converted} CMYK images to RGB`);
-    }, true);
+    });
   }
 
   // Resource optimization
@@ -923,18 +948,24 @@ export const analyzePdfIncremental = async (
     onProgress?.('Removing duplicate resources...');
     await applyMethod('removeDuplicateResources', true, (doc) => {
       const r = removeDuplicateResources(doc);
-      if (r.duplicatesFound > 0) log('success', `Removed ${r.duplicatesFound} duplicate resources`);
-      else log('info', 'No duplicate resources found');
-    }, true);
+      if (r.duplicatesFound > 0) {
+        log('success', `Removed ${r.duplicatesFound} duplicate resources`);
+      } else {
+        log('info', 'No duplicate resources found');
+      }
+    });
   }
 
   if (options.removeUnusedFonts) {
     onProgress?.('Removing unused fonts...');
     await applyMethod('removeUnusedFonts', true, (doc) => {
       const r = removeUnusedFonts(doc);
-      if (r.fontsRemoved > 0) log('success', `Removed ${r.fontsRemoved} unused fonts`, { fonts: r.fontNames });
-      else log('info', 'No unused fonts found');
-    }, true);
+      if (r.fontsRemoved > 0) {
+        log('success', `Removed ${r.fontsRemoved} unused fonts`, { fonts: r.fontNames });
+      } else {
+        log('info', 'No unused fonts found');
+      }
+    });
   }
 
   // Content stream optimization
@@ -958,7 +989,7 @@ export const analyzePdfIncremental = async (
       if (r.alternatesRemoved > 0 || r.printOnlyRemoved > 0 || r.screenOnlyRemoved > 0) {
         log('success', 'Removed alternate content objects');
       }
-    }, true);
+    });
   }
 
   if (options.removeInvisibleText) {
@@ -970,7 +1001,7 @@ export const analyzePdfIncremental = async (
 
   onProgress?.('Applying structure cleanup...');
 
-  // Structure cleanup
+  // Structure cleanup — applied on the same shared document, NO intermediate saves
   let structAttachmentsRemoved = 0;
   const structDoc = workDoc;
 
@@ -979,7 +1010,9 @@ export const analyzePdfIncremental = async (
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number,
   ): number | void => {
-    if (!enabled) return;
+    if (!enabled) {
+      return;
+    }
     report.methodsUsed.push(key);
     try {
       const result = apply(structDoc);
@@ -1006,6 +1039,7 @@ export const analyzePdfIncremental = async (
   applyStructMethod('flattenForms', options.flattenForms, flattenFM);
   applyStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
 
+  // Single orphan cleanup pass after ALL methods
   await removeOrphanObjects(structDoc);
 
   onProgress?.('Creating final compressed file...');
@@ -1025,80 +1059,75 @@ export const analyzePdfIncremental = async (
 
   // Single final save
   let fullCompressedBytes: Uint8Array;
-  let withoutOsBytes: Uint8Array | undefined;
+  let osSaved = 0;
   try {
-    if (options.useObjectStreams) {
-      withoutOsBytes = await structDoc.save({ useObjectStreams: false });
-    }
     fullCompressedBytes = await structDoc.save({
       useObjectStreams: options.useObjectStreams,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log('warning', `Final save failed, returning baseline: ${msg}`);
+    log('warning', `Final save failed, returning original: ${msg}`);
     report.errors.push('finalSave');
-    fullCompressedBytes = baselineBytes;
+    fullCompressedBytes = new Uint8Array(arrayBuffer);
   }
 
-  const osSaved = (options.useObjectStreams && withoutOsBytes)
-    ? Math.max(0, withoutOsBytes.byteLength - fullCompressedBytes.byteLength)
-    : 0;
-
-  if (options.useObjectStreams && osSaved > 0) {
+  if (options.useObjectStreams) {
     report.methodsUsed.push('useObjectStreams');
     report.methodsSuccessful.push('useObjectStreams');
-    log('success', 'Applied Object Streams compression', { saved: osSaved });
+    log('success', 'Applied Object Streams compression');
   }
 
-  // Calculate savings attribution (same logic as analyzePdf)
-  const totalFinalSize = fullCompressedBytes.byteLength;
-  const sizeAfterImages = lastSize;
-  const totalStructSavings = Math.max(0, sizeAfterImages - (totalFinalSize + osSaved));
-
-  const appliedMethodKeys = report.methodsSuccessful.filter(
-    k => !['recompressImages', 'downsampleImages', 'pngToJpeg', 'useObjectStreams'].includes(k)
-  );
-
-  if (appliedMethodKeys.length > 0 && totalStructSavings > 0) {
-    const perMethodSavings = Math.floor(totalStructSavings / appliedMethodKeys.length);
-    const remainder = totalStructSavings - (perMethodSavings * appliedMethodKeys.length);
-    for (let i = 0; i < appliedMethodKeys.length; i++) {
-      savings[appliedMethodKeys[i]] = perMethodSavings + (i === 0 ? remainder : 0);
-    }
-  }
-
+  // Image methods have real savings from the fast pass.
+  // Non-image methods are marked as pending — exact per-method savings will
+  // be calculated in the background by measureMethodSavings().
   const s = (key: string) => savings[key] ?? 0;
 
+  const knownKeys = new Set([
+    'recompressImages', 'downsampleImages', 'pngToJpeg', 'useObjectStreams',
+    'convertToGrayscale', 'convertToMonochrome',
+  ]);
+
+  const mkResult = (key: keyof CompressionOptions, extra?: Partial<MethodResult>): MethodResult => {
+    const known = knownKeys.has(key);
+    return {
+      key,
+      savedBytes: known ? (s(key)) : 0,
+      compressedSize: known ? (baselineSize - s(key)) : baselineSize,
+      pending: !known,
+      ...extra,
+    };
+  };
+
   const methodResults: MethodResult[] = [
-    { key: 'useObjectStreams', savedBytes: osSaved, compressedSize: originalSize - osSaved },
-    { key: 'stripMetadata', savedBytes: s('stripMetadata'), compressedSize: originalSize - s('stripMetadata') },
-    { key: 'recompressImages', savedBytes: s('recompressImages'), compressedSize: baselineSize - s('recompressImages'), details: { imagesProcessed, imagesSkipped } },
-    { key: 'downsampleImages', savedBytes: s('downsampleImages'), compressedSize: baselineSize - s('downsampleImages'), details: { imagesProcessed: imagesDownsampled, imagesSkipped: imagesProcessed - imagesDownsampled } },
-    { key: 'convertToGrayscale', savedBytes: 0, compressedSize: baselineSize },
-    { key: 'pngToJpeg', savedBytes: s('pngToJpeg'), compressedSize: baselineSize - s('pngToJpeg'), details: { imagesProcessed: pngsConverted, imagesSkipped: pngImages.length - pngsConverted } },
-    { key: 'convertToMonochrome', savedBytes: 0, compressedSize: baselineSize },
-    { key: 'removeAlphaChannels', savedBytes: s('removeAlphaChannels'), compressedSize: baselineSize - s('removeAlphaChannels') },
-    { key: 'removeColorProfiles', savedBytes: s('removeColorProfiles'), compressedSize: baselineSize - s('removeColorProfiles') },
-    { key: 'cmykToRgb', savedBytes: s('cmykToRgb'), compressedSize: baselineSize - s('cmykToRgb') },
-    { key: 'removeThumbnails', savedBytes: s('removeThumbnails'), compressedSize: baselineSize - s('removeThumbnails') },
-    { key: 'removeDuplicateResources', savedBytes: s('removeDuplicateResources'), compressedSize: baselineSize - s('removeDuplicateResources') },
-    { key: 'removeUnusedFonts', savedBytes: s('removeUnusedFonts'), compressedSize: baselineSize - s('removeUnusedFonts') },
-    { key: 'removeAttachments', savedBytes: s('removeAttachments'), compressedSize: baselineSize - s('removeAttachments'), details: { imagesProcessed: structAttachmentsRemoved } },
-    { key: 'flattenForms', savedBytes: s('flattenForms'), compressedSize: baselineSize - s('flattenForms') },
-    { key: 'flattenAnnotations', savedBytes: s('flattenAnnotations'), compressedSize: baselineSize - s('flattenAnnotations') },
-    { key: 'removeJavaScript', savedBytes: s('removeJavaScript'), compressedSize: baselineSize - s('removeJavaScript') },
-    { key: 'removeBookmarks', savedBytes: s('removeBookmarks'), compressedSize: baselineSize - s('removeBookmarks') },
-    { key: 'removeNamedDestinations', savedBytes: s('removeNamedDestinations'), compressedSize: baselineSize - s('removeNamedDestinations') },
-    { key: 'removeArticleThreads', savedBytes: s('removeArticleThreads'), compressedSize: baselineSize - s('removeArticleThreads') },
-    { key: 'removeWebCaptureInfo', savedBytes: s('removeWebCaptureInfo'), compressedSize: baselineSize - s('removeWebCaptureInfo') },
-    { key: 'removeHiddenLayers', savedBytes: s('removeHiddenLayers'), compressedSize: baselineSize - s('removeHiddenLayers') },
-    { key: 'removePageLabels', savedBytes: s('removePageLabels'), compressedSize: baselineSize - s('removePageLabels') },
-    { key: 'deepCleanMetadata', savedBytes: s('deepCleanMetadata'), compressedSize: baselineSize - s('deepCleanMetadata') },
-    { key: 'inlineToXObject', savedBytes: s('inlineToXObject'), compressedSize: baselineSize - s('inlineToXObject') },
-    { key: 'compressContentStreams', savedBytes: s('compressContentStreams'), compressedSize: baselineSize - s('compressContentStreams') },
-    { key: 'removeOrphanObjects', savedBytes: s('removeOrphanObjects'), compressedSize: baselineSize - s('removeOrphanObjects') },
-    { key: 'removeAlternateContent', savedBytes: s('removeAlternateContent'), compressedSize: baselineSize - s('removeAlternateContent') },
-    { key: 'removeInvisibleText', savedBytes: s('removeInvisibleText'), compressedSize: baselineSize - s('removeInvisibleText') },
+    mkResult('useObjectStreams', { savedBytes: osSaved, compressedSize: originalSize - osSaved, pending: false }),
+    mkResult('stripMetadata'),
+    mkResult('recompressImages', { details: { imagesProcessed, imagesSkipped } }),
+    mkResult('downsampleImages', { details: { imagesProcessed: imagesDownsampled, imagesSkipped: imagesProcessed - imagesDownsampled } }),
+    mkResult('convertToGrayscale'),
+    mkResult('pngToJpeg', { details: { imagesProcessed: pngsConverted, imagesSkipped: 0 } }),
+    mkResult('convertToMonochrome'),
+    mkResult('removeAlphaChannels'),
+    mkResult('removeColorProfiles'),
+    mkResult('cmykToRgb'),
+    mkResult('removeThumbnails'),
+    mkResult('removeDuplicateResources'),
+    mkResult('removeUnusedFonts'),
+    mkResult('removeAttachments', { details: { imagesProcessed: structAttachmentsRemoved } }),
+    mkResult('flattenForms'),
+    mkResult('flattenAnnotations'),
+    mkResult('removeJavaScript'),
+    mkResult('removeBookmarks'),
+    mkResult('removeNamedDestinations'),
+    mkResult('removeArticleThreads'),
+    mkResult('removeWebCaptureInfo'),
+    mkResult('removeHiddenLayers'),
+    mkResult('removePageLabels'),
+    mkResult('deepCleanMetadata'),
+    mkResult('inlineToXObject'),
+    mkResult('compressContentStreams'),
+    mkResult('removeOrphanObjects'),
+    mkResult('removeAlternateContent'),
+    mkResult('removeInvisibleText'),
   ];
 
   onProgress?.('Done!');
@@ -1126,5 +1155,102 @@ export const analyzePdfIncremental = async (
     imageStats,
     pdfFeatures,
     report,
+    workingBuffer,
   };
+};
+
+/**
+ * Background measurement: calculate exact per-method savings individually.
+ * Called AFTER the fast result is already sent to the user.
+ * Tests every method (enabled or not) to show potential savings.
+ * Calls onMethodUpdate after each method completes so the UI can update progressively.
+ */
+export const measureMethodSavings = async (
+  workingBuffer: ArrayBuffer,
+  settings: ExtendedProcessingSettings,
+  onMethodUpdate: (results: MethodResult[]) => void,
+  shouldAbort?: () => boolean,
+): Promise<void> => {
+  const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
+
+  // Load once to get baseline size for the working buffer
+  let baseDoc: PDFDocument;
+  let baseSize: number;
+  try {
+    baseDoc = (await loadPdf(workingBuffer)).pdfDoc;
+    baseSize = (await baseDoc.save({ useObjectStreams: false })).byteLength;
+  } catch {
+    return; // Can't measure, silently fail
+  }
+
+  // All non-image methods to measure individually
+  // Each entry: [key, apply function, needsOrphanCleanup]
+  const methods: Array<[keyof CompressionOptions, (doc: PDFDocument) => void | Promise<void>, boolean]> = [
+    ['stripMetadata', (doc) => stripMetadata(doc), false],
+    ['removeOrphanObjects', async (doc) => { await removeOrphanObjects(doc); }, false],
+    ['removeAlphaChannels', (doc) => { removeAlphaChannels(doc); }, true],
+    ['removeColorProfiles', (doc) => { removeIccProfiles(doc); }, true],
+    ['cmykToRgb', async (doc) => { await convertCmykToRgb(doc, settings.quality); }, true],
+    ['removeDuplicateResources', (doc) => { removeDuplicateResources(doc); }, true],
+    ['removeUnusedFonts', (doc) => { removeUnusedFonts(doc); }, true],
+    ['inlineToXObject', async (doc) => { await convertInlineImagesToXObjects(doc); }, false],
+    ['compressContentStreams', async (doc) => { await compressContentStreams(doc); }, false],
+    ['removeAlternateContent', async (doc) => { await removeAlternateContent(doc); }, true],
+    ['removeInvisibleText', async (doc) => { await removeInvisibleText(doc); }, false],
+    ['removeJavaScript', (doc) => { removeJS(doc); }, true],
+    ['removeBookmarks', (doc) => { removeBM(doc); }, true],
+    ['removeNamedDestinations', (doc) => { removeND(doc); }, true],
+    ['removeArticleThreads', (doc) => { removeAT(doc); }, true],
+    ['removeWebCaptureInfo', (doc) => { removeWC(doc); }, true],
+    ['removeHiddenLayers', (doc) => { removeHL(doc); }, true],
+    ['removePageLabels', (doc) => { removePL(doc); }, false],
+    ['deepCleanMetadata', (doc) => { deepCleanMD(doc); }, true],
+    ['removeThumbnails', (doc) => { removeTN(doc); }, true],
+    ['removeAttachments', (doc) => { removeATT(doc); }, true],
+    ['flattenForms', (doc) => { flattenFM(doc); }, true],
+    ['flattenAnnotations', (doc) => { flattenAN(doc); }, true],
+  ];
+
+  // Object streams is measured separately (it's a save option, not a mutation)
+  // and is already measured in the fast pass, so skip it here.
+
+  const results: MethodResult[] = [];
+
+  for (const [key, apply, cleanOrphans] of methods) {
+    // Yield to the event loop so the worker can process new messages (e.g. a new 'start').
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Check if a new compression job has started — abort if so
+    if (shouldAbort?.()) return;
+
+    try {
+      // Load a fresh copy for each method to measure independently
+      const { pdfDoc: freshDoc } = await loadPdf(workingBuffer);
+      await apply(freshDoc);
+      if (cleanOrphans) {
+        await removeOrphanObjects(freshDoc);
+      }
+      const afterBytes = await freshDoc.save({ useObjectStreams: false });
+      const saved = Math.max(0, baseSize - afterBytes.byteLength);
+      results.push({
+        key,
+        savedBytes: saved,
+        compressedSize: baseSize - saved,
+        pending: false,
+      });
+    } catch {
+      results.push({
+        key,
+        savedBytes: 0,
+        compressedSize: baseSize,
+        pending: false,
+      });
+    }
+
+    // Check again after the expensive work
+    if (shouldAbort?.()) return;
+
+    // Send progressive update after each method
+    onMethodUpdate([...results]);
+  }
 };

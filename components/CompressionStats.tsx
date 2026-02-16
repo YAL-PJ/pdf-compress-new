@@ -59,9 +59,10 @@ export const CompressionStats = ({
 
   const stats = useMemo(() => {
     const effective = methodResults
-      .filter(m => m.savedBytes > 0)
+      .filter(m => m.savedBytes > 0 && !m.pending)
       .sort((a, b) => b.savedBytes - a.savedBytes);
 
+    const pendingCount = methodResults.filter(m => m.pending).length;
     const totalSaved = originalSize - compressedSize;
     const maxSaved = effective.length > 0 ? effective[0].savedBytes : 0;
 
@@ -70,7 +71,7 @@ export const CompressionStats = ({
     const errorCount = report?.logs.filter(l => l.level === 'error').length ?? 0;
     const warningCount = report?.logs.filter(l => l.level === 'warning').length ?? 0;
 
-    return { effective, totalSaved, maxSaved, methodsUsed, methodsSuccessful, errorCount, warningCount };
+    return { effective, pendingCount, totalSaved, maxSaved, methodsUsed, methodsSuccessful, errorCount, warningCount };
   }, [methodResults, originalSize, compressedSize, report]);
 
   return (
@@ -87,6 +88,9 @@ export const CompressionStats = ({
             <h3 className="text-sm font-bold text-slate-800">Compression Analytics</h3>
             <p className="text-xs text-slate-500 font-medium">
               {stats.effective.length} method{stats.effective.length !== 1 ? 's' : ''} saved space
+              {stats.pendingCount > 0 && (
+                <span className="text-slate-400 animate-pulse"> • measuring {stats.pendingCount} more...</span>
+              )}
               {stats.errorCount > 0 && ` • ${stats.errorCount} error${stats.errorCount !== 1 ? 's' : ''}`}
             </p>
           </div>
@@ -199,15 +203,15 @@ export const CompressionStats = ({
                 </div>
               )}
 
-              {/* Methods that didn't save anything */}
-              {methodResults.filter(m => m.savedBytes === 0).length > 0 && (
+              {/* Methods that didn't save anything (exclude pending ones) */}
+              {methodResults.filter(m => m.savedBytes === 0 && !m.pending).length > 0 && (
                 <details className="text-xs">
                   <summary className="text-slate-400 cursor-pointer hover:text-slate-600 font-medium">
-                    {methodResults.filter(m => m.savedBytes === 0).length} methods had no impact
+                    {methodResults.filter(m => m.savedBytes === 0 && !m.pending).length} methods had no impact
                   </summary>
                   <div className="mt-1.5 text-slate-400 space-y-0.5 pl-2">
                     {methodResults
-                      .filter(m => m.savedBytes === 0)
+                      .filter(m => m.savedBytes === 0 && !m.pending)
                       .map(m => (
                         <div key={m.key}>{METHOD_LABELS[m.key] || m.key}</div>
                       ))}
