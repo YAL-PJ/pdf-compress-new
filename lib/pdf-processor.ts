@@ -385,11 +385,11 @@ export const analyzePdf = async (
 
   // Helper: apply a method on the shared document WITHOUT intermediate save.
   // We batch all methods and do a single save at the end for massive speedup.
+  // Orphan cleanup is deferred to a single pass after all methods (line ~545).
   const applyMethod = async (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number | Promise<void | { savedBytes: number; [k: string]: unknown }>,
-    cleanOrphans: boolean = false,
   ) => {
     if (!enabled) {
       savings[key] = 0;
@@ -398,9 +398,6 @@ export const analyzePdf = async (
     report.methodsUsed.push(key);
     try {
       const result = await apply(workDoc);
-      if (cleanOrphans) {
-        await removeOrphanObjects(workDoc);
-      }
       report.methodsSuccessful.push(key);
       return result;
     } catch (err) {
@@ -425,21 +422,21 @@ export const analyzePdf = async (
     await applyMethod('removeAlphaChannels', true, (doc) => {
       const r = removeAlphaChannels(doc);
       if (r.processed > 0) log('success', `Removed alpha channels from ${r.processed} images`);
-    }, true);
+    });
   }
 
   if (options.removeColorProfiles) {
     await applyMethod('removeColorProfiles', true, (doc) => {
       const r = removeIccProfiles(doc);
       if (r.removed > 0) log('success', `Removed ${r.removed} ICC profiles`);
-    }, true);
+    });
   }
 
   if (options.cmykToRgb) {
     await applyMethod('cmykToRgb', true, async (doc) => {
       const r = await convertCmykToRgb(doc, settings.quality, onProgress);
       if (r.converted > 0) log('success', `Converted ${r.converted} CMYK images to RGB`);
-    }, true);
+    });
   }
 
   // Resource optimization
@@ -452,7 +449,7 @@ export const analyzePdf = async (
       } else {
         log('info', 'No duplicate resources found');
       }
-    }, true);
+    });
   }
 
   if (options.removeUnusedFonts) {
@@ -464,7 +461,7 @@ export const analyzePdf = async (
       } else {
         log('info', 'No unused fonts found');
       }
-    }, true);
+    });
   }
 
   // Content stream optimization
@@ -488,7 +485,7 @@ export const analyzePdf = async (
       if (r.alternatesRemoved > 0 || r.printOnlyRemoved > 0 || r.screenOnlyRemoved > 0) {
         log('success', 'Removed alternate content objects');
       }
-    }, true);
+    });
   }
 
   if (options.removeInvisibleText) {
@@ -541,7 +538,9 @@ export const analyzePdf = async (
   applyStructMethod('flattenForms', options.flattenForms, flattenFM);
   applyStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
 
-  // Single orphan cleanup pass after all structure methods
+  // Single orphan cleanup pass after ALL methods (non-struct + struct).
+  // Per-method orphan cleanup is only needed in background measurement
+  // where each method is tested independently on a fresh document.
   await removeOrphanObjects(structDoc);
 
   onProgress?.('Creating final compressed file...');

@@ -49,7 +49,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     response: WorkerResponse,
     transfer?: Transferable[]
   ) => {
-    self.postMessage({ ...response, jobId }, transfer ?? []);
+    self.postMessage({ ...response, jobId }, { transfer: transfer ?? [] });
   };
 
   const postProgress = (message: string, percent?: number) => {
