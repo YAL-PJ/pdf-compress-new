@@ -1,14 +1,24 @@
 /**
  * PDF Compression Web Worker
- * Supports all Phase 2 compression methods
+ *
+ * Supports two compression modes:
+ *
+ * 1. Standard mode (no target): Single-pass analyzePdf()
+ * 2. Incremental mode (with target): Uses analyzePdfIncremental() for
+ *    streaming escalation — processes images progressively and adapts
+ *    compression mid-stream instead of restarting entire PDF.
+ *    Falls back to batch escalation only if incremental mode doesn't meet target.
+ *
+ * Features:
  * - Fast result delivery
- * - Iterative escalation to meet target size
  * - Background per-method measurement
  * - Safe job cancellation handling
+ * - Incremental mode is ~O(n) vs batch mode's O(n × tiers)
  */
 
 import {
   analyzePdf,
+  analyzePdfIncremental,
   measureMethodSavings,
   type ExtendedProcessingSettings,
 } from '../lib/pdf-processor';
@@ -74,7 +84,6 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     const hasTarget =
       targetPercent !== undefined && targetPercent < 100;
 
-    // === PASS 0: Initial compression ===
     let currentOptions = options;
     let currentImageSettings = imageSettings;
 
@@ -83,109 +92,97 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       options: currentOptions,
     };
 
-    let analysis = await analyzePdf(
-      safeOriginalBuffer,
-      postProgress,
-      extendedSettings
-    );
+    let analysis;
 
-    // Abort if job superseded
-    if (activeJobId !== jobId) return;
+    if (hasTarget) {
+      // === Incremental mode: streaming escalation ===
+      // Process images progressively with budget tracking.
+      // Escalates compression mid-stream instead of restarting the entire PDF.
+      postProgress('Starting incremental compression with budget tracking...');
 
-    // === ITERATIVE ESCALATION ===
-    if (
-      hasTarget &&
-      analysis.fullCompressedBytes.byteLength > targetBytes
-    ) {
-      for (let tier = 1; tier <= MAX_ESCALATION_TIERS; tier++) {
-        if (activeJobId !== jobId) return;
+      analysis = await analyzePdfIncremental(
+        safeOriginalBuffer,
+        postProgress,
+        extendedSettings,
+        targetBytes,
+      );
 
-        const compressedSize =
-          analysis.fullCompressedBytes.byteLength;
+      // Abort if job superseded
+      if (activeJobId !== jobId) return;
 
-        const currentPercent = Math.round(
-          (compressedSize / originalSize) * 100
-        );
-
+      // If incremental mode didn't meet target, fall back to batch escalation
+      if (analysis.fullCompressedBytes.byteLength > targetBytes) {
+        const currentPercent = Math.round((analysis.fullCompressedBytes.byteLength / originalSize) * 100);
         postProgress(
-          `Target not met (${currentPercent}% > ${targetPercent}%). Escalating to tier ${tier}/${MAX_ESCALATION_TIERS}...`
+          `Incremental compression reached ${currentPercent}% (target: ${targetPercent}%). Trying batch escalation fallback...`
         );
 
-        const escalated = getEscalationTier(
-          tier,
-          currentOptions,
-          currentImageSettings
-        );
+        // Try progressively harsher tiers as fallback
+        for (let tier = 2; tier <= MAX_ESCALATION_TIERS; tier++) {
+          if (activeJobId !== jobId) return;
 
-        currentOptions = escalated.options;
-        currentImageSettings = escalated.imageSettings;
+          const escalated = getEscalationTier(tier, currentOptions, currentImageSettings);
+          currentOptions = escalated.options;
+          currentImageSettings = escalated.imageSettings;
 
-        extendedSettings = {
-          ...currentImageSettings,
-          options: currentOptions,
-        };
+          extendedSettings = {
+            ...currentImageSettings,
+            options: currentOptions,
+          };
 
-        const escalatedAnalysis = await analyzePdf(
-          safeOriginalBuffer.slice(0),
-          (msg, pct) =>
-            postProgress(`[Tier ${tier}] ${msg}`, pct),
-          extendedSettings
-        );
+          const escalatedAnalysis = await analyzePdf(
+            safeOriginalBuffer.slice(0),
+            (msg, pct) => postProgress(`[Fallback tier ${tier}] ${msg}`, pct),
+            extendedSettings
+          );
 
-        if (activeJobId !== jobId) return;
+          if (activeJobId !== jobId) return;
 
-        // Only adopt if actually smaller
-        if (
-          escalatedAnalysis.fullCompressedBytes.byteLength <
-          analysis.fullCompressedBytes.byteLength
-        ) {
-          if (escalatedAnalysis.report && analysis.report) {
-            escalatedAnalysis.report.logs = [
-              ...analysis.report.logs,
-              {
-                timestamp: Date.now(),
-                level: 'info' as const,
-                message: `Escalated to tier ${tier} (target: ${targetPercent}%)`,
-              },
-              ...escalatedAnalysis.report.logs,
-            ];
+          if (escalatedAnalysis.fullCompressedBytes.byteLength < analysis.fullCompressedBytes.byteLength) {
+            if (escalatedAnalysis.report && analysis.report) {
+              escalatedAnalysis.report.logs = [
+                ...analysis.report.logs,
+                {
+                  timestamp: Date.now(),
+                  level: 'info' as const,
+                  message: `Fallback escalation to tier ${tier} (target: ${targetPercent}%)`,
+                },
+                ...escalatedAnalysis.report.logs,
+              ];
+            }
+            analysis = escalatedAnalysis;
           }
 
-          analysis = escalatedAnalysis;
+          if (analysis.fullCompressedBytes.byteLength <= targetBytes) {
+            postProgress(`Target met at fallback tier ${tier}!`);
+            break;
+          }
         }
 
-        if (
-          analysis.fullCompressedBytes.byteLength <=
-          targetBytes
-        ) {
-          postProgress(`Target met at tier ${tier}!`);
-          break;
+        if (analysis.fullCompressedBytes.byteLength > targetBytes) {
+          const finalPercent = Math.round((analysis.fullCompressedBytes.byteLength / originalSize) * 100);
+          if (analysis.report) {
+            analysis.report.logs.push({
+              timestamp: Date.now(),
+              level: 'warning',
+              message: `Could not reach target of ${targetPercent}% after incremental + fallback escalation. Best result: ${finalPercent}%`,
+            });
+          }
+          postProgress(
+            `Best compression: ${finalPercent}% (target was ${targetPercent}%). All methods exhausted.`
+          );
         }
       }
+    } else {
+      // === Standard mode: single-pass, no target ===
+      analysis = await analyzePdf(
+        safeOriginalBuffer,
+        postProgress,
+        extendedSettings
+      );
 
-      // If still not met
-      if (
-        analysis.fullCompressedBytes.byteLength >
-        targetBytes
-      ) {
-        const finalPercent = Math.round(
-          (analysis.fullCompressedBytes.byteLength /
-            originalSize) *
-            100
-        );
-
-        if (analysis.report) {
-          analysis.report.logs.push({
-            timestamp: Date.now(),
-            level: 'warning',
-            message: `Could not reach target of ${targetPercent}% after ${MAX_ESCALATION_TIERS} tiers. Best result: ${finalPercent}%`,
-          });
-        }
-
-        postProgress(
-          `Best compression: ${finalPercent}% (target was ${targetPercent}%).`
-        );
-      }
+      // Abort if job superseded
+      if (activeJobId !== jobId) return;
     }
 
     // === FAST RESULT DELIVERY ===
@@ -214,23 +211,25 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     );
 
     // === BACKGROUND METHOD MEASUREMENT ===
-    try {
-      await measureMethodSavings(
-        analysis.workingBuffer,
-        extendedSettings,
-        (updatedResults) => {
-          if (activeJobId !== jobId) return;
+    if (analysis.workingBuffer) {
+      try {
+        await measureMethodSavings(
+          analysis.workingBuffer,
+          extendedSettings,
+          (updatedResults) => {
+            if (activeJobId !== jobId) return;
 
-          postResponse({
-            type: 'method-update',
-            payload: { methodResults: updatedResults },
-            jobId,
-          });
-        },
-        () => activeJobId !== jobId
-      );
-    } catch {
-      // Silent failure — user already received file
+            postResponse({
+              type: 'method-update',
+              payload: { methodResults: updatedResults },
+              jobId,
+            });
+          },
+          () => activeJobId !== jobId
+        );
+      } catch {
+        // Silent failure — user already received file
+      }
     }
   } catch (error) {
     if (activeJobId !== jobId) return;
