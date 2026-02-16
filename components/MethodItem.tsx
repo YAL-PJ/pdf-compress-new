@@ -43,6 +43,8 @@ export const MethodItem = memo(({
 }: MethodItemProps) => {
     const Icon = method.icon;
     const displayBytes = result?.savedBytes ?? 0;
+    const isPending = result?.pending ?? false;
+    const range = result?.savingsRange;
 
     const handleQualityChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const quality = parseInt(e.target.value, 10);
@@ -86,6 +88,14 @@ export const MethodItem = memo(({
                         {notApplicable ? (
                             <span className="text-[9px] bg-slate-200 text-slate-500 px-1 py-0.5 rounded ml-1 flex-shrink-0 whitespace-nowrap">
                                 {notApplicable}
+                            </span>
+                        ) : isEnabled && isPending ? (
+                            <span className="text-[9px] bg-slate-500/20 text-slate-300 px-1 py-0.5 rounded ml-1 flex-shrink-0 animate-pulse">
+                                calculating...
+                            </span>
+                        ) : isEnabled && displayBytes > 0 && range && range.min !== range.max ? (
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-200 px-1 py-0.5 rounded ml-1 flex-shrink-0" title={`Current: -${formatBytes(displayBytes)} | Range: ${formatBytes(range.min)} – ${formatBytes(range.max)}`}>
+                                -{formatBytes(range.min)}–{formatBytes(range.max)}
                             </span>
                         ) : isEnabled && displayBytes > 0 ? (
                             <span className="text-[9px] bg-emerald-500/20 text-emerald-200 px-1 py-0.5 rounded ml-1 flex-shrink-0">

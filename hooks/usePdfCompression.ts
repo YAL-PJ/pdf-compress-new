@@ -21,6 +21,7 @@ import type {
   WorkerSuccessPayload,
   WorkerErrorPayload,
   WorkerProgressPayload,
+  WorkerMethodUpdatePayload,
   ProcessingSettings,
 } from '@/lib/types';
 
@@ -124,6 +125,30 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
               pdfFeatures: s.pdfFeatures,
             }
           }));
+          break;
+        }
+
+        case 'method-update': {
+          // Background measurement completed for some methods — merge into current analysis
+          const mu = payload as WorkerMethodUpdatePayload;
+          setState(prev => {
+            if (prev.status !== 'done') return prev;
+            const existing = prev.analysis.methodResults;
+            // Build a map of background-measured results for fast lookup
+            const bgMap = new Map(mu.methodResults.map(r => [r.key, r]));
+            // Merge: replace pending results with measured ones, keep image results as-is
+            const merged = existing.map(mr => {
+              const bg = bgMap.get(mr.key);
+              if (bg && mr.pending) {
+                return { ...mr, savedBytes: bg.savedBytes, compressedSize: bg.compressedSize, pending: false };
+              }
+              return mr;
+            });
+            return {
+              ...prev,
+              analysis: { ...prev.analysis, methodResults: merged },
+            };
+          });
           break;
         }
 
