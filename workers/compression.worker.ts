@@ -12,6 +12,9 @@ import {
 } from '@/lib/types';
 import type { WorkerMessage, WorkerResponse, ImageCompressionSettings, CompressionOptions } from '@/lib/types';
 
+// Track the active job so background measurement can abort when a new job starts
+let activeJobId: string | null = null;
+
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   const { type, payload } = event.data;
 
@@ -26,6 +29,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   };
 
   const { jobId } = payload;
+  activeJobId = jobId;
 
   const postResponse = (response: WorkerResponse, transfer?: Transferable[]) => {
     self.postMessage({ ...response, jobId }, { transfer: transfer ?? [] });
@@ -45,6 +49,9 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       postProgress,
       extendedSettings
     );
+
+    // If a newer job started while we were compressing, don't send stale results
+    if (activeJobId !== jobId) return;
 
     const buffer = analysis.fullCompressedBytes.slice().buffer as ArrayBuffer;
 
@@ -68,22 +75,30 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     // Background: measure exact per-method savings without blocking the user.
     // The workingBuffer (post-image processing) is used so each method is
     // measured independently against the same baseline.
+    // The shouldAbort callback checks if a new job has started — if so, the
+    // measurement loop aborts immediately so the new job can proceed.
     try {
       await measureMethodSavings(
         analysis.workingBuffer,
         extendedSettings,
         (updatedResults) => {
+          // Don't send updates if a new job superseded this one
+          if (activeJobId !== jobId) return;
           postResponse({
             type: 'method-update',
             payload: { methodResults: updatedResults },
             jobId,
           });
         },
+        () => activeJobId !== jobId, // shouldAbort
       );
     } catch {
       // Background measurement failed silently — user already has their result
     }
   } catch (error) {
+    // If a newer job started, don't send stale errors
+    if (activeJobId !== jobId) return;
+
     const message = error instanceof Error ? error.message : 'Unknown error';
 
     let code = 'PROCESSING_FAILED';

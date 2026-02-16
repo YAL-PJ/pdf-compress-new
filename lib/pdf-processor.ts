@@ -371,11 +371,9 @@ export const analyzePdf = async (
   // This eliminates 12+ redundant PDFDocument.load() calls
   onProgress?.('Applying optimizations...');
   let workDoc: PDFDocument;
-  let lastSize: number;
   try {
     const loaded = await loadPdf(workingBuffer);
     workDoc = loaded.pdfDoc;
-    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
   } catch (err) {
     // If recompressed image buffer is corrupt, fall back to original
     const msg = err instanceof Error ? err.message : String(err);
@@ -383,7 +381,6 @@ export const analyzePdf = async (
     report.errors.push('loadWorkingBuffer');
     const loaded = await loadPdf(arrayBuffer);
     workDoc = loaded.pdfDoc;
-    lastSize = (await workDoc.save({ useObjectStreams: false })).byteLength;
   }
 
   // Helper: apply a method on the shared document WITHOUT intermediate save.
@@ -507,12 +504,12 @@ export const analyzePdf = async (
   let structAttachmentsRemoved = 0;
   const structDoc = workDoc; // Alias for clarity — same document instance
 
-  // Helper: apply a structure method without saving (batched)
+  // Helper: apply a structure method without saving (batched).
+  // Orphan cleanup is deferred to a single pass after all struct methods.
   const applyStructMethod = (
     key: string,
     enabled: boolean,
     apply: (doc: PDFDocument) => void | number,
-    cleanOrphans: boolean = false,
   ): number | void => {
     if (!enabled) {
       return;
@@ -520,7 +517,6 @@ export const analyzePdf = async (
     report.methodsUsed.push(key);
     try {
       const result = apply(structDoc);
-      // Note: orphan cleanup is deferred to a single pass after all struct methods
       report.methodsSuccessful.push(key);
       return result;
     } catch (err) {
@@ -600,7 +596,12 @@ export const analyzePdf = async (
   const s = (key: string) => savings[key] ?? 0;
 
   // Keys whose savings we already know (image-related + object streams)
-  const knownKeys = new Set(['recompressImages', 'downsampleImages', 'pngToJpeg', 'useObjectStreams']);
+  // These keys have real savings from the fast pass (image pipeline or measured directly).
+  // convertToGrayscale/convertToMonochrome are applied inside recompressJpeg, not standalone methods.
+  const knownKeys = new Set([
+    'recompressImages', 'downsampleImages', 'pngToJpeg', 'useObjectStreams',
+    'convertToGrayscale', 'convertToMonochrome',
+  ]);
 
   const mkResult = (key: keyof CompressionOptions, extra?: Partial<MethodResult>): MethodResult => {
     const known = knownKeys.has(key);
@@ -682,6 +683,7 @@ export const measureMethodSavings = async (
   workingBuffer: ArrayBuffer,
   settings: ExtendedProcessingSettings,
   onMethodUpdate: (results: MethodResult[]) => void,
+  shouldAbort?: () => boolean,
 ): Promise<void> => {
   const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
 
@@ -729,6 +731,14 @@ export const measureMethodSavings = async (
   const results: MethodResult[] = [];
 
   for (const [key, apply, cleanOrphans] of methods) {
+    // Yield to the event loop so the worker can process new messages (e.g. a new 'start').
+    // Without this, the entire loop runs without ever checking for new messages,
+    // blocking re-compression when the user changes settings.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    // Check if a new compression job has started — abort if so
+    if (shouldAbort?.()) return;
+
     try {
       // Load a fresh copy for each method to measure independently
       const { pdfDoc: freshDoc } = await loadPdf(workingBuffer);
@@ -752,6 +762,9 @@ export const measureMethodSavings = async (
         pending: false,
       });
     }
+
+    // Check again after the expensive work
+    if (shouldAbort?.()) return;
 
     // Send progressive update after each method
     onMethodUpdate([...results]);
