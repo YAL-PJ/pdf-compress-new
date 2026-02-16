@@ -72,11 +72,10 @@ export const removeOrphanObjects = async (
 
   onProgress?.('Identifying orphan objects...', 50);
 
-  // Find all objects and identify orphans
-  const allRefs = Array.from(context.enumerateIndirectObjects());
+  // Find all objects and identify orphans — iterate directly to avoid materializing full array
   const orphanRefs: PDFRef[] = [];
 
-  for (const [ref, obj] of allRefs) {
+  for (const [ref, obj] of context.enumerateIndirectObjects()) {
     const refStr = `${ref.objectNumber}-${ref.generationNumber}`;
     if (!referencedRefs.has(refStr)) {
       orphanRefs.push(ref);

@@ -207,9 +207,8 @@ export const analyzePdf = async (
 
   // Load PDF ONCE for info, baseline, and image extraction
   const { pdfDoc: baseDoc, info } = await loadPdf(arrayBuffer);
-  // Establish baseline size
-  const baselineBytes = await baseDoc.save({ useObjectStreams: false });
-  const baselineSize = baselineBytes.byteLength;
+  // Use original buffer size as baseline — avoids an expensive full serialization
+  const baselineSize = originalSize;
 
   // Detect PDF features (will be enriched with image stats later)
   let pdfFeatures: PdfFeatures | undefined;
@@ -361,16 +360,24 @@ export const analyzePdf = async (
   }
 
   // Working buffer for further processing
-  // IMPORTANT: Use .slice().buffer to avoid reading garbage data from larger underlying ArrayBuffers
-  let workingBuffer = recompressedImageBytes
-    ? recompressedImageBytes.slice().buffer as ArrayBuffer
-    : arrayBuffer;
+  // Use the Uint8Array's underlying buffer directly if it covers the full range,
+  // otherwise create a minimal copy to avoid reading garbage from oversized ArrayBuffers.
+  let workingBuffer: ArrayBuffer;
+  if (recompressedImageBytes) {
+    const arr = recompressedImageBytes;
+    workingBuffer = (arr.byteOffset === 0 && arr.byteLength === arr.buffer.byteLength)
+      ? arr.buffer as ArrayBuffer
+      : arr.slice().buffer as ArrayBuffer;
+  } else {
+    workingBuffer = arrayBuffer;
+  }
 
   // Load document ONCE for all in-place mutation methods
   // (alpha, ICC, CMYK, dedup, fonts, inline, streams, orphans, alternate, invisible, structure)
   // This eliminates 12+ redundant PDFDocument.load() calls
   onProgress?.('Applying optimizations...');
   let workDoc: PDFDocument;
+  // Use the working buffer size as lastSize — avoids an expensive intermediate save
   try {
     const loaded = await loadPdf(workingBuffer);
     workDoc = loaded.pdfDoc;
@@ -383,9 +390,15 @@ export const analyzePdf = async (
     workDoc = loaded.pdfDoc;
   }
 
+  // Release extracted image data — no longer needed after embedding
+  images.length = 0;
+  jpegImages.length = 0;
+  pngImages.length = 0;
+  recompressedImageBytes = null;
+
   // Helper: apply a method on the shared document WITHOUT intermediate save.
   // We batch all methods and do a single save at the end for massive speedup.
-  // Orphan cleanup is deferred to a single pass after all methods (line ~545).
+  // Orphan cleanup is deferred to a single pass after all methods complete.
   const applyMethod = async (
     key: string,
     enabled: boolean,
@@ -418,6 +431,7 @@ export const analyzePdf = async (
   }
 
   // Image-related in-place mutations
+  // NOTE: orphan cleanup is deferred to a single pass after ALL methods (massive speedup)
   if (options.removeAlphaChannels) {
     await applyMethod('removeAlphaChannels', true, (doc) => {
       const r = removeAlphaChannels(doc);
@@ -560,32 +574,25 @@ export const analyzePdf = async (
   }
 
   // Single final save — this replaces ~20+ intermediate saves
+  // Only serialize ONCE (avoid previous double-save for object stream measurement)
   let fullCompressedBytes: Uint8Array;
-  let withoutOsBytes: Uint8Array | undefined;
+  let osSaved = 0;
   try {
-    // If object streams enabled, save once without to measure its contribution
-    if (options.useObjectStreams) {
-      withoutOsBytes = await structDoc.save({ useObjectStreams: false });
-    }
     fullCompressedBytes = await structDoc.save({
       useObjectStreams: options.useObjectStreams,
     });
   } catch (err) {
-    // If the mutated document can't be saved, fall back to baseline
+    // If the mutated document can't be saved, fall back to original
     const msg = err instanceof Error ? err.message : String(err);
-    log('warning', `Final save failed, returning baseline: ${msg}`);
+    log('warning', `Final save failed, returning original: ${msg}`);
     report.errors.push('finalSave');
-    fullCompressedBytes = baselineBytes;
+    fullCompressedBytes = new Uint8Array(arrayBuffer);
   }
 
-  const osSaved = (options.useObjectStreams && withoutOsBytes)
-    ? Math.max(0, withoutOsBytes.byteLength - fullCompressedBytes.byteLength)
-    : 0;
-
-  if (options.useObjectStreams && osSaved > 0) {
+  if (options.useObjectStreams) {
     report.methodsUsed.push('useObjectStreams');
     report.methodsSuccessful.push('useObjectStreams');
-    log('success', 'Applied Object Streams compression', { saved: osSaved });
+    log('success', 'Applied Object Streams compression');
   }
 
   // Image methods have real savings from the fast pass.
