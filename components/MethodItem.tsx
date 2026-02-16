@@ -94,7 +94,7 @@ export const MethodItem = memo(({
                                 calculating...
                             </span>
                         ) : isEnabled && displayBytes > 0 && range && range.min !== range.max ? (
-                            <span className="text-[9px] bg-emerald-500/20 text-emerald-200 px-1 py-0.5 rounded ml-1 flex-shrink-0" title={`Current: -${formatBytes(displayBytes)} | Range: ${formatBytes(range.min)} – ${formatBytes(range.max)}`}>
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-200 px-1 py-0.5 rounded ml-1 flex-shrink-0">
                                 -{formatBytes(range.min)}–{formatBytes(range.max)}
                             </span>
                         ) : isEnabled && displayBytes > 0 ? (
