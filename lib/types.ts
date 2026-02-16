@@ -146,6 +146,10 @@ export interface MethodResult {
     imagesSkipped?: number;
   };
   displaySavedBytes?: number; // Logic for display vs calculation
+  /** true when savings are still being calculated in the background */
+  pending?: boolean;
+  /** For image methods: estimated savings range at min/max quality or DPI */
+  savingsRange?: { min: number; max: number };
 }
 
 /** Analysis results after processing */
@@ -219,9 +223,13 @@ export interface WorkerMessage {
   };
 }
 
+export interface WorkerMethodUpdatePayload {
+  methodResults: MethodResult[];
+}
+
 export interface WorkerResponse {
-  type: 'success' | 'error' | 'progress';
-  payload: WorkerSuccessPayload | WorkerErrorPayload | WorkerProgressPayload;
+  type: 'success' | 'error' | 'progress' | 'method-update';
+  payload: WorkerSuccessPayload | WorkerErrorPayload | WorkerProgressPayload | WorkerMethodUpdatePayload;
   jobId: string;
 }
 

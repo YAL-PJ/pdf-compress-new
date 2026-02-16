@@ -692,6 +692,61 @@ export const calculateImageSavings = (recompressedImages: RecompressedImage[]): 
 };
 
 /**
+ * Estimate image compression savings range by sampling a few images at
+ * boundary quality levels (low=25, high=95) and extrapolating.
+ * Returns { min, max } representing the savings range across quality settings.
+ */
+export const estimateImageSavingsRange = async (
+  images: ExtractedImage[],
+  currentSettings: ImageCompressionSettings,
+  currentSavings: number,
+): Promise<{ min: number; max: number }> => {
+  if (images.length === 0 || currentSavings <= 0) {
+    return { min: 0, max: 0 };
+  }
+
+  // Sample up to 3 images for range estimation
+  const sampleSize = Math.min(3, images.length);
+  const step = Math.max(1, Math.floor(images.length / sampleSize));
+  const samples: ExtractedImage[] = [];
+  for (let i = 0; i < images.length && samples.length < sampleSize; i += step) {
+    samples.push(images[i]);
+  }
+
+  let lowRatio = 1;
+  let highRatio = 1;
+  let sampleCurrentSavings = 0;
+  let sampleLowSavings = 0;
+  let sampleHighSavings = 0;
+
+  for (const img of samples) {
+    // Current quality
+    const currentResult = await recompressJpeg(img, currentSettings);
+    const currentSaved = currentResult?.savedBytes ?? 0;
+    sampleCurrentSavings += currentSaved;
+
+    // Low quality (aggressive - more savings)
+    const lowResult = await recompressJpeg(img, { ...currentSettings, quality: 25 });
+    sampleLowSavings += lowResult?.savedBytes ?? 0;
+
+    // High quality (minimal - less savings)
+    const highResult = await recompressJpeg(img, { ...currentSettings, quality: 95 });
+    sampleHighSavings += highResult?.savedBytes ?? 0;
+  }
+
+  // Calculate ratios from samples, then apply to total savings
+  if (sampleCurrentSavings > 0) {
+    lowRatio = sampleLowSavings / sampleCurrentSavings;
+    highRatio = sampleHighSavings / sampleCurrentSavings;
+  }
+
+  return {
+    min: Math.round(currentSavings * Math.min(highRatio, lowRatio)),
+    max: Math.round(currentSavings * Math.max(highRatio, lowRatio)),
+  };
+};
+
+/**
  * Decode PNG/FlateDecode image data to raw pixels
  */
 const decodePngImage = (
