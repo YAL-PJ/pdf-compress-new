@@ -51,6 +51,12 @@ import {
   removeOrphanObjects,
   removeAlternateContent,
 } from './pdf-optimizer';
+import {
+  deduplicateShadings,
+  removeUnusedShadings,
+  reduceVectorPrecision,
+  detectVectorFeatures,
+} from './vector-processor';
 
 export const loadPdf = async (
   arrayBuffer: ArrayBuffer
@@ -85,6 +91,9 @@ const stripMetadata = (pdfDoc: PDFDocument): void => {
  */
 const detectFeatures = (pdfDoc: PDFDocument, imageStats?: ImageStats): PdfFeatures => {
   const catalog = pdfDoc.catalog;
+
+  // Vector feature detection
+  const vectorFeatures = detectVectorFeatures(pdfDoc);
 
   // JavaScript detection
   let hasJavaScript = false;
@@ -175,6 +184,8 @@ const detectFeatures = (pdfDoc: PDFDocument, imageStats?: ImageStats): PdfFeatur
     hasAttachments,
     hasThumbnails,
     hasMetadata,
+    hasShadings: vectorFeatures.hasShadings,
+    hasComplexPaths: vectorFeatures.hasComplexPaths,
   };
 };
 
@@ -513,6 +524,41 @@ export const analyzePdf = async (
     });
   }
 
+  // Vector optimization
+  if (options.deduplicateShadings) {
+    onProgress?.('Deduplicating shading objects...');
+    await applyMethod('deduplicateShadings', true, (doc) => {
+      const r = deduplicateShadings(doc, onProgress);
+      if (r.duplicatesRemoved > 0) {
+        log('success', `Deduplicated ${r.duplicatesRemoved} shading objects (${r.shadingsAnalyzed} analyzed)`);
+      } else {
+        log('info', `Analyzed ${r.shadingsAnalyzed} shadings, no duplicates found`);
+      }
+    });
+  }
+
+  if (options.removeUnusedShadings) {
+    onProgress?.('Removing unused shadings...');
+    await applyMethod('removeUnusedShadings', true, (doc) => {
+      const r = removeUnusedShadings(doc, onProgress);
+      if (r.unusedRemoved > 0) {
+        log('success', `Removed ${r.unusedRemoved} unused shading objects`);
+      } else {
+        log('info', `All ${r.shadingsAnalyzed} shadings are in use`);
+      }
+    });
+  }
+
+  if (options.reduceVectorPrecision) {
+    onProgress?.('Reducing vector precision...');
+    await applyMethod('reduceVectorPrecision', true, (doc) => {
+      const r = reduceVectorPrecision(doc, onProgress);
+      if (r.operatorsSimplified > 0) {
+        log('success', `Simplified ${r.operatorsSimplified} decimal values across ${r.pagesProcessed} pages`);
+      }
+    });
+  }
+
   onProgress?.('Applying structure cleanup...');
 
   // Structure cleanup — applied on the same shared document, NO intermediate saves
@@ -654,6 +700,9 @@ export const analyzePdf = async (
     mkResult('removeOrphanObjects'),
     mkResult('removeAlternateContent'),
     mkResult('removeInvisibleText'),
+    mkResult('deduplicateShadings'),
+    mkResult('removeUnusedShadings'),
+    mkResult('reduceVectorPrecision'),
   ];
 
   onProgress?.('Done!');
@@ -999,6 +1048,41 @@ export const analyzePdfIncremental = async (
     });
   }
 
+  // Vector optimization
+  if (options.deduplicateShadings) {
+    onProgress?.('Deduplicating shading objects...');
+    await applyMethod('deduplicateShadings', true, (doc) => {
+      const r = deduplicateShadings(doc, onProgress);
+      if (r.duplicatesRemoved > 0) {
+        log('success', `Deduplicated ${r.duplicatesRemoved} shading objects (${r.shadingsAnalyzed} analyzed)`);
+      } else {
+        log('info', `Analyzed ${r.shadingsAnalyzed} shadings, no duplicates found`);
+      }
+    });
+  }
+
+  if (options.removeUnusedShadings) {
+    onProgress?.('Removing unused shadings...');
+    await applyMethod('removeUnusedShadings', true, (doc) => {
+      const r = removeUnusedShadings(doc, onProgress);
+      if (r.unusedRemoved > 0) {
+        log('success', `Removed ${r.unusedRemoved} unused shading objects`);
+      } else {
+        log('info', `All ${r.shadingsAnalyzed} shadings are in use`);
+      }
+    });
+  }
+
+  if (options.reduceVectorPrecision) {
+    onProgress?.('Reducing vector precision...');
+    await applyMethod('reduceVectorPrecision', true, (doc) => {
+      const r = reduceVectorPrecision(doc, onProgress);
+      if (r.operatorsSimplified > 0) {
+        log('success', `Simplified ${r.operatorsSimplified} decimal values across ${r.pagesProcessed} pages`);
+      }
+    });
+  }
+
   onProgress?.('Applying structure cleanup...');
 
   // Structure cleanup — applied on the same shared document, NO intermediate saves
@@ -1128,6 +1212,9 @@ export const analyzePdfIncremental = async (
     mkResult('removeOrphanObjects'),
     mkResult('removeAlternateContent'),
     mkResult('removeInvisibleText'),
+    mkResult('deduplicateShadings'),
+    mkResult('removeUnusedShadings'),
+    mkResult('reduceVectorPrecision'),
   ];
 
   onProgress?.('Done!');
@@ -1209,6 +1296,9 @@ export const measureMethodSavings = async (
     ['removeAttachments', (doc) => { removeATT(doc); }, true],
     ['flattenForms', (doc) => { flattenFM(doc); }, true],
     ['flattenAnnotations', (doc) => { flattenAN(doc); }, true],
+    ['deduplicateShadings', (doc) => { deduplicateShadings(doc); }, true],
+    ['removeUnusedShadings', (doc) => { removeUnusedShadings(doc); }, true],
+    ['reduceVectorPrecision', (doc) => { reduceVectorPrecision(doc); }, false],
   ];
 
   // Object streams is measured separately (it's a save option, not a mutation)
