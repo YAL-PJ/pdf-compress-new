@@ -1438,28 +1438,16 @@ export const measureMethodSavings = async (
     onMethodUpdate([...results]);
   }
 
-  // Measure rasterization separately — it replaces the entire PDF, not a pdf-lib mutation
-  if (shouldAbort?.()) return;
-  try {
-    const rasterResult = await rasterizePages(
-      workingBuffer,
-      { dpi: 150, quality: 0.75 },
-    );
-    const saved = Math.max(0, baseSize - rasterResult.pdfBytes.byteLength);
-    results.push({
-      key: 'rasterizePages',
-      savedBytes: saved,
-      compressedSize: baseSize - saved,
-      pending: false,
-    });
-  } catch {
-    results.push({
-      key: 'rasterizePages',
-      savedBytes: 0,
-      compressedSize: baseSize,
-      pending: false,
-    });
-  }
+  // Rasterization is measured separately — it replaces the entire PDF, not a pdf-lib mutation.
+  // Skip it in background measurement: it's very expensive (renders every page) and the
+  // user already sees its savings when they enable it. Mark as pending: false with 0 savings
+  // so the UI doesn't show a spinner.
+  results.push({
+    key: 'rasterizePages',
+    savedBytes: 0,
+    compressedSize: baseSize,
+    pending: false,
+  });
   if (!shouldAbort?.()) {
     onMethodUpdate([...results]);
   }

@@ -13,7 +13,6 @@ import {
   PDFRef,
   PDFStream,
   PDFRawStream,
-  PDFNumber,
 } from 'pdf-lib';
 import pako from 'pako';
 
@@ -403,8 +402,12 @@ export const reduceVectorPrecision = (
 
       result.operatorsSimplified += opsSimplified;
 
-      // Re-encode and compress
-      const newBytes = new TextEncoder().encode(newContent);
+      // Re-encode as Latin-1 (must match the decode charset — TextEncoder uses
+      // UTF-8 which would corrupt bytes >127 into multi-byte sequences)
+      const newBytes = new Uint8Array(newContent.length);
+      for (let i = 0; i < newContent.length; i++) {
+        newBytes[i] = newContent.charCodeAt(i) & 0xff;
+      }
       const compressed = pako.deflate(newBytes, { level: 9 });
 
       const newDict = contentObj.dict.clone(context);
@@ -459,10 +462,25 @@ export function detectVectorFeatures(pdfDoc: PDFDocument): {
 
     // Check content stream size as indicator of vector complexity
     const contentsRef = page.node.get(PDFName.of('Contents'));
+    const contentRefs: PDFRef[] = [];
     if (contentsRef instanceof PDFRef) {
-      const obj = context.lookup(contentsRef);
-      if (obj instanceof PDFRawStream || obj instanceof PDFStream) {
-        const bytes = obj instanceof PDFRawStream ? obj.contents : undefined;
+      contentRefs.push(contentsRef);
+    } else if (contentsRef instanceof PDFArray) {
+      for (let i = 0; i < contentsRef.size(); i++) {
+        const ref = contentsRef.get(i);
+        if (ref instanceof PDFRef) contentRefs.push(ref);
+      }
+    }
+
+    for (const ref of contentRefs) {
+      const obj = context.lookup(ref);
+      if (obj instanceof PDFRawStream) {
+        if (obj.contents.length > 500_000) {
+          largeContentStreams = true;
+          hasComplexPaths = true;
+        }
+      } else if (obj instanceof PDFStream) {
+        const bytes = obj.getContents();
         if (bytes && bytes.length > 500_000) {
           largeContentStreams = true;
           hasComplexPaths = true;
