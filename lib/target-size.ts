@@ -100,6 +100,8 @@ export function settingsForTargetPercent(targetPercent: number): TargetSizeResul
     deduplicateShadings: true,
     removeUnusedShadings: true,
     reduceVectorPrecision: enableAggressiveMethods,
+    // Rasterization only at extreme compression (≤15%)
+    rasterizePages: pct <= 15,
   };
 
   const imageSettings: ImageCompressionSettings = {

@@ -52,6 +52,9 @@ export interface CompressionOptions {
   deduplicateShadings: boolean;   // 3.1 Deduplicate identical gradient/shading objects
   removeUnusedShadings: boolean;  // 3.2 Remove shadings not referenced in content streams
   reduceVectorPrecision: boolean; // 3.3 Reduce decimal precision in vector path coordinates
+
+  // Page Rasterization (Phase 3 - Nuclear)
+  rasterizePages: boolean;        // 3.4 Render all pages to JPEG images (destroys text/vectors)
 }
 
 export interface ImageCompressionSettings {
@@ -111,6 +114,9 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   deduplicateShadings: true,     // On - safe, merges identical gradient definitions
   removeUnusedShadings: true,    // On - safe, removes unreferenced shading objects
   reduceVectorPrecision: false,  // Off - may cause sub-pixel shifts in vector art
+
+  // Page Rasterization (Phase 3 - Nuclear)
+  rasterizePages: false,         // Off - destroys text/vectors, only for extreme compression
 };
 
 export const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {

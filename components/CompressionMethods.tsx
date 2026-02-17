@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package, Eraser, Image as ImageIcon, Settings2, Minimize2, Palette, FileImage, Square, Layers,
   Bookmark, Link2, Newspaper, Globe, EyeOff, Hash, Trash2, FileText, MessageSquare, Code, Copy, Type,
-  Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye, Blend, Scissors, Spline,
+  Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye, Blend, Scissors, Spline, ImageDown,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useState, useMemo, useCallback } from 'react';
@@ -280,6 +280,14 @@ const HIGH_METHODS: MethodConfig[] = [
     impact: 'Can significantly reduce size on text-heavy PDFs, but copy/search text may be corrupted in some viewers.',
     icon: Type,
     warning: 'May break copy/search text quality',
+  },
+  {
+    key: 'rasterizePages',
+    label: 'Rasterize Pages',
+    description: 'Convert pages to JPEG images',
+    impact: 'Renders all pages as JPEG images. Destroys text selection, vector quality, and searchability. Huge savings for vector-heavy PDFs.',
+    icon: ImageDown,
+    warning: 'Destroys text & vectors',
   },
 ];
 

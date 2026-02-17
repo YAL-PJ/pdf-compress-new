@@ -59,6 +59,7 @@ import {
   reduceVectorPrecision,
   detectVectorFeatures,
 } from './vector-processor';
+import { rasterizePages } from './page-rasterizer';
 
 export const loadPdf = async (
   arrayBuffer: ArrayBuffer
@@ -219,6 +220,24 @@ export const analyzePdf = async (
 }> => {
   const originalSize = arrayBuffer.byteLength;
   const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
+
+  // === Page Rasterization (must run FIRST — replaces entire PDF content) ===
+  let rasterSavings = 0;
+  if (options.rasterizePages) {
+    try {
+      onProgress?.('Rasterizing pages to JPEG...');
+      const rasterResult = await rasterizePages(
+        arrayBuffer,
+        { dpi: settings.targetDpi || 150, quality: (settings.quality || 75) / 100 },
+        onProgress,
+      );
+      rasterSavings = Math.max(0, arrayBuffer.byteLength - rasterResult.pdfBytes.byteLength);
+      // Replace input with rasterized PDF for all subsequent processing
+      arrayBuffer = rasterResult.pdfBytes.slice().buffer as ArrayBuffer;
+    } catch {
+      // Rasterization failed — continue with original PDF
+    }
+  }
 
   onProgress?.('Reading PDF...');
 
@@ -731,6 +750,7 @@ export const analyzePdf = async (
     mkResult('deduplicateShadings'),
     mkResult('removeUnusedShadings'),
     mkResult('reduceVectorPrecision'),
+    mkResult('rasterizePages', { savedBytes: rasterSavings, compressedSize: originalSize - rasterSavings, pending: false }),
   ];
 
   onProgress?.('Done!');
@@ -802,6 +822,23 @@ export const analyzePdfIncremental = async (
 
   const originalSize = arrayBuffer.byteLength;
   const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
+
+  // === Page Rasterization (must run FIRST — replaces entire PDF content) ===
+  let rasterSavings = 0;
+  if (options.rasterizePages) {
+    try {
+      onProgress?.('Rasterizing pages to JPEG...');
+      const rasterResult = await rasterizePages(
+        arrayBuffer,
+        { dpi: settings.targetDpi || 150, quality: (settings.quality || 75) / 100 },
+        onProgress,
+      );
+      rasterSavings = Math.max(0, arrayBuffer.byteLength - rasterResult.pdfBytes.byteLength);
+      arrayBuffer = rasterResult.pdfBytes.slice().buffer as ArrayBuffer;
+    } catch {
+      // Rasterization failed — continue with original PDF
+    }
+  }
 
   onProgress?.('Reading PDF...');
 
@@ -1269,6 +1306,7 @@ export const analyzePdfIncremental = async (
     mkResult('deduplicateShadings'),
     mkResult('removeUnusedShadings'),
     mkResult('reduceVectorPrecision'),
+    mkResult('rasterizePages', { savedBytes: rasterSavings, compressedSize: originalSize - rasterSavings, pending: false }),
   ];
 
   onProgress?.('Done!');
@@ -1397,6 +1435,32 @@ export const measureMethodSavings = async (
     if (shouldAbort?.()) return;
 
     // Send progressive update after each method
+    onMethodUpdate([...results]);
+  }
+
+  // Measure rasterization separately — it replaces the entire PDF, not a pdf-lib mutation
+  if (shouldAbort?.()) return;
+  try {
+    const rasterResult = await rasterizePages(
+      workingBuffer,
+      { dpi: 150, quality: 0.75 },
+    );
+    const saved = Math.max(0, baseSize - rasterResult.pdfBytes.byteLength);
+    results.push({
+      key: 'rasterizePages',
+      savedBytes: saved,
+      compressedSize: baseSize - saved,
+      pending: false,
+    });
+  } catch {
+    results.push({
+      key: 'rasterizePages',
+      savedBytes: 0,
+      compressedSize: baseSize,
+      pending: false,
+    });
+  }
+  if (!shouldAbort?.()) {
     onMethodUpdate([...results]);
   }
 };
