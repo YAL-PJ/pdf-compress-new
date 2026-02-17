@@ -343,6 +343,7 @@ export const ResultsDisplay = memo(({
             onMovePage={onMovePage}
             selectedPreviewPage={previewPage}
             onSelectPreviewPage={handlePreviewPageChange}
+            compressedBlob={blob}
           />
         </div>
 

@@ -72,3 +72,33 @@ export const applyPageOperations = async (
     const pdfBytes = await destDoc.save();
     return new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
 };
+
+/**
+ * Estimate the byte contribution of each page in a PDF.
+ * Creates a single-page PDF for each page and measures its size minus baseline overhead.
+ * Returns a Map from 1-based page index to estimated byte size.
+ */
+export const estimatePageSizes = async (
+    pdfBlob: Blob,
+): Promise<Map<number, number>> => {
+    const buffer = await pdfBlob.arrayBuffer();
+    const srcDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
+    const pageCount = srcDoc.getPageCount();
+
+    // Measure empty PDF overhead once
+    const emptyDoc = await PDFDocument.create();
+    const emptyBytes = await emptyDoc.save();
+    const baselineSize = emptyBytes.length;
+
+    const pageSizes = new Map<number, number>();
+
+    for (let i = 0; i < pageCount; i++) {
+        const singleDoc = await PDFDocument.create();
+        const [copiedPage] = await singleDoc.copyPages(srcDoc, [i]);
+        singleDoc.addPage(copiedPage);
+        const singleBytes = await singleDoc.save();
+        pageSizes.set(i + 1, Math.max(0, singleBytes.length - baselineSize));
+    }
+
+    return pageSizes;
+};

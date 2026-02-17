@@ -3,7 +3,8 @@
 import { useState, useCallback, useRef, KeyboardEvent } from 'react';
 import { PageThumbnail } from './PageThumbnail';
 import { usePageManager, PageState } from '@/hooks/usePageManager';
-import { LayoutGrid, GripVertical, ChevronDown, ChevronUp } from 'lucide-react';
+import { estimatePageSizes } from '@/lib/page-operations';
+import { LayoutGrid, GripVertical, ChevronDown, ChevronUp, Calculator, Loader2 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 
 interface PageGridProps {
@@ -20,6 +21,8 @@ interface PageGridProps {
     // Page preview selection
     selectedPreviewPage?: number;
     onSelectPreviewPage?: (pageIndex: number) => void;
+    // Compressed PDF blob for savings estimation
+    compressedBlob?: Blob;
 }
 
 export const PageGrid = ({
@@ -34,6 +37,7 @@ export const PageGrid = ({
     onMovePage: externalMovePage,
     selectedPreviewPage,
     onSelectPreviewPage,
+    compressedBlob,
 }: PageGridProps) => {
     const PREVIEW_LIMIT = 8;
 
@@ -45,6 +49,36 @@ export const PageGrid = ({
 
     // Preview collapse state
     const [showAll, setShowAll] = useState(false);
+
+    // Savings calculator state
+    const [pageSizes, setPageSizes] = useState<Map<number, number> | null>(null);
+    const [isCalculating, setIsCalculating] = useState(false);
+    const [calcError, setCalcError] = useState(false);
+
+    // Reset savings when blob changes (recompression)
+    const prevBlobRef = useRef<Blob | undefined>(undefined);
+    if (compressedBlob !== prevBlobRef.current) {
+        prevBlobRef.current = compressedBlob;
+        if (pageSizes) {
+            setPageSizes(null);
+            setCalcError(false);
+        }
+    }
+
+    const handleCalculateSavings = useCallback(async () => {
+        if (!compressedBlob || isCalculating) return;
+        setIsCalculating(true);
+        setCalcError(false);
+        try {
+            const sizes = await estimatePageSizes(compressedBlob);
+            setPageSizes(sizes);
+        } catch (err) {
+            console.error('Failed to estimate page sizes:', err);
+            setCalcError(true);
+        } finally {
+            setIsCalculating(false);
+        }
+    }, [compressedBlob, isCalculating]);
     const hasMorePages = pages.length > PREVIEW_LIMIT;
     const visiblePages = showAll || !hasMorePages ? pages : pages.slice(0, PREVIEW_LIMIT);
     const toggleDelete = externalToggleDelete ?? internal.toggleDelete;
@@ -171,13 +205,47 @@ export const PageGrid = ({
 
     return (
         <div className={className}>
-            <div className="flex items-center gap-2 mb-4 text-slate-700 font-medium">
+            <div className="flex items-center gap-2 mb-4 text-slate-700 font-medium flex-wrap">
                 <LayoutGrid className="w-5 h-5" />
                 <h3>Page Manager</h3>
-                <span className="text-sm text-slate-600 font-normal ml-auto">
+                <span className="text-sm text-slate-600 font-normal ml-auto flex items-center gap-2">
                     {pages.filter(p => !p.isDeleted).length} of {pageCount} pages selected
+                    {compressedBlob && (
+                        <button
+                            onClick={handleCalculateSavings}
+                            disabled={isCalculating}
+                            className={twMerge(
+                                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all",
+                                pageSizes
+                                    ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                                    : "bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 hover:border-blue-300",
+                                isCalculating && "opacity-70 cursor-wait"
+                            )}
+                            title={pageSizes ? "Savings calculated — delete large pages to reduce file size" : "Estimate how much each page contributes to file size"}
+                        >
+                            {isCalculating ? (
+                                <>
+                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                    Calculating...
+                                </>
+                            ) : pageSizes ? (
+                                <>
+                                    <Calculator className="w-3 h-3" />
+                                    Savings Shown
+                                </>
+                            ) : (
+                                <>
+                                    <Calculator className="w-3 h-3" />
+                                    Calculate Savings
+                                </>
+                            )}
+                        </button>
+                    )}
                 </span>
             </div>
+            {calcError && (
+                <p className="text-xs text-red-500 mb-3">Failed to calculate page sizes. Please try again.</p>
+            )}
 
             {/* Instructions */}
             <p className="text-xs text-slate-500 mb-3">
@@ -245,6 +313,7 @@ export const PageGrid = ({
                                 onToggleDelete={toggleDelete}
                                 onToggleKeepOriginal={toggleKeepOriginal}
                                 onRotate={rotatePage}
+                                estimatedSize={pageSizes?.get(page.index)}
                             />
                             {selectedPreviewPage === page.index && (
                                 <div className="absolute -top-1 -left-1 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full z-10 shadow-sm">
