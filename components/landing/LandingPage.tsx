@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import {
     Shield,
     Zap,
@@ -9,6 +10,7 @@ import {
 import { UploadZone } from '@/components/UploadZone';
 import { BetaFeedbackBanner } from '@/components/BetaFeedbackBanner';
 import { Footer } from '@/components/landing/Footer';
+import { FAQSection } from '@/components/landing/FAQSection';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // This is a Server Component. It renders static HTML.
@@ -17,16 +19,16 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 const features = [
     { icon: Shield, title: '100% Private', description: 'Your files never leave your browser.' },
     { icon: Zap, title: 'Lightning Fast', description: 'WebAssembly + Web Workers.' },
-    { icon: FileDown, title: 'Up to 90% Smaller', description: '24+ compression methods.' },
+    { icon: FileDown, title: 'Compress PDF Online Free', description: 'Powerful optimization with 24+ methods.' },
     { icon: Settings, title: 'Full Control', description: 'Presets or fine-tuned settings.' },
     { icon: Layers, title: 'Page Management', description: 'Reorder, rotate, delete pages.' },
     { icon: Lock, title: 'No Sign-up Required', description: 'No accounts, no limits.' },
 ];
 
 const steps = [
-    { number: '1', title: 'Upload PDF', description: 'Drag & drop or browse.' },
-    { number: '2', title: 'Choose Compression', description: 'Preset or custom.' },
-    { number: '3', title: 'Download', description: 'Instant results.' },
+    { number: '1', title: 'Upload Your PDF', description: 'Drag, drop, or browse your file.' },
+    { number: '2', title: 'Choose Compression Level', description: 'Quick presets or custom controls.' },
+    { number: '3', title: 'Download Smaller PDF', description: 'Get fast results in seconds.' },
 ];
 
 export const LandingPage = () => {
@@ -42,11 +44,11 @@ export const LandingPage = () => {
                     </span>
 
                     <h1 className="mt-6 text-5xl font-extrabold text-slate-900">
-                        Compress PDFs <span className="text-blue-600">Without Uploading</span>
+                        Free <span className="text-blue-600">PDF Compressor Online</span>
                     </h1>
 
                     <p className="mt-6 text-xl text-slate-600 max-w-2xl mx-auto">
-                        Professional client-side PDF compression. 24+ methods. 100% private.
+                        Compress PDF files online free with powerful local processing. Reduce PDF size quickly, keep quality high, and stay private with no server upload required.
                     </p>
 
                     <div className="mt-12 max-w-xl mx-auto">
@@ -87,6 +89,32 @@ export const LandingPage = () => {
                         </div>
                     </div>
                 </section>
+
+
+                {/* SEO CONTENT */}
+                <section className="py-20 bg-slate-50 border-t border-slate-200">
+                    <div className="max-w-4xl mx-auto px-4">
+                        <h2 className="text-3xl font-bold text-slate-900 mb-6 text-center">
+                            Why Users Choose This Free PDF Compressor
+                        </h2>
+                        <div className="space-y-4 text-slate-700 leading-7">
+                            <p>
+                                Looking for a <strong>PDF compressor online</strong> that actually works? This tool is built for real-world files and delivers high-quality results while reducing file size quickly.
+                            </p>
+                            <p>
+                                Unlike many basic tools, this <strong>free compress PDF</strong> workflow runs directly in your browser. That means faster processing, private handling, and no waiting for server uploads.
+                            </p>
+                            <p>
+                                Whether you need to <strong>compress large PDF files</strong> for email, web upload, school, or business, you can choose presets or advanced controls to balance size and quality.
+                            </p>
+                            <p>
+                                Built for transparent privacy: review our <Link href="/privacy" className="text-blue-700 hover:underline">Privacy Policy</Link> and <Link href="/terms" className="text-blue-700 hover:underline">Terms</Link> anytime.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+
+                <FAQSection />
 
                 <Footer />
             </main>
