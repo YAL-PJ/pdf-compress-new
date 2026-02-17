@@ -184,6 +184,14 @@ export const BetaFeedbackBanner = () => {
                   </>
                 )}
               </button>
+              <a
+                href="https://x.com/compress__pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden sm:inline text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                @compress__pdf
+              </a>
             </div>
           </div>
         </div>
