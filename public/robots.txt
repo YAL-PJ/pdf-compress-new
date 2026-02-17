@@ -1,9 +1,14 @@
 # https://www.robotstxt.org/robotstxt.html
 User-agent: *
 Allow: /
+Disallow: /api/
+Disallow: /_next/
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
 
 # Sitemap location
 Sitemap: https://www.freecompresspdf.com/sitemap.xml
-
-# Disallow internal routes
-Disallow: /api/
