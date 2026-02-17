@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Package, Eraser, Image as ImageIcon, Settings2, Minimize2, Palette, FileImage, Square, Layers,
   Bookmark, Link2, Newspaper, Globe, EyeOff, Hash, Trash2, FileText, MessageSquare, Code, Copy, Type,
-  Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye, Blend, Scissors, Spline,
+  Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye, Blend, Scissors, Spline, ImageDown,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useState, useMemo, useCallback } from 'react';
@@ -65,9 +65,16 @@ const SAFE_METHODS: MethodConfig[] = [
   {
     key: 'removeDuplicateResources',
     label: 'Deduplicate',
-    description: 'Merge duplicate images',
+    description: 'Merge duplicate images/fonts',
     impact: 'Merges exact duplicate resources. No quality change whatsoever.',
     icon: Copy,
+  },
+  {
+    key: 'compressUncompressedStreams',
+    label: 'Compress Raw Streams',
+    description: 'Flate-compress uncompressed resources',
+    impact: 'Compresses uncompressed streams (often embedded fonts). No visual or functional change.',
+    icon: Archive,
   },
   {
     key: 'removeThumbnails',
@@ -265,6 +272,22 @@ const HIGH_METHODS: MethodConfig[] = [
     impact: 'Removes searchable text layer from scanned pages. PDF becomes non-searchable.',
     icon: ScanEye,
     warning: 'Breaks text search & accessibility',
+  },
+  {
+    key: 'removeFontUnicodeMaps',
+    label: 'Remove Font Unicode Maps',
+    description: 'Strip ToUnicode mapping tables',
+    impact: 'Can significantly reduce size on text-heavy PDFs, but copy/search text may be corrupted in some viewers.',
+    icon: Type,
+    warning: 'May break copy/search text quality',
+  },
+  {
+    key: 'rasterizePages',
+    label: 'Rasterize Pages',
+    description: 'Convert pages to JPEG images',
+    impact: 'Renders all pages as JPEG images. Destroys text selection, vector quality, and searchability. Huge savings for vector-heavy PDFs.',
+    icon: ImageDown,
+    warning: 'Destroys text & vectors',
   },
 ];
 

@@ -22,7 +22,9 @@ export interface CompressionOptions {
   // Resources (Phase 2)
   removeThumbnails: boolean;
   removeDuplicateResources: boolean;
+  compressUncompressedStreams: boolean;
   removeUnusedFonts: boolean;
+  removeFontUnicodeMaps: boolean;
   removeAttachments: boolean;
 
   // Interactive (Phase 2.10-2.11)
@@ -50,6 +52,9 @@ export interface CompressionOptions {
   deduplicateShadings: boolean;   // 3.1 Deduplicate identical gradient/shading objects
   removeUnusedShadings: boolean;  // 3.2 Remove shadings not referenced in content streams
   reduceVectorPrecision: boolean; // 3.3 Reduce decimal precision in vector path coordinates
+
+  // Page Rasterization (Phase 3 - Nuclear)
+  rasterizePages: boolean;        // 3.4 Render all pages to JPEG images (destroys text/vectors)
 }
 
 export interface ImageCompressionSettings {
@@ -79,7 +84,9 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   // Resources (Phase 2) - safe to enable by default
   removeThumbnails: true,
   removeDuplicateResources: true,  // Safe — only removes exact duplicates, no quality impact
+  compressUncompressedStreams: true,  // Safe — Flate-compresses raw streams (especially embedded fonts) with no visual change
   removeUnusedFonts: true,  // Safe — only removes fonts with zero Tf references, fail-safe on parse errors
+  removeFontUnicodeMaps: false,  // High impact — can degrade copy/search text extraction for better compression
   removeAttachments: false,  // User may want to keep attachments
 
   // Interactive (Phase 2.10-2.11) - off by default, destructive
@@ -107,6 +114,9 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   deduplicateShadings: true,     // On - safe, merges identical gradient definitions
   removeUnusedShadings: true,    // On - safe, removes unreferenced shading objects
   reduceVectorPrecision: false,  // Off - may cause sub-pixel shifts in vector art
+
+  // Page Rasterization (Phase 3 - Nuclear)
+  rasterizePages: false,         // Off - destroys text/vectors, only for extreme compression
 };
 
 export const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
@@ -177,6 +187,7 @@ export interface CompressionAnalysis {
     jpegCount: number;
     pngCount: number;
     otherCount: number;
+    totalOriginalSize: number;
     highDpiCount: number;
     cmykCount: number;
     iccCount: number;
@@ -257,6 +268,7 @@ export interface WorkerSuccessPayload {
     jpegCount: number;
     pngCount: number;
     otherCount: number;
+    totalOriginalSize: number;
     highDpiCount: number;
     cmykCount: number;
     iccCount: number;

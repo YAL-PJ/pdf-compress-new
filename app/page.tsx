@@ -1,15 +1,31 @@
 import type { Metadata } from 'next';
 import { LandingPage } from '@/components/landing/LandingPage';
 import { AppShell } from '@/components/AppShell';
+import { seoFaqs } from '@/lib/seo';
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.freecompresspdf.com';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: 'PDF Compressor Online Free - Compress PDF with Secure Local Processing',
   description:
     'Use our free PDF compressor online to reduce PDF size fast. Compress large PDF files in your browser with no server upload, no sign-up, and advanced quality controls.',
   alternates: {
     canonical: '/',
+  },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    title: 'Free PDF Compressor Online',
+    description:
+      'Compress PDF files online free with secure local processing and no server upload required.',
+    siteName: 'PDF Compress',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Free PDF Compressor Online',
+    description:
+      'Compress PDF files online free in your browser with no server upload and no sign-up.',
   },
 };
 
@@ -53,6 +69,17 @@ const pageJsonLd = {
           text: 'Save the optimized file after processing completes.',
         },
       ],
+    },
+    {
+      '@type': 'FAQPage',
+      mainEntity: seoFaqs.map((faq) => ({
+        '@type': 'Question',
+        name: faq.question,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: faq.answer,
+        },
+      })),
     },
   ],
 };

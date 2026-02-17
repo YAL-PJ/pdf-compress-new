@@ -40,7 +40,9 @@ import {
 } from './structure-processor';
 import {
   removeDuplicateResources,
+  compressUncompressedStreams,
   removeUnusedFonts,
+  removeFontUnicodeMaps,
 } from './resource-processor';
 import {
   convertInlineImagesToXObjects,
@@ -57,6 +59,7 @@ import {
   reduceVectorPrecision,
   detectVectorFeatures,
 } from './vector-processor';
+import { rasterizePages } from './page-rasterizer';
 
 export const loadPdf = async (
   arrayBuffer: ArrayBuffer
@@ -217,6 +220,24 @@ export const analyzePdf = async (
 }> => {
   const originalSize = arrayBuffer.byteLength;
   const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
+
+  // === Page Rasterization (must run FIRST — replaces entire PDF content) ===
+  let rasterSavings = 0;
+  if (options.rasterizePages) {
+    try {
+      onProgress?.('Rasterizing pages to JPEG...');
+      const rasterResult = await rasterizePages(
+        arrayBuffer,
+        { dpi: settings.targetDpi || 150, quality: (settings.quality || 75) / 100 },
+        onProgress,
+      );
+      rasterSavings = Math.max(0, arrayBuffer.byteLength - rasterResult.pdfBytes.byteLength);
+      // Replace input with rasterized PDF for all subsequent processing
+      arrayBuffer = rasterResult.pdfBytes.slice().buffer as ArrayBuffer;
+    } catch {
+      // Rasterization failed — continue with original PDF
+    }
+  }
 
   onProgress?.('Reading PDF...');
 
@@ -481,6 +502,18 @@ export const analyzePdf = async (
     });
   }
 
+  if (options.compressUncompressedStreams) {
+    onProgress?.('Compressing uncompressed streams...');
+    await applyMethod('compressUncompressedStreams', true, (doc) => {
+      const r = compressUncompressedStreams(doc);
+      if (r.streamsCompressed > 0) {
+        log('success', `Compressed ${r.streamsCompressed} raw streams`);
+      } else {
+        log('info', 'No uncompressed streams found');
+      }
+    });
+  }
+
   if (options.removeUnusedFonts) {
     onProgress?.('Removing unused fonts...');
     await applyMethod('removeUnusedFonts', true, (doc) => {
@@ -489,6 +522,18 @@ export const analyzePdf = async (
         log('success', `Removed ${r.fontsRemoved} unused fonts`, { fonts: r.fontNames });
       } else {
         log('info', 'No unused fonts found');
+      }
+    });
+  }
+
+  if (options.removeFontUnicodeMaps) {
+    onProgress?.('Removing font unicode maps...');
+    await applyMethod('removeFontUnicodeMaps', true, (doc) => {
+      const r = removeFontUnicodeMaps(doc);
+      if (r.mapsRemoved > 0) {
+        log('success', `Removed ${r.mapsRemoved} font unicode maps`);
+      } else {
+        log('info', 'No font unicode maps found');
       }
     });
   }
@@ -683,7 +728,9 @@ export const analyzePdf = async (
     mkResult('cmykToRgb'),
     mkResult('removeThumbnails'),
     mkResult('removeDuplicateResources'),
+    mkResult('compressUncompressedStreams'),
     mkResult('removeUnusedFonts'),
+    mkResult('removeFontUnicodeMaps'),
     mkResult('removeAttachments', { details: { imagesProcessed: structAttachmentsRemoved } }),
     mkResult('flattenForms'),
     mkResult('flattenAnnotations'),
@@ -703,6 +750,7 @@ export const analyzePdf = async (
     mkResult('deduplicateShadings'),
     mkResult('removeUnusedShadings'),
     mkResult('reduceVectorPrecision'),
+    mkResult('rasterizePages', { savedBytes: rasterSavings, compressedSize: originalSize - rasterSavings, pending: false }),
   ];
 
   onProgress?.('Done!');
@@ -774,6 +822,23 @@ export const analyzePdfIncremental = async (
 
   const originalSize = arrayBuffer.byteLength;
   const options = settings.options ?? DEFAULT_COMPRESSION_OPTIONS;
+
+  // === Page Rasterization (must run FIRST — replaces entire PDF content) ===
+  let rasterSavings = 0;
+  if (options.rasterizePages) {
+    try {
+      onProgress?.('Rasterizing pages to JPEG...');
+      const rasterResult = await rasterizePages(
+        arrayBuffer,
+        { dpi: settings.targetDpi || 150, quality: (settings.quality || 75) / 100 },
+        onProgress,
+      );
+      rasterSavings = Math.max(0, arrayBuffer.byteLength - rasterResult.pdfBytes.byteLength);
+      arrayBuffer = rasterResult.pdfBytes.slice().buffer as ArrayBuffer;
+    } catch {
+      // Rasterization failed — continue with original PDF
+    }
+  }
 
   onProgress?.('Reading PDF...');
 
@@ -1005,6 +1070,18 @@ export const analyzePdfIncremental = async (
     });
   }
 
+  if (options.compressUncompressedStreams) {
+    onProgress?.('Compressing uncompressed streams...');
+    await applyMethod('compressUncompressedStreams', true, (doc) => {
+      const r = compressUncompressedStreams(doc);
+      if (r.streamsCompressed > 0) {
+        log('success', `Compressed ${r.streamsCompressed} raw streams`);
+      } else {
+        log('info', 'No uncompressed streams found');
+      }
+    });
+  }
+
   if (options.removeUnusedFonts) {
     onProgress?.('Removing unused fonts...');
     await applyMethod('removeUnusedFonts', true, (doc) => {
@@ -1013,6 +1090,18 @@ export const analyzePdfIncremental = async (
         log('success', `Removed ${r.fontsRemoved} unused fonts`, { fonts: r.fontNames });
       } else {
         log('info', 'No unused fonts found');
+      }
+    });
+  }
+
+  if (options.removeFontUnicodeMaps) {
+    onProgress?.('Removing font unicode maps...');
+    await applyMethod('removeFontUnicodeMaps', true, (doc) => {
+      const r = removeFontUnicodeMaps(doc);
+      if (r.mapsRemoved > 0) {
+        log('success', `Removed ${r.mapsRemoved} font unicode maps`);
+      } else {
+        log('info', 'No font unicode maps found');
       }
     });
   }
@@ -1195,7 +1284,9 @@ export const analyzePdfIncremental = async (
     mkResult('cmykToRgb'),
     mkResult('removeThumbnails'),
     mkResult('removeDuplicateResources'),
+    mkResult('compressUncompressedStreams'),
     mkResult('removeUnusedFonts'),
+    mkResult('removeFontUnicodeMaps'),
     mkResult('removeAttachments', { details: { imagesProcessed: structAttachmentsRemoved } }),
     mkResult('flattenForms'),
     mkResult('flattenAnnotations'),
@@ -1215,6 +1306,7 @@ export const analyzePdfIncremental = async (
     mkResult('deduplicateShadings'),
     mkResult('removeUnusedShadings'),
     mkResult('reduceVectorPrecision'),
+    mkResult('rasterizePages', { savedBytes: rasterSavings, compressedSize: originalSize - rasterSavings, pending: false }),
   ];
 
   onProgress?.('Done!');
@@ -1279,7 +1371,9 @@ export const measureMethodSavings = async (
     ['removeColorProfiles', (doc) => { removeIccProfiles(doc); }, true],
     ['cmykToRgb', async (doc) => { await convertCmykToRgb(doc, settings.quality); }, true],
     ['removeDuplicateResources', (doc) => { removeDuplicateResources(doc); }, true],
+    ['compressUncompressedStreams', (doc) => { compressUncompressedStreams(doc); }, false],
     ['removeUnusedFonts', (doc) => { removeUnusedFonts(doc); }, true],
+    ['removeFontUnicodeMaps', (doc) => { removeFontUnicodeMaps(doc); }, true],
     ['inlineToXObject', async (doc) => { await convertInlineImagesToXObjects(doc); }, false],
     ['compressContentStreams', async (doc) => { await compressContentStreams(doc); }, false],
     ['removeAlternateContent', async (doc) => { await removeAlternateContent(doc); }, true],
@@ -1341,6 +1435,20 @@ export const measureMethodSavings = async (
     if (shouldAbort?.()) return;
 
     // Send progressive update after each method
+    onMethodUpdate([...results]);
+  }
+
+  // Rasterization is measured separately — it replaces the entire PDF, not a pdf-lib mutation.
+  // Skip it in background measurement: it's very expensive (renders every page) and the
+  // user already sees its savings when they enable it. Mark as pending: false with 0 savings
+  // so the UI doesn't show a spinner.
+  results.push({
+    key: 'rasterizePages',
+    savedBytes: 0,
+    compressedSize: baseSize,
+    pending: false,
+  });
+  if (!shouldAbort?.()) {
     onMethodUpdate([...results]);
   }
 };

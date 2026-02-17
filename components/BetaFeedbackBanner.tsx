@@ -139,9 +139,6 @@ export const BetaFeedbackBanner = () => {
     }
   };
 
-
-
-
   return (
     <div className="fixed top-0 left-0 right-0 z-50">
       {/* Collapsed Bar */}
@@ -183,6 +180,7 @@ export const BetaFeedbackBanner = () => {
                   </>
                 )}
               </button>
+
               <XLogoLink className="hidden sm:inline text-slate-600 hover:text-slate-900 transition-colors" />
             </div>
           </div>

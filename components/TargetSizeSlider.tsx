@@ -131,16 +131,20 @@ export const TargetSizeSlider = memo(() => {
     }
   };
 
-  const handleDpiChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const targetDpi = parseInt(e.target.value, 10);
-    const newSettings = { ...imageSettings, targetDpi, enableDownsampling: true };
-    setImageSettings(newSettings);
-    if (!options.downsampleImages) {
-      setOptions({ ...options, downsampleImages: true, recompressImages: true });
-    }
-  };
 
   const dpiAboveOriginal = imageStats && imageStats.avgDpi > 0 && imageSettings.targetDpi >= imageStats.avgDpi;
+
+  // Find which DPI preset is closest to the detected average (the "original")
+  const closestOriginalDpi = useMemo(() => {
+    if (!imageStats || imageStats.avgDpi <= 0) return null;
+    let closest: number = DPI_OPTIONS.PRESETS[0].value;
+    let minDiff = Infinity;
+    for (const p of DPI_OPTIONS.PRESETS) {
+      const diff = Math.abs(p.value - imageStats.avgDpi);
+      if (diff < minDiff) { minDiff = diff; closest = p.value; }
+    }
+    return closest;
+  }, [imageStats]);
 
   // Label for current zone
   const zoneLabel = targetPercent <= 35
@@ -198,6 +202,12 @@ export const TargetSizeSlider = memo(() => {
             {targetPercent}% of {formatBytes(originalSize)}
           </span>
         </div>
+
+        {targetPercent > 35 && (
+          <p className="text-[10px] text-slate-500 mb-2">
+            For SmallPDF-like aggressive compression, move target to <span className="font-semibold">35% or lower</span>.
+          </p>
+        )}
 
         {/* Main slider with potential markers */}
         <div className="relative mt-2 mb-1">
@@ -373,8 +383,16 @@ export const TargetSizeSlider = memo(() => {
           </div>
           <p className="text-[10px] text-slate-400 mb-1.5">
             Re-encodes images at lower quality.
-            {imageStats ? ` ${imageStats.totalImages} image${imageStats.totalImages !== 1 ? 's' : ''} (${imageStats.jpegCount} JPEG)` : ''}
+            {imageStats
+              ? ` ${imageStats.totalImages} image${imageStats.totalImages !== 1 ? 's' : ''} (${imageStats.jpegCount} JPEG, ${formatBytes(imageStats.totalOriginalSize)} total)`
+              : ''}
           </p>
+          {imageStats && imageStats.totalOriginalSize > 0 && imageStats.totalOriginalSize / originalSize < 0.1 && (
+            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mb-1.5">
+              This PDF is mostly text/fonts, so image quality changes will have limited effect.
+              For stronger compression, lower Target Size to enable structural cleanup methods.
+            </p>
+          )}
           <div className="relative">
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-slate-100 rounded-full" />
             <div
@@ -419,7 +437,7 @@ export const TargetSizeSlider = memo(() => {
         <div className="border-t border-slate-100" />
 
         {/* DPI / Downsample */}
-        <div className={dpiAboveOriginal ? 'opacity-50' : ''}>
+        <div>
           <div className="flex items-center gap-1.5 mb-0.5">
             <Minimize2 className="w-3 h-3 text-slate-400" />
             <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Downsample</span>
@@ -442,26 +460,64 @@ export const TargetSizeSlider = memo(() => {
               Target DPI is equal to or higher than original (~{imageStats!.avgDpi} DPI) — downsampling will have no effect.
             </p>
           )}
-          <select
-            value={imageSettings.targetDpi}
-            onChange={handleDpiChange}
-            disabled={disabled}
-            aria-label="Target DPI for downsampling"
-            className="w-full text-[11px] bg-slate-50 border border-slate-200 rounded px-1.5 py-[5px] text-slate-800 font-medium
-              focus:outline-none focus:ring-1 focus:ring-slate-400
-              cursor-pointer hover:bg-slate-100 transition-colors"
-          >
+          <div className="grid grid-cols-5 gap-1" role="radiogroup" aria-label="Target DPI for downsampling">
             {DPI_OPTIONS.PRESETS.map((preset) => {
-              const isOriginal = imageStats && imageStats.avgDpi > 0 &&
-                Math.abs(preset.value - imageStats.avgDpi) <=
-                  Math.min(...DPI_OPTIONS.PRESETS.map(p => Math.abs(p.value - (imageStats?.avgDpi ?? 0))));
+              const isOriginal = preset.value === closestOriginalDpi;
+              const isAboveOriginal = closestOriginalDpi !== null && preset.value > closestOriginalDpi;
+              const isSelected = imageSettings.targetDpi === preset.value;
               return (
-                <option key={preset.value} value={preset.value}>
-                  {preset.label}{isOriginal ? ' ← original' : ''}
-                </option>
+                <button
+                  key={preset.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
+                  disabled={disabled || isAboveOriginal}
+                  onClick={() => {
+                    if (isAboveOriginal) return;
+                    const newSettings = { ...imageSettings, targetDpi: preset.value, enableDownsampling: true };
+                    setImageSettings(newSettings);
+                    if (!options.downsampleImages) {
+                      setOptions({ ...options, downsampleImages: true, recompressImages: true });
+                    }
+                  }}
+                  title={
+                    isAboveOriginal
+                      ? `Cannot upscale above original (~${imageStats!.avgDpi} DPI)`
+                      : isOriginal
+                        ? `${preset.label} — closest to original (~${imageStats!.avgDpi} DPI)`
+                        : preset.label
+                  }
+                  className={twMerge(
+                    "relative px-1 py-1.5 rounded text-center text-[10px] font-semibold transition-all duration-150 border",
+                    "focus:outline-none focus:ring-1 focus:ring-slate-400 focus:ring-offset-1",
+                    // Selected state
+                    isSelected && !isAboveOriginal && "bg-slate-900 text-white border-slate-900 shadow-sm",
+                    // Original DPI indicator (not selected)
+                    isOriginal && !isSelected && !isAboveOriginal && "bg-blue-50 text-blue-800 border-blue-300 ring-1 ring-blue-200",
+                    // Normal state
+                    !isSelected && !isOriginal && !isAboveOriginal && "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer",
+                    // Above original — grayed out
+                    isAboveOriginal && "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed",
+                  )}
+                >
+                  <div>{preset.value}</div>
+                  {isOriginal && (
+                    <div className={twMerge(
+                      "text-[7px] font-bold uppercase tracking-wider mt-0.5",
+                      isSelected ? "text-blue-200" : "text-blue-500"
+                    )}>
+                      current
+                    </div>
+                  )}
+                  {isAboveOriginal && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="w-full h-px bg-slate-300 rotate-[-15deg]" />
+                    </div>
+                  )}
+                </button>
               );
             })}
-          </select>
+          </div>
         </div>
       </div>
     </div>

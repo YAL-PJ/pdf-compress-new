@@ -51,13 +51,20 @@ export const MethodItem = memo(({
         onImageSettingsChange({ ...imageSettings, quality });
     }, [imageSettings, onImageSettingsChange]);
 
-    const handleDpiChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-        const targetDpi = parseInt(e.target.value, 10);
-        onImageSettingsChange({ ...imageSettings, targetDpi });
-    }, [imageSettings, onImageSettingsChange]);
-
     // Check if target DPI is at or above original - downsampling won't help
     const dpiAboveOriginal = imageStats && imageStats.avgDpi > 0 && imageSettings.targetDpi >= imageStats.avgDpi;
+
+    // Find which DPI preset is closest to the detected average (the "original")
+    const closestOriginalDpi = (() => {
+        if (!imageStats || imageStats.avgDpi <= 0) return null;
+        let closest: number = DPI_OPTIONS.PRESETS[0].value;
+        let minDiff = Infinity;
+        for (const p of DPI_OPTIONS.PRESETS) {
+            const diff = Math.abs(p.value - imageStats.avgDpi);
+            if (diff < minDiff) { minDiff = diff; closest = p.value; }
+        }
+        return closest;
+    })();
 
     return (
         <div>
@@ -203,27 +210,56 @@ export const MethodItem = memo(({
                                         Target DPI is equal to or higher than original (~{imageStats!.avgDpi} DPI) — no effect.
                                     </div>
                                 )}
-                                <select
-                                    value={imageSettings.targetDpi}
-                                    onChange={handleDpiChange}
-                                    disabled={disabled}
-                                    aria-label="Target DPI for downsampling"
-                                    className={twMerge(
-                                        "w-full text-xs bg-white border rounded px-1.5 py-1 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900",
-                                        dpiAboveOriginal && "opacity-50"
-                                    )}
-                                >
+                                <div className="grid grid-cols-5 gap-1" role="radiogroup" aria-label="Target DPI for downsampling">
                                     {DPI_OPTIONS.PRESETS.map((preset) => {
-                                        const isOriginal = imageStats && imageStats.avgDpi > 0 &&
-                                            Math.abs(preset.value - imageStats.avgDpi) <=
-                                              Math.min(...DPI_OPTIONS.PRESETS.map(p => Math.abs(p.value - (imageStats?.avgDpi ?? 0))));
+                                        const isOriginal = preset.value === closestOriginalDpi;
+                                        const isAboveOriginal = closestOriginalDpi !== null && preset.value > closestOriginalDpi;
+                                        const isSelected = imageSettings.targetDpi === preset.value;
                                         return (
-                                            <option key={preset.value} value={preset.value}>
-                                                {preset.label}{isOriginal ? ' ← original' : ''}
-                                            </option>
+                                            <button
+                                                key={preset.value}
+                                                type="button"
+                                                role="radio"
+                                                aria-checked={isSelected}
+                                                disabled={disabled || isAboveOriginal}
+                                                onClick={() => {
+                                                    if (isAboveOriginal) return;
+                                                    onImageSettingsChange({ ...imageSettings, targetDpi: preset.value });
+                                                }}
+                                                title={
+                                                    isAboveOriginal
+                                                        ? `Cannot upscale above original (~${imageStats!.avgDpi} DPI)`
+                                                        : isOriginal
+                                                            ? `${preset.label} — closest to original (~${imageStats!.avgDpi} DPI)`
+                                                            : preset.label
+                                                }
+                                                className={twMerge(
+                                                    "relative px-1 py-1.5 rounded text-center text-[10px] font-semibold transition-all duration-150 border",
+                                                    "focus:outline-none focus:ring-1 focus:ring-slate-400 focus:ring-offset-1",
+                                                    isSelected && !isAboveOriginal && "bg-slate-900 text-white border-slate-900 shadow-sm",
+                                                    isOriginal && !isSelected && !isAboveOriginal && "bg-blue-50 text-blue-800 border-blue-300 ring-1 ring-blue-200",
+                                                    !isSelected && !isOriginal && !isAboveOriginal && "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 cursor-pointer",
+                                                    isAboveOriginal && "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed",
+                                                )}
+                                            >
+                                                <div>{preset.value}</div>
+                                                {isOriginal && (
+                                                    <div className={twMerge(
+                                                        "text-[7px] font-bold uppercase tracking-wider mt-0.5",
+                                                        isSelected ? "text-blue-200" : "text-blue-500"
+                                                    )}>
+                                                        current
+                                                    </div>
+                                                )}
+                                                {isAboveOriginal && (
+                                                    <div className="absolute inset-0 flex items-center justify-center">
+                                                        <div className="w-full h-px bg-slate-300 rotate-[-15deg]" />
+                                                    </div>
+                                                )}
+                                            </button>
                                         );
                                     })}
-                                </select>
+                                </div>
                             </div>
                         </div>
                     </motion.div>
