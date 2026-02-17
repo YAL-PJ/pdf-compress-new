@@ -55,6 +55,20 @@ export const TargetSizeSlider = memo(() => {
     };
   }, [potential, originalSize]);
 
+  // Find which DPI preset is closest to the detected average (the "original")
+  // NOTE: This useMemo MUST be before the early return to avoid React error #310
+  // ("Rendered more hooks than during the previous render").
+  const closestOriginalDpi = useMemo(() => {
+    if (!imageStats || imageStats.avgDpi <= 0) return null;
+    let closest: number = DPI_OPTIONS.PRESETS[0].value;
+    let minDiff = Infinity;
+    for (const p of DPI_OPTIONS.PRESETS) {
+      const diff = Math.abs(p.value - imageStats.avgDpi);
+      if (diff < minDiff) { minDiff = diff; closest = p.value; }
+    }
+    return closest;
+  }, [imageStats]);
+
   // Don't render if no file has been compressed yet
   if (!analysis || originalSize === 0) return null;
 
@@ -133,18 +147,6 @@ export const TargetSizeSlider = memo(() => {
 
 
   const dpiAboveOriginal = imageStats && imageStats.avgDpi > 0 && imageSettings.targetDpi >= imageStats.avgDpi;
-
-  // Find which DPI preset is closest to the detected average (the "original")
-  const closestOriginalDpi = useMemo(() => {
-    if (!imageStats || imageStats.avgDpi <= 0) return null;
-    let closest: number = DPI_OPTIONS.PRESETS[0].value;
-    let minDiff = Infinity;
-    for (const p of DPI_OPTIONS.PRESETS) {
-      const diff = Math.abs(p.value - imageStats.avgDpi);
-      if (diff < minDiff) { minDiff = diff; closest = p.value; }
-    }
-    return closest;
-  }, [imageStats]);
 
   // Label for current zone
   const zoneLabel = targetPercent <= 35
