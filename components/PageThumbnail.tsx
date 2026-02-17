@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import { renderPageToImage } from '@/lib/pdf-renderer';
-import { Loader2, Trash2, RotateCw, ShieldCheck } from 'lucide-react';
+import { Loader2, Trash2, RotateCw, ShieldCheck, TrendingDown } from 'lucide-react';
+import { formatBytes } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { twMerge } from 'tailwind-merge';
 
@@ -15,6 +16,7 @@ interface PageThumbnailProps {
     isDeleted?: boolean;
     keepOriginal?: boolean;
     rotation?: number; // 0, 90, 180, 270
+    estimatedSize?: number; // estimated byte contribution of this page
 }
 
 export const PageThumbnail = memo(({
@@ -25,7 +27,8 @@ export const PageThumbnail = memo(({
     onRotate,
     isDeleted = false,
     keepOriginal = false,
-    rotation = 0
+    rotation = 0,
+    estimatedSize,
 }: PageThumbnailProps) => {
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -155,6 +158,24 @@ export const PageThumbnail = memo(({
                     <div className="bg-blue-100 text-blue-600 rounded-full p-2 border border-blue-200">
                         <ShieldCheck className="w-5 h-5" aria-hidden="true" />
                     </div>
+                </div>
+            )}
+
+            {/* Estimated Size Badge */}
+            {estimatedSize != null && (
+                <div
+                    className={twMerge(
+                        "absolute bottom-2 right-2 flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold backdrop-blur-sm z-10",
+                        estimatedSize >= 500 * 1024
+                            ? "bg-red-600/80 text-white"
+                            : estimatedSize >= 100 * 1024
+                                ? "bg-amber-500/80 text-white"
+                                : "bg-emerald-600/80 text-white"
+                    )}
+                    title={`Deleting this page saves ~${formatBytes(estimatedSize)}`}
+                >
+                    <TrendingDown className="w-2.5 h-2.5" aria-hidden="true" />
+                    {formatBytes(estimatedSize)}
                 </div>
             )}
 
