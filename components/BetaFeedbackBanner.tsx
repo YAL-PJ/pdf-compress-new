@@ -7,9 +7,7 @@ import {
   Lightbulb,
   Send,
   Check,
-  ChevronDown,
   ChevronUp,
-  User,
   Loader2
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
@@ -185,7 +183,10 @@ export const BetaFeedbackBanner = () => {
                   </>
                 )}
               </button>
-              <XLogoLink className="hidden sm:inline text-slate-600 hover:text-slate-900 transition-colors" />
+              <XLogoLink
+                ariaLabel="Visit PDF Compress on X"
+                className="hidden sm:inline text-slate-600 hover:text-slate-900 transition-colors"
+              />
             </div>
           </div>
         </div>
