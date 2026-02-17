@@ -33,6 +33,16 @@ export function Footer() {
                 Terms of Service
               </Link>
             </li>
+            <li>
+              <a
+                href="https://x.com/compress__pdf"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Twitter/X @compress__pdf
+              </a>
+            </li>
           </ul>
         </nav>
 
