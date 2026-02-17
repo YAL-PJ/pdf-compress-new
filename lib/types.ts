@@ -22,7 +22,9 @@ export interface CompressionOptions {
   // Resources (Phase 2)
   removeThumbnails: boolean;
   removeDuplicateResources: boolean;
+  compressUncompressedStreams: boolean;
   removeUnusedFonts: boolean;
+  removeFontUnicodeMaps: boolean;
   removeAttachments: boolean;
 
   // Interactive (Phase 2.10-2.11)
@@ -79,7 +81,9 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   // Resources (Phase 2) - safe to enable by default
   removeThumbnails: true,
   removeDuplicateResources: true,  // Safe — only removes exact duplicates, no quality impact
+  compressUncompressedStreams: true,  // Safe — Flate-compresses raw streams (especially embedded fonts) with no visual change
   removeUnusedFonts: true,  // Safe — only removes fonts with zero Tf references, fail-safe on parse errors
+  removeFontUnicodeMaps: false,  // High impact — can degrade copy/search text extraction for better compression
   removeAttachments: false,  // User may want to keep attachments
 
   // Interactive (Phase 2.10-2.11) - off by default, destructive
@@ -177,6 +181,7 @@ export interface CompressionAnalysis {
     jpegCount: number;
     pngCount: number;
     otherCount: number;
+    totalOriginalSize: number;
     highDpiCount: number;
     cmykCount: number;
     iccCount: number;
@@ -257,6 +262,7 @@ export interface WorkerSuccessPayload {
     jpegCount: number;
     pngCount: number;
     otherCount: number;
+    totalOriginalSize: number;
     highDpiCount: number;
     cmykCount: number;
     iccCount: number;

@@ -199,6 +199,12 @@ export const TargetSizeSlider = memo(() => {
           </span>
         </div>
 
+        {targetPercent > 35 && (
+          <p className="text-[10px] text-slate-500 mb-2">
+            For SmallPDF-like aggressive compression, move target to <span className="font-semibold">35% or lower</span>.
+          </p>
+        )}
+
         {/* Main slider with potential markers */}
         <div className="relative mt-2 mb-1">
           {/* Track background */}
@@ -373,8 +379,16 @@ export const TargetSizeSlider = memo(() => {
           </div>
           <p className="text-[10px] text-slate-400 mb-1.5">
             Re-encodes images at lower quality.
-            {imageStats ? ` ${imageStats.totalImages} image${imageStats.totalImages !== 1 ? 's' : ''} (${imageStats.jpegCount} JPEG)` : ''}
+            {imageStats
+              ? ` ${imageStats.totalImages} image${imageStats.totalImages !== 1 ? 's' : ''} (${imageStats.jpegCount} JPEG, ${formatBytes(imageStats.totalOriginalSize)} total)`
+              : ''}
           </p>
+          {imageStats && imageStats.totalOriginalSize > 0 && imageStats.totalOriginalSize / originalSize < 0.1 && (
+            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mb-1.5">
+              This PDF is mostly text/fonts, so image quality changes will have limited effect.
+              For stronger compression, lower Target Size to enable structural cleanup methods.
+            </p>
+          )}
           <div className="relative">
             <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-1 bg-slate-100 rounded-full" />
             <div

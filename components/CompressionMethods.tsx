@@ -65,9 +65,16 @@ const SAFE_METHODS: MethodConfig[] = [
   {
     key: 'removeDuplicateResources',
     label: 'Deduplicate',
-    description: 'Merge duplicate images',
+    description: 'Merge duplicate images/fonts',
     impact: 'Merges exact duplicate resources. No quality change whatsoever.',
     icon: Copy,
+  },
+  {
+    key: 'compressUncompressedStreams',
+    label: 'Compress Raw Streams',
+    description: 'Flate-compress uncompressed resources',
+    impact: 'Compresses uncompressed streams (often embedded fonts). No visual or functional change.',
+    icon: Archive,
   },
   {
     key: 'removeThumbnails',
@@ -265,6 +272,14 @@ const HIGH_METHODS: MethodConfig[] = [
     impact: 'Removes searchable text layer from scanned pages. PDF becomes non-searchable.',
     icon: ScanEye,
     warning: 'Breaks text search & accessibility',
+  },
+  {
+    key: 'removeFontUnicodeMaps',
+    label: 'Remove Font Unicode Maps',
+    description: 'Strip ToUnicode mapping tables',
+    impact: 'Can significantly reduce size on text-heavy PDFs, but copy/search text may be corrupted in some viewers.',
+    icon: Type,
+    warning: 'May break copy/search text quality',
   },
 ];
 

@@ -18,6 +18,7 @@ export const SAFE_METHOD_KEYS: (keyof CompressionOptions)[] = [
   'compressContentStreams',
   'removeOrphanObjects',
   'removeDuplicateResources',
+  'compressUncompressedStreams',
   'removeThumbnails',
   'removeJavaScript',
   'removeArticleThreads',
@@ -52,6 +53,7 @@ export const HIGH_METHOD_KEYS: (keyof CompressionOptions)[] = [
   'flattenForms',
   'flattenAnnotations',
   'removeInvisibleText',
+  'removeFontUnicodeMaps',
 ];
 
 /** All method keys across all risk levels */
