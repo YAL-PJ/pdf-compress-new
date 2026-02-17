@@ -12,6 +12,8 @@ import { twMerge } from 'tailwind-merge';
 import { useState, useMemo, useCallback } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { usePdf } from '@/context/PdfContext';
+import type { RiskLevel } from '@/lib/method-categories';
+
 export interface MethodConfig {
   key: keyof CompressionOptions;
   label: string;
@@ -21,8 +23,6 @@ export interface MethodConfig {
   hasSettings?: boolean;
   warning?: string;
 }
-
-type RiskLevel = 'safe' | 'medium' | 'high';
 
 // Methods organized by risk level - how much harm/loss they cause to the file
 
