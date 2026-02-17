@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { XLogoLink } from '@/components/XLogoLink';
 
 export function Footer() {
   const currentYear = new Date().getFullYear();
@@ -42,14 +43,7 @@ export function Footer() {
               </Link>
             </li>
             <li>
-              <a
-                href="https://x.com/compress__pdf"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-slate-600 hover:text-slate-900 transition-colors"
-              >
-                Twitter/X @compress__pdf
-              </a>
+              <XLogoLink className="text-slate-600 hover:text-slate-900 transition-colors" />
             </li>
           </ul>
         </nav>

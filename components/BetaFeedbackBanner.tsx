@@ -7,12 +7,11 @@ import {
   Lightbulb,
   Send,
   Check,
-  ChevronDown,
   ChevronUp,
-  User,
   Loader2
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
+import { XLogoLink } from '@/components/XLogoLink';
 
 /* =========================
    CONFIGURATION
@@ -140,9 +139,6 @@ export const BetaFeedbackBanner = () => {
     }
   };
 
-
-
-
   return (
     <div className="fixed top-0 left-0 right-0 z-50">
       {/* Collapsed Bar */}
@@ -184,14 +180,8 @@ export const BetaFeedbackBanner = () => {
                   </>
                 )}
               </button>
-              <a
-                href="https://x.com/compress__pdf"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden sm:inline text-xs font-medium text-slate-600 hover:text-slate-900 transition-colors"
-              >
-                @compress__pdf
-              </a>
+
+              <XLogoLink className="hidden sm:inline text-slate-600 hover:text-slate-900 transition-colors" />
             </div>
           </div>
         </div>
