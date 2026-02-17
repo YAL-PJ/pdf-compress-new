@@ -27,6 +27,14 @@ export function Footer() {
             </li>
             <li>
               <Link
+                href="/faq"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                FAQ
+              </Link>
+            </li>
+            <li>
+              <Link
                 href="/terms"
                 className="text-slate-600 hover:text-slate-900 transition-colors"
               >
