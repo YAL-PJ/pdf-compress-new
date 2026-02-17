@@ -14,6 +14,7 @@
  */
 
 import { CompressionOptions, ImageCompressionSettings, DEFAULT_COMPRESSION_OPTIONS, DEFAULT_IMAGE_SETTINGS } from './types';
+import { allMethodsEnabled } from './method-categories';
 
 function lerp(a: number, b: number, t: number): number {
   return Math.round(a + (b - a) * t);
@@ -57,6 +58,20 @@ export function settingsForTargetPercent(targetPercent: number): TargetSizeResul
   const enableDownsampling = pct <= 80;
   const enableAggressiveMethods = pct <= 50;
   const enableMaxCompression = pct <= 30;
+  const enableNuclear = pct <= 15;
+
+  // At extreme low targets (≤15%), enable every single method
+  if (enableNuclear) {
+    return {
+      options: allMethodsEnabled(),
+      imageSettings: {
+        quality: Math.max(5, quality),
+        targetDpi: 72,
+        enableDownsampling: true,
+        minSizeThreshold: 1024,
+      },
+    };
+  }
 
   const options: CompressionOptions = {
     ...DEFAULT_COMPRESSION_OPTIONS,
@@ -189,43 +204,9 @@ export function getEscalationTier(
     }
     case 3:
     default: {
-      // Tier 3: Nuclear — absolute minimum quality, grayscale, everything on
+      // Tier 3: Nuclear — absolute minimum quality, every method enabled
       return {
-        options: {
-          ...baseOptions,
-          useObjectStreams: true,
-          stripMetadata: true,
-          recompressImages: true,
-          downsampleImages: true,
-          convertToGrayscale: true,
-          convertToMonochrome: false, // Monochrome may destroy readability
-          pngToJpeg: true,
-          removeAlphaChannels: true,
-          removeColorProfiles: true,
-          cmykToRgb: true,
-          removeThumbnails: true,
-          removeDuplicateResources: true,
-          removeUnusedFonts: true,
-          removeAttachments: true,
-          flattenForms: true,
-          flattenAnnotations: true,
-          removeJavaScript: true,
-          removeBookmarks: true,
-          removeNamedDestinations: true,
-          removeArticleThreads: true,
-          removeWebCaptureInfo: true,
-          removeHiddenLayers: true,
-          removePageLabels: true,
-          deepCleanMetadata: true,
-          inlineToXObject: true,
-          compressContentStreams: true,
-          removeOrphanObjects: true,
-          removeAlternateContent: true,
-          removeInvisibleText: true,
-          deduplicateShadings: true,
-          removeUnusedShadings: true,
-          reduceVectorPrecision: true,
-        },
+        options: allMethodsEnabled(),
         imageSettings: {
           quality: 5,
           targetDpi: 72,

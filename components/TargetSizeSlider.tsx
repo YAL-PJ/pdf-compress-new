@@ -4,6 +4,7 @@ import { memo, useState, useMemo, useRef } from 'react';
 import { usePdf } from '@/context/PdfContext';
 import { settingsForTargetPercent, TARGET_SIZE_STEPS } from '@/lib/target-size';
 import { calculateCompressionPotential, selectMethodsForTarget } from '@/lib/compression-potential';
+import { allMethodsEnabled } from '@/lib/method-categories';
 import { formatBytes } from '@/lib/utils';
 import { IMAGE_COMPRESSION, DPI_OPTIONS } from '@/lib/constants';
 import { Target, ImageIcon, Minimize2, Shield, AlertTriangle, Zap } from 'lucide-react';
@@ -77,22 +78,40 @@ export const TargetSizeSlider = memo(() => {
     // Debounce settings update to avoid rapid recompressions
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
+      const targetBytesForPercent = Math.round(originalSize * (newPercent / 100));
+
       // Use measured savings to pick methods progressively when we have data
       if (methodResults && methodResults.length > 0) {
-        const needed = selectMethodsForTarget(originalSize, Math.round(originalSize * (newPercent / 100)), methodResults);
+        const needed = selectMethodsForTarget(originalSize, targetBytesForPercent, methodResults);
 
         // Start from the zone-based settings as a baseline for image quality/DPI
         const baseline = settingsForTargetPercent(newPercent);
 
-        // Merge: enable all methods the progressive selector chose,
-        // but keep zone-based image quality/DPI settings
-        const mergedOptions = { ...baseline.options };
-        for (const key of needed) {
-          (mergedOptions as Record<string, boolean>)[key] = true;
-        }
+        // Check if progressive selection exhausted all tiers and still can't reach target
+        // → go nuclear: enable every method + absolute minimum image settings
+        const potential = calculateCompressionPotential(originalSize, methodResults);
+        const needsMaxCompression = targetBytesForPercent <= potential.absoluteFloor;
 
-        setOptions(mergedOptions);
-        setImageSettings(baseline.imageSettings);
+        if (needsMaxCompression) {
+          // Enable every single method and push image settings to absolute minimum
+          setOptions(allMethodsEnabled());
+          setImageSettings({
+            quality: 5,
+            targetDpi: 72,
+            enableDownsampling: true,
+            minSizeThreshold: 1024, // Process even tiny images
+          });
+        } else {
+          // Merge: enable all methods the progressive selector chose,
+          // but keep zone-based image quality/DPI settings
+          const mergedOptions = { ...baseline.options };
+          for (const key of needed) {
+            (mergedOptions as Record<string, boolean>)[key] = true;
+          }
+
+          setOptions(mergedOptions);
+          setImageSettings(baseline.imageSettings);
+        }
       } else {
         // Fallback: no measurements yet, use zone-based heuristics
         const { options, imageSettings } = settingsForTargetPercent(newPercent);

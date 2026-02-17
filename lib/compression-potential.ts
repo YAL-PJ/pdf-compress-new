@@ -10,49 +10,10 @@
  */
 
 import type { CompressionOptions, MethodResult } from './types';
+import { METHOD_RISK_LEVELS, type RiskLevel } from './method-categories';
 
-export type RiskLevel = 'safe' | 'medium' | 'high';
-
-/** Classification of every compression method by risk level */
-export const METHOD_RISK_LEVELS: Record<keyof CompressionOptions, RiskLevel> = {
-  // Safe — no visual or functional loss
-  useObjectStreams: 'safe',
-  stripMetadata: 'safe',
-  deepCleanMetadata: 'safe',
-  compressContentStreams: 'safe',
-  removeOrphanObjects: 'safe',
-  removeDuplicateResources: 'safe',
-  removeThumbnails: 'safe',
-  removeJavaScript: 'safe',
-  removeArticleThreads: 'safe',
-  removeWebCaptureInfo: 'safe',
-  removeColorProfiles: 'safe',
-  removeUnusedFonts: 'safe',
-  inlineToXObject: 'safe',
-  deduplicateShadings: 'safe',
-  removeUnusedShadings: 'safe',
-
-  // Medium — some quality or content loss
-  recompressImages: 'medium',
-  downsampleImages: 'medium',
-  pngToJpeg: 'medium',
-  removeAlphaChannels: 'medium',
-  cmykToRgb: 'medium',
-  removeBookmarks: 'medium',
-  removeNamedDestinations: 'medium',
-  removePageLabels: 'medium',
-  removeAttachments: 'medium',
-  removeAlternateContent: 'medium',
-  removeHiddenLayers: 'medium',
-  reduceVectorPrecision: 'medium',
-
-  // High — significant / destructive changes
-  convertToGrayscale: 'high',
-  convertToMonochrome: 'high',
-  flattenForms: 'high',
-  flattenAnnotations: 'high',
-  removeInvisibleText: 'high',
-};
+// Re-export so consumers can import from here too
+export { METHOD_RISK_LEVELS, type RiskLevel } from './method-categories';
 
 export interface CompressionPotential {
   /** Bytes saveable using only safe methods */
