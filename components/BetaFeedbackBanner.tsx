@@ -183,10 +183,7 @@ export const BetaFeedbackBanner = () => {
                   </>
                 )}
               </button>
-              <XLogoLink
-                ariaLabel="Visit PDF Compress on X"
-                className="hidden sm:inline text-slate-600 hover:text-slate-900 transition-colors"
-              />
+              <XLogoLink className="hidden sm:inline text-slate-600 hover:text-slate-900 transition-colors" />
             </div>
           </div>
         </div>

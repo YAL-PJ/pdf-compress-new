@@ -35,10 +35,7 @@ export function Footer() {
               </Link>
             </li>
             <li>
-              <XLogoLink
-                ariaLabel="Visit PDF Compress on X"
-                className="text-slate-600 hover:text-slate-900 transition-colors"
-              />
+              <XLogoLink className="text-slate-600 hover:text-slate-900 transition-colors" />
             </li>
           </ul>
         </nav>
