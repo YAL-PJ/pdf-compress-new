@@ -40,7 +40,9 @@ import {
 } from './structure-processor';
 import {
   removeDuplicateResources,
+  compressUncompressedStreams,
   removeUnusedFonts,
+  removeFontUnicodeMaps,
 } from './resource-processor';
 import {
   convertInlineImagesToXObjects,
@@ -481,6 +483,18 @@ export const analyzePdf = async (
     });
   }
 
+  if (options.compressUncompressedStreams) {
+    onProgress?.('Compressing uncompressed streams...');
+    await applyMethod('compressUncompressedStreams', true, (doc) => {
+      const r = compressUncompressedStreams(doc);
+      if (r.streamsCompressed > 0) {
+        log('success', `Compressed ${r.streamsCompressed} raw streams`);
+      } else {
+        log('info', 'No uncompressed streams found');
+      }
+    });
+  }
+
   if (options.removeUnusedFonts) {
     onProgress?.('Removing unused fonts...');
     await applyMethod('removeUnusedFonts', true, (doc) => {
@@ -489,6 +503,18 @@ export const analyzePdf = async (
         log('success', `Removed ${r.fontsRemoved} unused fonts`, { fonts: r.fontNames });
       } else {
         log('info', 'No unused fonts found');
+      }
+    });
+  }
+
+  if (options.removeFontUnicodeMaps) {
+    onProgress?.('Removing font unicode maps...');
+    await applyMethod('removeFontUnicodeMaps', true, (doc) => {
+      const r = removeFontUnicodeMaps(doc);
+      if (r.mapsRemoved > 0) {
+        log('success', `Removed ${r.mapsRemoved} font unicode maps`);
+      } else {
+        log('info', 'No font unicode maps found');
       }
     });
   }
@@ -683,7 +709,9 @@ export const analyzePdf = async (
     mkResult('cmykToRgb'),
     mkResult('removeThumbnails'),
     mkResult('removeDuplicateResources'),
+    mkResult('compressUncompressedStreams'),
     mkResult('removeUnusedFonts'),
+    mkResult('removeFontUnicodeMaps'),
     mkResult('removeAttachments', { details: { imagesProcessed: structAttachmentsRemoved } }),
     mkResult('flattenForms'),
     mkResult('flattenAnnotations'),
@@ -1005,6 +1033,18 @@ export const analyzePdfIncremental = async (
     });
   }
 
+  if (options.compressUncompressedStreams) {
+    onProgress?.('Compressing uncompressed streams...');
+    await applyMethod('compressUncompressedStreams', true, (doc) => {
+      const r = compressUncompressedStreams(doc);
+      if (r.streamsCompressed > 0) {
+        log('success', `Compressed ${r.streamsCompressed} raw streams`);
+      } else {
+        log('info', 'No uncompressed streams found');
+      }
+    });
+  }
+
   if (options.removeUnusedFonts) {
     onProgress?.('Removing unused fonts...');
     await applyMethod('removeUnusedFonts', true, (doc) => {
@@ -1013,6 +1053,18 @@ export const analyzePdfIncremental = async (
         log('success', `Removed ${r.fontsRemoved} unused fonts`, { fonts: r.fontNames });
       } else {
         log('info', 'No unused fonts found');
+      }
+    });
+  }
+
+  if (options.removeFontUnicodeMaps) {
+    onProgress?.('Removing font unicode maps...');
+    await applyMethod('removeFontUnicodeMaps', true, (doc) => {
+      const r = removeFontUnicodeMaps(doc);
+      if (r.mapsRemoved > 0) {
+        log('success', `Removed ${r.mapsRemoved} font unicode maps`);
+      } else {
+        log('info', 'No font unicode maps found');
       }
     });
   }
@@ -1195,7 +1247,9 @@ export const analyzePdfIncremental = async (
     mkResult('cmykToRgb'),
     mkResult('removeThumbnails'),
     mkResult('removeDuplicateResources'),
+    mkResult('compressUncompressedStreams'),
     mkResult('removeUnusedFonts'),
+    mkResult('removeFontUnicodeMaps'),
     mkResult('removeAttachments', { details: { imagesProcessed: structAttachmentsRemoved } }),
     mkResult('flattenForms'),
     mkResult('flattenAnnotations'),
@@ -1279,7 +1333,9 @@ export const measureMethodSavings = async (
     ['removeColorProfiles', (doc) => { removeIccProfiles(doc); }, true],
     ['cmykToRgb', async (doc) => { await convertCmykToRgb(doc, settings.quality); }, true],
     ['removeDuplicateResources', (doc) => { removeDuplicateResources(doc); }, true],
+    ['compressUncompressedStreams', (doc) => { compressUncompressedStreams(doc); }, false],
     ['removeUnusedFonts', (doc) => { removeUnusedFonts(doc); }, true],
+    ['removeFontUnicodeMaps', (doc) => { removeFontUnicodeMaps(doc); }, true],
     ['inlineToXObject', async (doc) => { await convertInlineImagesToXObjects(doc); }, false],
     ['compressContentStreams', async (doc) => { await compressContentStreams(doc); }, false],
     ['removeAlternateContent', async (doc) => { await removeAlternateContent(doc); }, true],

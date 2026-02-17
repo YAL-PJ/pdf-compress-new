@@ -21,6 +21,7 @@ const METHOD_LABELS: Record<string, string> = {
   cmykToRgb: 'CMYK to RGB',
   removeThumbnails: 'Remove Thumbnails',
   removeDuplicateResources: 'Remove Duplicates',
+  compressUncompressedStreams: 'Compress Raw Streams',
   removeUnusedFonts: 'Remove Unused Fonts',
   removeAttachments: 'Remove Attachments',
   flattenForms: 'Flatten Forms',
@@ -38,6 +39,7 @@ const METHOD_LABELS: Record<string, string> = {
   removeOrphanObjects: 'Remove Orphan Objects',
   removeAlternateContent: 'Remove Alternate Content',
   removeInvisibleText: 'Remove Invisible Text',
+  removeFontUnicodeMaps: 'Remove Font Unicode Maps',
 };
 
 interface CompressionStatsProps {

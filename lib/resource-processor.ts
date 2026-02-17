@@ -1,6 +1,6 @@
 /**
  * Resource Processor - Handles resource optimization
- * - Duplicate resource removal (images, fonts, etc.)
+ * - Duplicate resource removal (images, embedded font files, etc.)
  * - Unused font removal
  */
 
@@ -25,6 +25,16 @@ export interface DuplicateRemovalResult {
 export interface UnusedFontResult {
   fontsRemoved: number;
   fontNames: string[];
+}
+
+export interface FontUnicodeMapRemovalResult {
+  mapsRemoved: number;
+  estimatedSavedBytes: number;
+}
+
+export interface StreamCompressionResult {
+  streamsCompressed: number;
+  savedBytes: number;
 }
 
 /**
@@ -109,9 +119,68 @@ const isImageXObject = (dict: PDFDict): boolean => {
   return subtype instanceof PDFName && subtype.toString() === '/Image';
 };
 
+
+/**
+ * Check if an object is a FontDescriptor dictionary
+ */
+const isFontDescriptor = (dict: PDFDict): boolean => {
+  const type = dict.get(PDFName.of('Type'));
+  return type instanceof PDFName && type.toString() === '/FontDescriptor';
+};
+
+/**
+ * Deduplicate embedded font program streams referenced by FontDescriptor
+ * dictionaries (/FontFile, /FontFile2, /FontFile3).
+ */
+const dedupeEmbeddedFontPrograms = (
+  pdfDoc: PDFDocument,
+  hashToRef: Map<string, { ref: PDFRef; size: number }>,
+  refRemapping: Map<string, PDFRef>,
+  result: DuplicateRemovalResult,
+): void => {
+  const context = pdfDoc.context;
+
+  for (const [, obj] of context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFDict) || !isFontDescriptor(obj)) {
+      continue;
+    }
+
+    for (const key of ['FontFile', 'FontFile2', 'FontFile3']) {
+      const fontFileKey = PDFName.of(key);
+      const fontFile = obj.get(fontFileKey);
+      if (!(fontFile instanceof PDFRef)) continue;
+
+      const fontStream = context.lookup(fontFile);
+      if (!(fontStream instanceof PDFRawStream) && !(fontStream instanceof PDFStream)) {
+        continue;
+      }
+
+      const bytes = getStreamBytes(fontStream);
+      if (!bytes || bytes.length < 1024) continue;
+
+      const subtype = fontStream.dict.get(PDFName.of('Subtype'))?.toString() || 'unknown';
+      const length1 = fontStream.dict.get(PDFName.of('Length1'))?.toString() || '0';
+      const length2 = fontStream.dict.get(PDFName.of('Length2'))?.toString() || '0';
+      const fullHash = `font:${key}:${subtype}:${length1}:${length2}:${hashBytes(bytes)}`;
+
+      const refKey = `${fontFile.objectNumber}-${fontFile.generationNumber}`;
+      const existing = hashToRef.get(fullHash);
+
+      if (existing) {
+        refRemapping.set(refKey, existing.ref);
+        obj.set(fontFileKey, existing.ref);
+        result.duplicatesFound++;
+        result.bytesEstimatedSaved += bytes.length;
+      } else {
+        hashToRef.set(fullHash, { ref: fontFile, size: bytes.length });
+      }
+    }
+  }
+};
+
 /**
  * Remove duplicate resources from PDF
- * Finds identical streams (images, etc.) and merges references
+ * Finds identical streams (images, embedded font files, etc.) and merges references
  */
 export const removeDuplicateResources = (pdfDoc: PDFDocument): DuplicateRemovalResult => {
   const result: DuplicateRemovalResult = {
@@ -165,6 +234,9 @@ export const removeDuplicateResources = (pdfDoc: PDFDocument): DuplicateRemovalR
       hashToRef.set(fullHash, { ref, size: bytes.length });
     }
   }
+
+  // Also deduplicate identical embedded font programs
+  dedupeEmbeddedFontPrograms(pdfDoc, hashToRef, refRemapping, result);
 
   if (refRemapping.size === 0) {
     return result;
@@ -441,6 +513,119 @@ export const removeUnusedFonts = (pdfDoc: PDFDocument): UnusedFontResult => {
       fonts.delete(fontKey);
       result.fontsRemoved++;
     }
+  }
+
+  return result;
+};
+
+
+/**
+ * Compress currently-unfiltered embedded font program streams referenced by
+ * FontDescriptor dictionaries (/FontFile, /FontFile2, /FontFile3).
+ *
+ * This is intentionally conservative: page/content/image streams are handled by
+ * dedicated processors and are not touched here.
+ */
+export const compressUncompressedStreams = (pdfDoc: PDFDocument): StreamCompressionResult => {
+  const result: StreamCompressionResult = {
+    streamsCompressed: 0,
+    savedBytes: 0,
+  };
+
+  const context = pdfDoc.context;
+  const processedRefs = new Set<string>();
+
+  for (const [, obj] of context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFDict) || !isFontDescriptor(obj)) {
+      continue;
+    }
+
+    for (const key of ['FontFile', 'FontFile2', 'FontFile3']) {
+      const fontFile = obj.get(PDFName.of(key));
+      if (!(fontFile instanceof PDFRef)) {
+        continue;
+      }
+
+      const refKey = `${fontFile.objectNumber}-${fontFile.generationNumber}`;
+      if (processedRefs.has(refKey)) {
+        continue;
+      }
+      processedRefs.add(refKey);
+
+      const streamObj = context.lookup(fontFile);
+      if (!(streamObj instanceof PDFRawStream) && !(streamObj instanceof PDFStream)) {
+        continue;
+      }
+
+      // Compress only currently unfiltered streams.
+      if (streamObj.dict.has(PDFName.of('Filter'))) {
+        continue;
+      }
+
+      const bytes = getStreamBytes(streamObj);
+      if (!bytes || bytes.length < 256) {
+        continue;
+      }
+
+      const compressed = pako.deflate(bytes, { level: 9 });
+      if (compressed.length + 12 >= bytes.length) {
+        continue;
+      }
+
+      const newDict = streamObj.dict.clone(context);
+      newDict.set(PDFName.of('Length'), context.obj(compressed.length));
+      newDict.set(PDFName.of('Filter'), PDFName.of('FlateDecode'));
+      newDict.delete(PDFName.of('DecodeParms'));
+
+      const newStream = PDFRawStream.of(newDict, compressed);
+      context.assign(fontFile, newStream);
+
+      result.streamsCompressed++;
+      result.savedBytes += bytes.length - compressed.length;
+    }
+  }
+
+  return result;
+};
+
+
+/**
+ * Remove ToUnicode maps from embedded fonts.
+ *
+ * This can save noticeable space on text-heavy PDFs but will reduce text
+ * extraction/search/copy quality in many viewers. Rendering is usually unchanged.
+ */
+export const removeFontUnicodeMaps = (pdfDoc: PDFDocument): FontUnicodeMapRemovalResult => {
+  const result: FontUnicodeMapRemovalResult = {
+    mapsRemoved: 0,
+    estimatedSavedBytes: 0,
+  };
+
+  const context = pdfDoc.context;
+
+  for (const [, obj] of context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFDict)) continue;
+
+    const type = obj.get(PDFName.of('Type'));
+    if (!(type instanceof PDFName) || type.toString() !== '/Font') {
+      continue;
+    }
+
+    const toUnicode = obj.get(PDFName.of('ToUnicode'));
+    if (!toUnicode) continue;
+
+    if (toUnicode instanceof PDFRef) {
+      const cmapObj = context.lookup(toUnicode);
+      if (cmapObj instanceof PDFRawStream || cmapObj instanceof PDFStream) {
+        const bytes = getStreamBytes(cmapObj);
+        if (bytes) {
+          result.estimatedSavedBytes += bytes.length;
+        }
+      }
+    }
+
+    obj.delete(PDFName.of('ToUnicode'));
+    result.mapsRemoved++;
   }
 
   return result;
