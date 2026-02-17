@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AnalyticsScript } from "@/components";
+import { seoFaqs } from "@/lib/seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -38,25 +39,27 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
 
   title: {
-    default: "PDF Compress - Free Online PDF Compressor | No Upload Required",
+    default: "Free PDF Compressor Online | Compress PDF Files Fast & Privately",
     template: "%s | PDF Compress",
   },
 
   description:
-    "Compress PDFs instantly in your browser. 100% free and privacy-first — your files never leave your device. 24+ compression methods, batch processing, and page management.",
+    "Compress PDF online for free with powerful browser-based optimization. Reduce PDF file size fast with no server upload required, advanced quality controls, and secure local processing.",
 
   keywords: [
-    "PDF compression",
-    "PDF compressor",
-    "reduce PDF size",
-    "compress PDF online",
-    "free PDF tool",
-    "PDF optimizer",
-    "shrink PDF",
-    "PDF size reducer",
-    "browser PDF compression",
-    "private PDF compression",
-    "batch PDF compression",
+    "pdf compressor online",
+    "free compress pdf",
+    "compress pdf online free",
+    "reduce pdf size",
+    "shrink pdf file size",
+    "best pdf compressor",
+    "online pdf optimizer",
+    "secure pdf compressor",
+    "no upload pdf compression",
+    "browser based pdf compressor",
+    "batch pdf compressor",
+    "compress large pdf",
+    "high quality pdf compression",
   ],
 
   authors: [{ name: "PDF Compress" }],
@@ -73,9 +76,9 @@ export const metadata: Metadata = {
   },
 
   openGraph: {
-    title: "PDF Compress - Free Online PDF Compressor",
+    title: "Free PDF Compressor Online | Fast, Secure, High-Quality Results",
     description:
-      "Compress PDFs instantly in your browser. 100% free and privacy-first — your files never leave your device.",
+      "Compress PDF files online for free with powerful client-side optimization. No server upload needed. Faster compression, better quality, and total privacy.",
     type: "website",
     url: siteUrl,
     siteName: "PDF Compress",
@@ -85,16 +88,16 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "PDF Compress - Free Online PDF Compressor",
+        alt: "PDF Compress - Free PDF Compressor Online",
       },
     ],
   },
 
   twitter: {
     card: "summary_large_image",
-    title: "PDF Compress - Free Online PDF Compressor",
+    title: "Free PDF Compressor Online | PDF Compress",
     description:
-      "Compress PDFs instantly in your browser. 100% free and privacy-first.",
+      "Compress PDF online free with private, browser-based processing and advanced optimization settings.",
     images: ["/og-image.png"],
   },
 
@@ -122,28 +125,59 @@ export const metadata: Metadata = {
 ========================= */
 const jsonLd = {
   "@context": "https://schema.org",
-  "@type": "WebApplication",
-  name: "PDF Compress",
-  description:
-    "Free online PDF compressor that runs entirely in your browser. Privacy-first: your files never leave your device.",
-  url: siteUrl,
-  applicationCategory: "UtilityApplication",
-  operatingSystem: "Any",
-  offers: {
-    "@type": "Offer",
-    price: "0",
-    priceCurrency: "USD",
-  },
-  featureList: [
-    "24+ compression methods",
-    "Browser-based processing",
-    "No file uploads required",
-    "Batch processing",
-    "Page management",
-    "Visual quality comparison",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      name: "PDF Compress",
+      url: siteUrl,
+      description:
+        "Free PDF compressor online to reduce PDF size quickly and privately in your browser.",
+      inLanguage: "en-US",
+      potentialAction: {
+        "@type": "SearchAction",
+        target: `${siteUrl}/?q={search_term_string}`,
+        "query-input": "required name=search_term_string",
+      },
+    },
+    {
+      "@type": "SoftwareApplication",
+      name: "PDF Compress",
+      applicationCategory: "BusinessApplication",
+      operatingSystem: "Any",
+      offers: {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+      },
+      description:
+        "Compress PDF online free with high-quality output and no server upload.",
+      url: siteUrl,
+      featureList: [
+        "24+ compression methods",
+        "No server uploads required",
+        "Batch PDF compression",
+        "Advanced quality controls",
+        "Page management tools",
+      ],
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: seoFaqs.map((faq) => ({
+        "@type": "Question",
+        name: faq.question,
+        acceptedAnswer: {
+          "@type": "Answer",
+          text: faq.answer,
+        },
+      })),
+    },
+    {
+      "@type": "Organization",
+      name: "PDF Compress",
+      url: siteUrl,
+      sameAs: [siteUrl],
+    },
   ],
-  browserRequirements:
-    "Requires JavaScript. Works in Chrome, Firefox, Safari, Edge.",
 };
 
 /* =========================

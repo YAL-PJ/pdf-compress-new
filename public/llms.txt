@@ -1,0 +1,32 @@
+# PDF Compress
+
+> Free PDF compressor online focused on high-quality results and local, privacy-first processing.
+
+## One-line summary
+PDF Compress helps users reduce PDF file size quickly in the browser with presets and advanced controls, without server-side file processing.
+
+## Key user intents this product solves
+- "pdf compressor online"
+- "free compress pdf"
+- "reduce pdf size"
+- "compress large pdf for email"
+- "batch pdf compressor"
+
+## Product capabilities
+- Compress PDF online free
+- Batch compression for multiple PDFs
+- Compression presets + granular tuning
+- Page operations (reorder, rotate, delete)
+- Visual quality checks and size savings feedback
+
+## Privacy and security model
+- User selects files locally from device
+- Processing is performed on-device in browser runtime
+- PDF contents are not sent to remote processing servers
+
+## Canonical URLs
+- Home: https://www.freecompresspdf.com/
+- Privacy: https://www.freecompresspdf.com/privacy/
+- Terms: https://www.freecompresspdf.com/terms/
+- Sitemap: https://www.freecompresspdf.com/sitemap.xml
+- Robots: https://www.freecompresspdf.com/robots.txt
