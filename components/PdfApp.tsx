@@ -171,24 +171,22 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                     </header>
 
                     {!isAdvancedMode && (
-                        <section className="max-w-3xl mx-auto space-y-6">
-                            <div className="bg-white border rounded-lg shadow-sm p-4 sm:p-6">
-                                <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">Compression Level</h2>
-                                <p className="text-slate-600 text-sm sm:text-base mb-4">Pick one option. That&apos;s it.</p>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <section className="max-w-5xl mx-auto space-y-6">
+                            <div className="flex justify-end">
+                                <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-end">
                                     <button
                                         onClick={() => handleSimpleLevelChange('low')}
-                                        className={`rounded-lg border p-4 text-left transition-colors ${activeSimpleLevel === 'low' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                                        className={`rounded-lg border px-4 py-3 text-left sm:text-center transition-colors ${activeSimpleLevel === 'low' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                                     >
                                         <p className="font-semibold">Low Compression</p>
-                                        <p className={`text-sm ${activeSimpleLevel === 'low' ? 'text-slate-100' : 'text-slate-500'}`}>Better visual quality, lighter size savings.</p>
+                                        <p className={`text-xs sm:text-sm ${activeSimpleLevel === 'low' ? 'text-slate-100' : 'text-slate-500'}`}>Better visual quality.</p>
                                     </button>
                                     <button
                                         onClick={() => handleSimpleLevelChange('high')}
-                                        className={`rounded-lg border p-4 text-left transition-colors ${activeSimpleLevel === 'high' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                                        className={`rounded-lg border px-4 py-3 text-left sm:text-center transition-colors ${activeSimpleLevel === 'high' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
                                     >
                                         <p className="font-semibold">High Compression</p>
-                                        <p className={`text-sm ${activeSimpleLevel === 'high' ? 'text-slate-100' : 'text-slate-500'}`}>Smaller file size, lower image quality.</p>
+                                        <p className={`text-xs sm:text-sm ${activeSimpleLevel === 'high' ? 'text-slate-100' : 'text-slate-500'}`}>Smaller files.</p>
                                     </button>
                                 </div>
                             </div>
@@ -235,6 +233,7 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                         report={analysis?.report}
                                         methodResults={methodResults}
                                         isUpdating={isUpdating}
+                                        showCompressionAnalytics={false}
                                     />
                                 </div>
                             )}

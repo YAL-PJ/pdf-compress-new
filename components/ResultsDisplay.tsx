@@ -40,6 +40,7 @@ interface ResultsDisplayProps {
   report?: CompressionReport;
   methodResults?: MethodResult[];
   isUpdating?: boolean;
+  showCompressionAnalytics?: boolean;
 }
 
 import { memo } from 'react';
@@ -62,6 +63,7 @@ export const ResultsDisplay = memo(({
   report,
   methodResults,
   isUpdating,
+  showCompressionAnalytics = true,
 }: ResultsDisplayProps) => {
   const blobUrlRef = useRef<string | null>(null);
   const { savedBytes, savedPercent, isSmaller } = calculateSavings(originalSize, compressedSize);
@@ -348,7 +350,7 @@ export const ResultsDisplay = memo(({
         </div>
 
         {/* Compression Analytics */}
-        {methodResults && (
+        {showCompressionAnalytics && methodResults && (
           <div className="pt-4 border-t border-slate-100">
             <CompressionStats
               methodResults={methodResults}
