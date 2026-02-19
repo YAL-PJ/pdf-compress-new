@@ -247,6 +247,8 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                         methodResults={methodResults}
                                         isUpdating={isUpdating}
                                         showCompressionAnalytics={false}
+                                        showActivityLog={false}
+                                        showPageSavingsCalculator={false}
                                     />
                                 </div>
                             )}
