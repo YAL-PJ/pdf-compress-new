@@ -42,9 +42,10 @@ interface PdfProviderProps {
     children: React.ReactNode;
     initialFile?: File;
     onReset?: () => void;
+    autoProcessInitialFile?: boolean;
 }
 
-export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps) => {
+export const PdfProvider = ({ children, initialFile, onReset, autoProcessInitialFile = true }: PdfProviderProps) => {
     const { state, processFile: processFileInternal, reset: resetInternal } = usePdfCompression();
 
     const [options, setOptions] = useState<CompressionOptions>(PRESETS.balanced.options);
@@ -58,11 +59,11 @@ export const PdfProvider = ({ children, initialFile, onReset }: PdfProviderProps
 
     // Process initial file (once)
     useEffect(() => {
-        if (initialFile && state.status === 'idle' && !initialFileProcessed.current) {
+        if (autoProcessInitialFile && initialFile && state.status === 'idle' && !initialFileProcessed.current) {
             initialFileProcessed.current = true;
             processFileInternal(initialFile, { imageSettings, options });
         }
-    }, [initialFile]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [autoProcessInitialFile, initialFile]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Wrapper for processFile to use current settings
     const processFile = useCallback((file: File) => {

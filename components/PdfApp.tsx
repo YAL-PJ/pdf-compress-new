@@ -23,12 +23,8 @@ import { useBatchCompression } from '@/hooks/useBatchCompression';
 import { usePageManager } from '@/hooks/usePageManager';
 import { usePdf, PdfProvider } from '@/context/PdfContext';
 
-// Types
-import type {
-    CompressionOptions,
-    ImageCompressionSettings,
-} from '@/lib/types';
-
+import { PRESETS } from '@/lib/presets';
+import { calculateSavings, formatBytes } from '@/lib/utils';
 
 interface PdfAppProps {
     initialFile?: File;
@@ -47,10 +43,12 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
         processFile,
         isProcessing,
         isUpdating,
-        analysis
+        analysis,
     } = usePdf();
 
-    // Batch processing (kept separate for now as requested)
+    const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+
+    // Batch processing (advanced mode only)
     const [isBatchMode, setIsBatchMode] = useState(false);
     const {
         queue,
@@ -71,6 +69,21 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
         onReset?.();
     }, [resetContext, onReset]);
 
+    const handleSimpleLevelChange = useCallback((level: 'low' | 'high') => {
+        const preset = level === 'high' ? PRESETS.aggressive : PRESETS.minimal;
+        startTransition(() => {
+            setOptions(preset.options);
+            setImageSettings(preset.imageSettings);
+        });
+    }, [setImageSettings, setOptions]);
+
+    const activeSimpleLevel: 'low' | 'high' = useMemo(() => (
+        JSON.stringify(options) === JSON.stringify(PRESETS.aggressive.options)
+            && JSON.stringify(imageSettings) === JSON.stringify(PRESETS.aggressive.imageSettings)
+            ? 'high'
+            : 'low'
+    ), [options, imageSettings]);
+
     // Handle batch file selection
     const handleBatchFilesSelect = useCallback((files: File[]) => {
         addFiles(files);
@@ -90,14 +103,6 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
             handleReset();
         }
     }, [isBatchMode, clearQueue, handleReset]);
-
-    // Handle preset selection
-    const handlePresetSelect = useCallback((newOptions: CompressionOptions, newSettings: ImageCompressionSettings) => {
-        startTransition(() => {
-            setOptions(newOptions);
-            setImageSettings(newSettings);
-        });
-    }, [setOptions, setImageSettings]);
 
     // Smart result calculation
     const currentResult = useMemo(() => {
@@ -120,11 +125,10 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
     }, [state, options, analysis]);
 
     const methodResults = state.status === 'done' ? state.analysis.methodResults : undefined;
-    const imageStats = state.status === 'done' ? state.analysis.imageStats : undefined;
 
-    /* =========================
-       APP VIEW (from /compress - the better version)
-    ========================= */
+    const simpleSavings = currentResult
+        ? calculateSavings(currentResult.originalSize, currentResult.compressedSize)
+        : null;
 
     return (
         <ErrorBoundary>
@@ -135,195 +139,268 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                 className="min-h-screen w-full bg-slate-50 text-slate-900 font-sans selection:bg-slate-200 pt-10"
                 role="main"
             >
-                {/* Background - Technical Grid for Pro feel */}
                 <div
                     className="fixed inset-0 z-0 bg-[linear-gradient(to_right,#e2e8f080_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f080_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none"
                     aria-hidden="true"
                 />
 
                 <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 md:py-12">
-                    {/* Header */}
                     <header className="mb-8 sm:mb-12 flex flex-col items-center md:items-start md:flex-row md:justify-between gap-4 sm:gap-6">
                         <div className="text-center md:text-left">
                             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl flex items-center gap-2 sm:gap-3 justify-center md:justify-start">
                                 <span className="text-2xl sm:text-3xl" aria-hidden="true">🗜️</span>
                                 <span>PDF Compress</span>
-                                <span className="text-slate-400 font-normal text-lg sm:text-xl md:text-2xl">PRO</span>
+                                <span className="text-slate-400 font-normal text-lg sm:text-xl md:text-2xl">{isAdvancedMode ? 'PRO' : 'Simple'}</span>
                             </h1>
                             <p className="mt-2 text-base sm:text-lg text-slate-500 max-w-2xl">
-                                Professional client-side compression. No server uploads. 100% Secure.
+                                {isAdvancedMode
+                                    ? 'Professional client-side compression with fully customizable controls.'
+                                    : 'Choose Low or High compression, click compress, and download your smaller PDF.'}
                             </p>
                         </div>
+                        <button
+                            onClick={() => {
+                                setIsAdvancedMode(prev => !prev);
+                                setIsBatchMode(false);
+                                clearQueue();
+                            }}
+                            className="text-sm px-4 py-2 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-colors"
+                        >
+                            {isAdvancedMode ? '← Switch to Simple Compression' : 'Advanced Powerful Compression →'}
+                        </button>
                     </header>
 
-                    <div className="flex flex-col lg:flex-row gap-8 items-start">
+                    {!isAdvancedMode && (
+                        <section className="max-w-3xl mx-auto space-y-6">
+                            <div className="bg-white border rounded-lg shadow-sm p-4 sm:p-6">
+                                <h2 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">Compression Level</h2>
+                                <p className="text-slate-600 text-sm sm:text-base mb-4">Pick one option. That&apos;s it.</p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <button
+                                        onClick={() => handleSimpleLevelChange('low')}
+                                        className={`rounded-lg border p-4 text-left transition-colors ${activeSimpleLevel === 'low' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                                    >
+                                        <p className="font-semibold">Low Compression</p>
+                                        <p className={`text-sm ${activeSimpleLevel === 'low' ? 'text-slate-100' : 'text-slate-500'}`}>Better visual quality, lighter size savings.</p>
+                                    </button>
+                                    <button
+                                        onClick={() => handleSimpleLevelChange('high')}
+                                        className={`rounded-lg border p-4 text-left transition-colors ${activeSimpleLevel === 'high' ? 'border-slate-900 bg-slate-900 text-white' : 'border-slate-200 bg-white hover:bg-slate-50'}`}
+                                    >
+                                        <p className="font-semibold">High Compression</p>
+                                        <p className={`text-sm ${activeSimpleLevel === 'high' ? 'text-slate-100' : 'text-slate-500'}`}>Smaller file size, lower image quality.</p>
+                                    </button>
+                                </div>
+                            </div>
 
-                        {/* Sidebar - Controls (Visible when needed) */}
-                        <AnimatePresence>
-                            {(state.status === 'idle' || state.status === 'done' || isProcessing) && (
-                                <motion.aside
-                                    initial={false}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    className="w-full lg:w-80 flex-shrink-0 space-y-6 lg:sticky lg:top-8"
-                                >
-                                    <div className="bg-white border rounded-lg shadow-sm p-4">
-                                        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">
-                                            Compression Levels
-                                        </h2>
-                                        {/* Simplified Prop Usage via Context in wrapper */}
-                                        <PresetSelector />
-                                    </div>
+                            {state.status === 'idle' && !isProcessing && (
+                                <UploadZone onFileSelect={processFile} />
+                            )}
 
-                                    <TargetSizeSlider />
+                            {isProcessing && (
+                                <div className="flex justify-center py-8">
+                                    <ProcessingIndicator
+                                        fileName={state.status === 'processing' ? state.fileName : ''}
+                                        progress={state.status === 'processing' ? state.progress : 'Validating file...'}
+                                        progressPercent={state.status === 'processing' ? state.progressPercent : undefined}
+                                    />
+                                </div>
+                            )}
 
-                                    <CompressionMethods />
-
-                                    {state.status === 'idle' && (
-                                        <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 text-sm text-blue-700">
-                                            <p><strong>Tip:</strong> Select your compression preference before or after uploading.</p>
+                            {state.status === 'done' && currentResult && (
+                                <div className="space-y-6">
+                                    {simpleSavings && (
+                                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                                            <p className="text-sm text-emerald-700 font-semibold">Saved {formatBytes(simpleSavings.savedBytes)} ({simpleSavings.savedPercent.toFixed(1)}%)</p>
+                                            <p className="text-sm text-emerald-700/80 mt-1">
+                                                {formatBytes(currentResult.originalSize)} → {formatBytes(currentResult.compressedSize)}
+                                            </p>
                                         </div>
                                     )}
-                                </motion.aside>
+                                    <ResultsDisplay
+                                        originalSize={currentResult.originalSize}
+                                        compressedSize={currentResult.compressedSize}
+                                        pageCount={currentResult.pageCount}
+                                        blob={currentResult.blob}
+                                        originalFile={state.originalFile}
+                                        originalFileName={state.fileName}
+                                        onReset={handleReset}
+                                        imageStats={currentResult.imageStats}
+                                        pages={[]}
+                                        onToggleDeletePage={() => {}}
+                                        onToggleKeepOriginalPage={() => {}}
+                                        onRotatePage={() => {}}
+                                        onReorderPages={() => {}}
+                                        onMovePage={() => {}}
+                                        report={analysis?.report}
+                                        methodResults={methodResults}
+                                        isUpdating={isUpdating}
+                                    />
+                                </div>
                             )}
-                        </AnimatePresence>
 
-                        {/* Main Content Area */}
-                        <div className="flex-1 w-full min-w-0">
-                            <AnimatePresence mode="wait">
+                            {state.status === 'error' && (
+                                <ErrorDisplay error={state.error} onReset={handleReset} />
+                            )}
+                        </section>
+                    )}
 
-                                {/* IDLE STATE / BATCH MODE */}
-                                {(state.status === 'idle' || isBatchMode) && !isProcessing && (
-                                    <motion.div
-                                        key="idle-batch"
+                    {isAdvancedMode && (
+                        <div className="flex flex-col lg:flex-row gap-8 items-start">
+                            <AnimatePresence>
+                                {(state.status === 'idle' || state.status === 'done' || isProcessing) && (
+                                    <motion.aside
                                         initial={false}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -10 }}
-                                        className="space-y-4"
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        className="w-full lg:w-80 flex-shrink-0 space-y-6 lg:sticky lg:top-8"
                                     >
-                                        {/* Mode Toggle */}
-                                        <div className="flex justify-end">
-                                            <button
-                                                onClick={toggleBatchMode}
-                                                disabled={isBatchProcessing}
-                                                className="text-sm px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            >
-                                                {isBatchMode ? '← Single File Mode' : 'Batch Mode →'}
-                                            </button>
+                                        <div className="bg-white border rounded-lg shadow-sm p-4">
+                                            <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-3">
+                                                Compression Levels
+                                            </h2>
+                                            <PresetSelector />
                                         </div>
 
-                                        {/* Upload Zone - Single or Batch */}
-                                        {isBatchMode ? (
-                                            <>
-                                                <BatchUploadZone
-                                                    onFilesSelect={handleBatchFilesSelect}
-                                                    disabled={isBatchProcessing}
-                                                />
+                                        <TargetSizeSlider />
 
-                                                {/* Batch Queue */}
-                                                {queue.length > 0 && (
-                                                    <>
-                                                        <FileQueueList queue={queue} onRemove={removeFile} />
+                                        <CompressionMethods />
 
-                                                        {/* Batch Action Buttons */}
-                                                        <div className="flex gap-3">
-                                                            {batchStats.queued > 0 && (
-                                                                <button
-                                                                    onClick={handleStartBatchProcessing}
-                                                                    disabled={isBatchProcessing}
-                                                                    className="flex-1 px-4 py-3 rounded-md bg-slate-900 text-white font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                                                >
-                                                                    {isBatchProcessing ? (
-                                                                        <>
-                                                                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                                            Processing...
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            Compress {batchStats.queued} File{batchStats.queued !== 1 ? 's' : ''}
-                                                                        </>
-                                                                    )}
-                                                                </button>
-                                                            )}
-
-                                                            <button
-                                                                onClick={clearQueue}
-                                                                disabled={isBatchProcessing}
-                                                                className="px-4 py-3 rounded-md border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                                            >
-                                                                Clear All
-                                                            </button>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </>
-                                        ) : (
-                                            <UploadZone onFileSelect={processFile} />
+                                        {state.status === 'idle' && (
+                                            <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 text-sm text-blue-700">
+                                                <p><strong>Tip:</strong> Select your compression preference before or after uploading.</p>
+                                            </div>
                                         )}
-                                    </motion.div>
-                                )}
-
-                                {/* PROCESSING STATE (Single file mode only) */}
-                                {isProcessing && !isBatchMode && (
-                                    <motion.div
-                                        key="processing"
-                                        initial={{ opacity: 0, scale: 0.98 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.98 }}
-                                        className="flex justify-center py-12"
-                                    >
-                                        <ProcessingIndicator
-                                            fileName={state.status === 'processing' ? state.fileName : ''}
-                                            progress={state.status === 'processing' ? state.progress : 'Validating file...'}
-                                            progressPercent={state.status === 'processing' ? state.progressPercent : undefined}
-                                        />
-                                    </motion.div>
-                                )}
-
-                                {/* RESULTS STATE (Single file mode only) */}
-                                {state.status === 'done' && currentResult && !isBatchMode && (
-                                    <motion.div
-                                        key="results"
-                                        initial={{ opacity: 0, y: 10 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        className="space-y-6"
-                                    >
-                                        <ResultsDisplay
-                                            originalSize={currentResult.originalSize}
-                                            compressedSize={currentResult.compressedSize}
-                                            pageCount={currentResult.pageCount}
-                                            blob={currentResult.blob}
-                                            originalFile={state.originalFile}
-                                            originalFileName={state.fileName}
-                                            onReset={handleReset}
-                                            imageStats={currentResult.imageStats}
-                                            pages={pages}
-                                            onToggleDeletePage={toggleDelete}
-                                            onToggleKeepOriginalPage={toggleKeepOriginal}
-                                            onRotatePage={rotatePage}
-                                            onReorderPages={reorderPages}
-                                            onMovePage={movePage}
-                                            report={analysis?.report}
-                                            methodResults={methodResults}
-                                            isUpdating={isUpdating}
-                                        />
-                                    </motion.div>
-                                )}
-
-                                {/* ERROR STATE (Single file mode only) */}
-                                {state.status === 'error' && !isBatchMode && (
-                                    <motion.div
-                                        key="error"
-                                        initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
-                                    >
-                                        <ErrorDisplay error={state.error} onReset={handleReset} />
-                                    </motion.div>
+                                    </motion.aside>
                                 )}
                             </AnimatePresence>
-                        </div>
 
-                    </div>
+                            <div className="flex-1 w-full min-w-0">
+                                <AnimatePresence mode="wait">
+                                    {(state.status === 'idle' || isBatchMode) && !isProcessing && (
+                                        <motion.div
+                                            key="idle-batch"
+                                            initial={false}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -10 }}
+                                            className="space-y-4"
+                                        >
+                                            <div className="flex justify-end">
+                                                <button
+                                                    onClick={toggleBatchMode}
+                                                    disabled={isBatchProcessing}
+                                                    className="text-sm px-3 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {isBatchMode ? '← Single File Mode' : 'Batch Mode →'}
+                                                </button>
+                                            </div>
+
+                                            {isBatchMode ? (
+                                                <>
+                                                    <BatchUploadZone
+                                                        onFilesSelect={handleBatchFilesSelect}
+                                                        disabled={isBatchProcessing}
+                                                    />
+
+                                                    {queue.length > 0 && (
+                                                        <>
+                                                            <FileQueueList queue={queue} onRemove={removeFile} />
+
+                                                            <div className="flex gap-3">
+                                                                {batchStats.queued > 0 && (
+                                                                    <button
+                                                                        onClick={handleStartBatchProcessing}
+                                                                        disabled={isBatchProcessing}
+                                                                        className="flex-1 px-4 py-3 rounded-md bg-slate-900 text-white font-bold hover:bg-slate-800 transition-all flex items-center justify-center gap-2 text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    >
+                                                                        {isBatchProcessing ? (
+                                                                            <>
+                                                                                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                                                                Processing...
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                Compress {batchStats.queued} File{batchStats.queued !== 1 ? 's' : ''}
+                                                                            </>
+                                                                        )}
+                                                                    </button>
+                                                                )}
+
+                                                                <button
+                                                                    onClick={clearQueue}
+                                                                    disabled={isBatchProcessing}
+                                                                    className="px-4 py-3 rounded-md border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                >
+                                                                    Clear All
+                                                                </button>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <UploadZone onFileSelect={processFile} />
+                                            )}
+                                        </motion.div>
+                                    )}
+
+                                    {isProcessing && !isBatchMode && (
+                                        <motion.div
+                                            key="processing"
+                                            initial={{ opacity: 0, scale: 0.98 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            exit={{ opacity: 0, scale: 0.98 }}
+                                            className="flex justify-center py-12"
+                                        >
+                                            <ProcessingIndicator
+                                                fileName={state.status === 'processing' ? state.fileName : ''}
+                                                progress={state.status === 'processing' ? state.progress : 'Validating file...'}
+                                                progressPercent={state.status === 'processing' ? state.progressPercent : undefined}
+                                            />
+                                        </motion.div>
+                                    )}
+
+                                    {state.status === 'done' && currentResult && !isBatchMode && (
+                                        <motion.div
+                                            key="results"
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className="space-y-6"
+                                        >
+                                            <ResultsDisplay
+                                                originalSize={currentResult.originalSize}
+                                                compressedSize={currentResult.compressedSize}
+                                                pageCount={currentResult.pageCount}
+                                                blob={currentResult.blob}
+                                                originalFile={state.originalFile}
+                                                originalFileName={state.fileName}
+                                                onReset={handleReset}
+                                                imageStats={currentResult.imageStats}
+                                                pages={pages}
+                                                onToggleDeletePage={toggleDelete}
+                                                onToggleKeepOriginalPage={toggleKeepOriginal}
+                                                onRotatePage={rotatePage}
+                                                onReorderPages={reorderPages}
+                                                onMovePage={movePage}
+                                                report={analysis?.report}
+                                                methodResults={methodResults}
+                                                isUpdating={isUpdating}
+                                            />
+                                        </motion.div>
+                                    )}
+
+                                    {state.status === 'error' && !isBatchMode && (
+                                        <motion.div
+                                            key="error"
+                                            initial={{ opacity: 0 }}
+                                            animate={{ opacity: 1 }}
+                                        >
+                                            <ErrorDisplay error={state.error} onReset={handleReset} />
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <Footer />
@@ -335,7 +412,7 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
 // Main Export - Wrapper with Provider
 export const PdfApp = ({ initialFile, onReset }: PdfAppProps) => {
     return (
-        <PdfProvider initialFile={initialFile} onReset={onReset}>
+        <PdfProvider initialFile={initialFile} onReset={onReset} autoProcessInitialFile={false}>
             <PdfAppContent onReset={onReset} />
         </PdfProvider>
     );
