@@ -48,13 +48,13 @@ interface PdfProviderProps {
 export const PdfProvider = ({ children, initialFile, onReset, autoProcessInitialFile = true }: PdfProviderProps) => {
     const { state, processFile: processFileInternal, reset: resetInternal } = usePdfCompression();
 
-    const [options, setOptions] = useState<CompressionOptions>(PRESETS.balanced.options);
-    const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(PRESETS.balanced.imageSettings);
+    const [options, setOptions] = useState<CompressionOptions>(PRESETS.minimal.options);
+    const [imageSettings, setImageSettings] = useState<ImageCompressionSettings>(PRESETS.minimal.imageSettings);
     const [targetPercent, setTargetPercent] = useState<number | undefined>(undefined);
 
     // Refs for tracking previous settings for auto-recompression
-    const prevSettingsRef = useRef<ImageCompressionSettings>(PRESETS.balanced.imageSettings);
-    const prevOptionsRef = useRef<CompressionOptions>(PRESETS.balanced.options);
+    const prevSettingsRef = useRef<ImageCompressionSettings>(PRESETS.minimal.imageSettings);
+    const prevOptionsRef = useRef<CompressionOptions>(PRESETS.minimal.options);
     const initialFileProcessed = useRef(false);
 
     // Process initial file (once)
@@ -74,11 +74,11 @@ export const PdfProvider = ({ children, initialFile, onReset, autoProcessInitial
 
     const reset = useCallback(() => {
         resetInternal();
-        setOptions(PRESETS.balanced.options);
-        setImageSettings(PRESETS.balanced.imageSettings);
+        setOptions(PRESETS.minimal.options);
+        setImageSettings(PRESETS.minimal.imageSettings);
         setTargetPercent(undefined);
-        prevSettingsRef.current = PRESETS.balanced.imageSettings;
-        prevOptionsRef.current = PRESETS.balanced.options;
+        prevSettingsRef.current = PRESETS.minimal.imageSettings;
+        prevOptionsRef.current = PRESETS.minimal.options;
         initialFileProcessed.current = false;
         onReset?.();
     }, [resetInternal, onReset]);
