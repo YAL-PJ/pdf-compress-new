@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useMemo, startTransition } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     UploadZone,
@@ -71,18 +71,26 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
 
     const handleSimpleLevelChange = useCallback((level: 'low' | 'high') => {
         const preset = level === 'high' ? PRESETS.aggressive : PRESETS.minimal;
-        startTransition(() => {
-            setOptions(preset.options);
-            setImageSettings(preset.imageSettings);
-        });
+        setOptions(preset.options);
+        setImageSettings(preset.imageSettings);
     }, [setImageSettings, setOptions]);
 
-    const activeSimpleLevel: 'low' | 'high' = useMemo(() => (
-        JSON.stringify(options) === JSON.stringify(PRESETS.aggressive.options)
-            && JSON.stringify(imageSettings) === JSON.stringify(PRESETS.aggressive.imageSettings)
-            ? 'high'
-            : 'low'
-    ), [options, imageSettings]);
+    const activeSimpleLevel: 'low' | 'high' | null = useMemo(() => {
+        const isHigh = JSON.stringify(options) === JSON.stringify(PRESETS.aggressive.options)
+            && JSON.stringify(imageSettings) === JSON.stringify(PRESETS.aggressive.imageSettings);
+
+        if (isHigh) return 'high';
+
+        const isLow = JSON.stringify(options) === JSON.stringify(PRESETS.minimal.options)
+            && JSON.stringify(imageSettings) === JSON.stringify(PRESETS.minimal.imageSettings);
+
+        return isLow ? 'low' : null;
+    }, [options, imageSettings]);
+
+    useEffect(() => {
+        if (isAdvancedMode || activeSimpleLevel !== null) return;
+        handleSimpleLevelChange('low');
+    }, [isAdvancedMode, activeSimpleLevel, handleSimpleLevelChange]);
 
     // Handle batch file selection
     const handleBatchFilesSelect = useCallback((files: File[]) => {
