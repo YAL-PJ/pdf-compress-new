@@ -41,6 +41,8 @@ interface ResultsDisplayProps {
   methodResults?: MethodResult[];
   isUpdating?: boolean;
   showCompressionAnalytics?: boolean;
+  showActivityLog?: boolean;
+  showPageSavingsCalculator?: boolean;
 }
 
 import { memo } from 'react';
@@ -64,6 +66,8 @@ export const ResultsDisplay = memo(({
   methodResults,
   isUpdating,
   showCompressionAnalytics = true,
+  showActivityLog = true,
+  showPageSavingsCalculator = true,
 }: ResultsDisplayProps) => {
   const blobUrlRef = useRef<string | null>(null);
   const { savedBytes, savedPercent, isSmaller } = calculateSavings(originalSize, compressedSize);
@@ -346,6 +350,7 @@ export const ResultsDisplay = memo(({
             selectedPreviewPage={previewPage}
             onSelectPreviewPage={handlePreviewPageChange}
             compressedBlob={blob}
+            showSavingsCalculator={showPageSavingsCalculator}
           />
         </div>
 
@@ -362,7 +367,7 @@ export const ResultsDisplay = memo(({
         )}
 
         {/* Activity Log */}
-        {report && (
+        {showActivityLog && report && (
           <div className="pt-4 border-t border-slate-100">
             <ActivityLog logs={report.logs} />
           </div>

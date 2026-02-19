@@ -23,6 +23,7 @@ interface PageGridProps {
     onSelectPreviewPage?: (pageIndex: number) => void;
     // Compressed PDF blob for savings estimation
     compressedBlob?: Blob;
+    showSavingsCalculator?: boolean;
 }
 
 export const PageGrid = ({
@@ -38,6 +39,7 @@ export const PageGrid = ({
     selectedPreviewPage,
     onSelectPreviewPage,
     compressedBlob,
+    showSavingsCalculator = true,
 }: PageGridProps) => {
     const PREVIEW_LIMIT = 8;
 
@@ -210,7 +212,7 @@ export const PageGrid = ({
                 <h3>Page Manager</h3>
                 <span className="text-sm text-slate-600 font-normal ml-auto flex items-center gap-2">
                     {pages.filter(p => !p.isDeleted).length} of {pageCount} pages selected
-                    {compressedBlob && (
+                    {compressedBlob && showSavingsCalculator && (
                         <button
                             onClick={handleCalculateSavings}
                             disabled={isCalculating}
