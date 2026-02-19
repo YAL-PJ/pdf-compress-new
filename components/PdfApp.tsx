@@ -412,7 +412,7 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
 // Main Export - Wrapper with Provider
 export const PdfApp = ({ initialFile, onReset }: PdfAppProps) => {
     return (
-        <PdfProvider initialFile={initialFile} onReset={onReset} autoProcessInitialFile={false}>
+        <PdfProvider initialFile={initialFile} onReset={onReset}>
             <PdfAppContent onReset={onReset} />
         </PdfProvider>
     );
