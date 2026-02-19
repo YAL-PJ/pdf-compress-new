@@ -472,6 +472,14 @@ export const recompressJpeg = async (
     return null;
   }
 
+  // Browser decoders in worker contexts frequently fail on CMYK JPEG streams
+  // with `InvalidStateError: The source image could not be decoded`.
+  // Skip recompression for those images unless they are converted by a dedicated
+  // CMYK->RGB pass elsewhere in the pipeline.
+  if (image.colorSpace === 'DeviceCMYK') {
+    return null;
+  }
+
   try {
     // Create blob from JPEG bytes
     const blob = new Blob([image.bytes as any], { type: 'image/jpeg' });
@@ -556,7 +564,13 @@ export const recompressJpeg = async (
 
     return null;
   } catch (err) {
-    // Log error for debugging but don't crash
+    // Known browser decode failures can occur for some embedded JPEG variants.
+    // Treat these as a non-fatal skip to avoid noisy console errors.
+    if (err instanceof DOMException && err.name === 'InvalidStateError') {
+      return null;
+    }
+
+    // Log unexpected errors for debugging but don't crash
     console.warn('Failed to recompress image:', image.ref, err);
     return null;
   }
@@ -1330,4 +1344,3 @@ export const convertCmykToRgb = async (
 
   return result;
 };
-
