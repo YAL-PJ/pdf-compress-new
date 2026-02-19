@@ -158,16 +158,18 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                     : 'Choose Low or High compression, click compress, and download your smaller PDF.'}
                             </p>
                         </div>
-                        <button
-                            onClick={() => {
-                                setIsAdvancedMode(prev => !prev);
-                                setIsBatchMode(false);
-                                clearQueue();
-                            }}
-                            className="text-sm px-4 py-2 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-colors"
-                        >
-                            {isAdvancedMode ? '← Switch to Simple Compression' : 'Advanced Powerful Compression →'}
-                        </button>
+                        {isAdvancedMode && (
+                            <button
+                                onClick={() => {
+                                    setIsAdvancedMode(prev => !prev);
+                                    setIsBatchMode(false);
+                                    clearQueue();
+                                }}
+                                className="text-sm px-4 py-2 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 transition-colors"
+                            >
+                                ← Switch to Simple Compression
+                            </button>
+                        )}
                     </header>
 
                     {!isAdvancedMode && (
@@ -187,6 +189,17 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                     >
                                         <p className="font-semibold">High Compression</p>
                                         <p className={`text-xs sm:text-sm ${activeSimpleLevel === 'high' ? 'text-slate-100' : 'text-slate-500'}`}>Smaller files.</p>
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setIsAdvancedMode(true);
+                                            setIsBatchMode(false);
+                                            clearQueue();
+                                        }}
+                                        className="rounded-lg border border-slate-300 px-4 py-3 text-left sm:text-center bg-white hover:bg-slate-50 text-slate-700 transition-colors"
+                                    >
+                                        <p className="font-semibold">Advanced Mode</p>
+                                        <p className="text-xs sm:text-sm text-slate-500">Powerful Compression</p>
                                     </button>
                                 </div>
                             </div>
