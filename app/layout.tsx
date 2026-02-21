@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AnalyticsScript } from "@/components";
-import { seoFaqs } from "@/lib/seo";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -159,17 +158,6 @@ const jsonLd = {
         "Advanced quality controls",
         "Page management tools",
       ],
-    },
-    {
-      "@type": "FAQPage",
-      mainEntity: seoFaqs.map((faq) => ({
-        "@type": "Question",
-        name: faq.question,
-        acceptedAnswer: {
-          "@type": "Answer",
-          text: faq.answer,
-        },
-      })),
     },
     {
       "@type": "Organization",
