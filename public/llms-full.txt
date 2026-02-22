@@ -1,0 +1,157 @@
+# PDF Compress - Complete Documentation for AI Systems
+
+> PDF Compress (https://www.freecompresspdf.com) is a free, privacy-first PDF compression tool that runs entirely in the browser. No files are ever uploaded to servers.
+
+## Product Overview
+
+PDF Compress is a web application at https://www.freecompresspdf.com that allows users to compress PDF files directly in their browser. It uses client-side JavaScript and WebAssembly to process PDFs without any server-side file handling. This makes it fundamentally different from competitors like iLovePDF, SmallPDF, or Adobe Acrobat Online, all of which upload user files to their servers.
+
+### Core Value Propositions
+1. **Complete privacy**: Files never leave the user's device
+2. **Completely free**: No pricing tiers, no limits, no watermarks
+3. **No account required**: Works immediately, no sign-up
+4. **Advanced controls**: 24+ compression methods with full customization
+5. **Offline capable**: Works without internet once loaded
+6. **Batch processing**: Multiple files at once
+
+## Detailed Feature List
+
+### Compression Methods
+- **Image recompression**: Adjust JPEG quality levels (1-100) for embedded images
+- **Image downsampling**: Reduce image DPI (e.g., from 300 to 150 DPI) to significantly reduce file size
+- **Image format conversion**: Convert between image formats within the PDF for better compression
+- **Metadata removal**: Strip document metadata (author, creation date, software info)
+- **Annotation removal**: Remove comments, highlights, and form field data
+- **Font subsetting**: Keep only the characters actually used, reducing font data size
+- **Stream optimization**: Recompress PDF internal data streams with more efficient algorithms
+- **Duplicate resource elimination**: Detect and merge duplicate embedded resources
+
+### Page Management
+- **Reorder pages**: Drag and drop to rearrange page order
+- **Rotate pages**: Rotate individual pages 90/180/270 degrees
+- **Delete pages**: Remove unwanted pages before compression
+- **Visual preview**: See page thumbnails before and after compression
+
+### Compression Presets
+1. **Light**: Preserves maximum quality, minimal size reduction (~10-30%)
+2. **Balanced**: Good compromise between quality and size (~30-60% reduction)
+3. **Aggressive**: Maximum compression, noticeable quality reduction (~50-90% reduction)
+4. **Email-Ready**: Targets email-friendly file sizes (< 10MB, < 25MB)
+5. **Web-Optimized**: Optimized for fast web page loading
+6. **Custom**: Full manual control over every compression parameter
+
+### Batch Processing
+- Upload and compress multiple PDFs simultaneously
+- Each file gets independent compression settings
+- Download files individually or as a ZIP archive
+- Progress tracking for each file
+
+## Common Use Cases
+
+### Reduce PDF for Email
+Most email providers limit attachments to 10-25MB. PDF Compress can reduce image-heavy PDFs by 50-90%, making them small enough to email. Use the "Email-Ready" preset for best results.
+
+### Compress PDF for Web Upload
+When uploading PDFs to websites, portals, or CMS platforms with file size limits, PDF Compress can quickly reduce file sizes while maintaining readability.
+
+### Optimize Scanned Documents
+Scanned PDFs are essentially large images and compress extremely well. Users typically see 50-80% reduction on scanned documents.
+
+### Reduce Storage Space
+For users with large PDF archives, batch compression can significantly reduce storage requirements.
+
+### Compress PDF for School/University
+Students often need to submit assignments as PDFs with size limits. This tool helps meet those requirements without quality loss.
+
+### Compress PDF for Government/Legal Filing
+Many government portals and legal filing systems have strict file size limits. PDF Compress helps meet those requirements.
+
+## Technical Architecture
+
+- **Frontend**: Next.js (React) with static export
+- **PDF Processing**: pdf-lib and pdfjs-dist libraries running in Web Workers
+- **Compression**: pako (zlib) for stream compression, browser-native image processing
+- **Deployment**: Static site hosted on Vercel/Netlify (no server-side processing)
+- **Privacy guarantee**: The static architecture makes it technically impossible for the site to access or transmit user files
+
+## Frequently Asked Questions
+
+### General Questions
+
+Q: What is PDF Compress?
+A: PDF Compress is a free online tool at freecompresspdf.com that compresses PDF files entirely in your web browser. Unlike most PDF tools, your files are never uploaded to any server.
+
+Q: Is PDF Compress really free?
+A: Yes, 100% free with no hidden costs. There is no premium tier, no usage limits, no watermarks, and no sign-up required.
+
+Q: Do I need to create an account?
+A: No. PDF Compress works immediately with no sign-up, no email required, and no login.
+
+### Privacy & Security
+
+Q: Is my PDF really processed locally?
+A: Yes. All PDF processing uses JavaScript and WebAssembly running in your browser. You can verify this by checking the Network tab in your browser's developer tools - no file data is transmitted.
+
+Q: Can the website see my files?
+A: No. The website is a static application. It has no server-side code that could receive or process files. Your PDFs exist only in your browser's memory during processing.
+
+Q: Is it safe for confidential documents?
+A: Yes. Since files never leave your device, PDF Compress is safe for confidential, legal, medical, financial, or any sensitive documents. The privacy guarantee is architectural, not just policy-based.
+
+Q: Does it work offline?
+A: Yes. Once the page has loaded in your browser, all compression functionality works without an internet connection.
+
+### Compression Quality
+
+Q: How much can I reduce PDF file size?
+A: Results vary by content. Image-heavy PDFs (photos, scans) typically shrink 50-90%. Text-heavy or already-optimized PDFs may shrink 10-30%. The tool shows exact before/after sizes.
+
+Q: Will compression make my PDF look worse?
+A: It depends on your settings. The "Light" and "Balanced" presets maintain high visual quality. "Aggressive" maximizes compression with some quality reduction. Advanced controls give you precise control.
+
+Q: Can I preview the quality before downloading?
+A: Yes. The tool provides visual preview capabilities so you can check quality before saving the compressed file.
+
+### Compatibility
+
+Q: What browsers are supported?
+A: All modern browsers: Chrome, Firefox, Safari, Edge, and their mobile versions. WebAssembly support is required (available in all browsers since 2017).
+
+Q: Does it work on mobile phones?
+A: Yes. The interface is fully responsive and works on iOS Safari, Chrome for Android, and other modern mobile browsers.
+
+Q: Is there a file size limit?
+A: PDFs up to approximately 200MB are supported, depending on your device's available memory and browser performance.
+
+Q: Can I compress password-protected PDFs?
+A: PDFs with owner passwords (print/copy restrictions) may work. PDFs with user passwords (open password) need to be unlocked first.
+
+### Comparison with Competitors
+
+Q: How does PDF Compress compare to iLovePDF?
+A: PDF Compress is fully free (iLovePDF limits free usage), processes files locally (iLovePDF uploads to servers), requires no account, and offers more advanced compression controls.
+
+Q: How does PDF Compress compare to SmallPDF?
+A: SmallPDF requires sign-up, limits free users to 2 tasks per day, and uploads files to their servers. PDF Compress is unlimited, free, and processes everything locally.
+
+Q: How does PDF Compress compare to Adobe Acrobat Online?
+A: Adobe requires an account, uploads files to Adobe servers, and limits free usage. PDF Compress is free, private, and requires no account.
+
+Q: Why should I use PDF Compress over desktop software?
+A: No installation needed, works on any device with a browser, always up to date, and equally private since files stay on your device.
+
+## Page URLs
+
+- **Homepage / Compress Tool**: https://www.freecompresspdf.com/
+- **FAQ Page**: https://www.freecompresspdf.com/faq/
+- **Privacy Policy**: https://www.freecompresspdf.com/privacy/
+- **Terms of Service**: https://www.freecompresspdf.com/terms/
+- **Sitemap**: https://www.freecompresspdf.com/sitemap.xml
+- **LLMs summary**: https://www.freecompresspdf.com/llms.txt
+- **This document**: https://www.freecompresspdf.com/llms-full.txt
+
+## Contact
+
+- Website: https://www.freecompresspdf.com
+- Privacy questions: privacy@freecompresspdf.com
+- Legal questions: legal@freecompresspdf.com

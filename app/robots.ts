@@ -12,12 +12,67 @@ export default function robots(): MetadataRoute.Robots {
         allow: '/',
         disallow: ['/api/', '/_next/'],
       },
+      // OpenAI crawlers
+      {
+        userAgent: 'GPTBot',
+        allow: '/',
+      },
       {
         userAgent: 'OAI-SearchBot',
         allow: '/',
       },
       {
-        userAgent: 'GPTBot',
+        userAgent: 'ChatGPT-User',
+        allow: '/',
+      },
+      // Anthropic / Claude
+      {
+        userAgent: 'ClaudeBot',
+        allow: '/',
+      },
+      {
+        userAgent: 'anthropic-ai',
+        allow: '/',
+      },
+      // Perplexity
+      {
+        userAgent: 'PerplexityBot',
+        allow: '/',
+      },
+      // Google AI / Gemini
+      {
+        userAgent: 'Google-Extended',
+        allow: '/',
+      },
+      {
+        userAgent: 'Googlebot',
+        allow: '/',
+      },
+      // Bing / Microsoft Copilot
+      {
+        userAgent: 'Bingbot',
+        allow: '/',
+      },
+      // Meta
+      {
+        userAgent: 'FacebookBot',
+        allow: '/',
+      },
+      // Common crawlers used by AI systems
+      {
+        userAgent: 'CCBot',
+        allow: '/',
+      },
+      {
+        userAgent: 'cohere-ai',
+        allow: '/',
+      },
+      {
+        userAgent: 'YouBot',
+        allow: '/',
+      },
+      {
+        userAgent: 'Applebot-Extended',
         allow: '/',
       },
     ],

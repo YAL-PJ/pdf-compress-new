@@ -2,15 +2,51 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.freecompresspdf.com';
+
 export const metadata: Metadata = {
-  title: 'Terms of Service',
+  metadataBase: new URL(siteUrl),
+  title: 'Terms of Service - PDF Compress',
   description:
     'Terms of Service for PDF Compress. Understand your rights and responsibilities when using our free, browser-based PDF compression service.',
+  alternates: {
+    canonical: '/terms',
+  },
+  openGraph: {
+    title: 'Terms of Service - PDF Compress',
+    description:
+      'Terms and conditions for using PDF Compress, a free browser-based PDF compression tool.',
+    type: 'article',
+    url: '/terms',
+  },
+};
+
+const breadcrumbJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: siteUrl,
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Terms of Service',
+      item: `${siteUrl}/terms`,
+    },
+  ],
 };
 
 export default function TermsOfService() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {/* Header */}
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

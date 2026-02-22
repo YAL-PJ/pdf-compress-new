@@ -7,25 +7,25 @@ const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.freecompresspdf
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
-  title: 'PDF Compressor Online Free - Compress PDF with Secure Local Processing',
+  title: 'Free PDF Compressor Online - Compress PDF Files Fast & Privately',
   description:
-    'Use our free PDF compressor online to reduce PDF size fast. Compress large PDF files in your browser with no server upload, no sign-up, and advanced quality controls.',
+    'Compress PDF online free with our browser-based tool. Reduce PDF file size by up to 90% with no server upload, no sign-up, and no watermark. Batch compression, advanced controls, and 100% privacy.',
   alternates: {
     canonical: '/',
   },
   openGraph: {
     type: 'website',
     url: '/',
-    title: 'Free PDF Compressor Online',
+    title: 'Free PDF Compressor Online - No Upload, No Sign-up',
     description:
-      'Compress PDF files online free with secure local processing and no server upload required.',
+      'Compress PDF files online free with secure local processing. Reduce PDF size by up to 90% with no server upload required. Batch compression and advanced quality controls.',
     siteName: 'PDF Compress',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Free PDF Compressor Online',
+    title: 'Free PDF Compressor Online - 100% Private',
     description:
-      'Compress PDF files online free in your browser with no server upload and no sign-up.',
+      'Compress PDF files online free in your browser. No server upload, no sign-up, no watermark. Advanced controls with 24+ compression methods.',
   },
 };
 
@@ -37,36 +37,63 @@ const pageJsonLd = {
       name: 'Free PDF Compressor Online',
       url: siteUrl,
       description:
-        'Compress PDF files online free with secure local processing and no server upload required.',
+        'Compress PDF files online free with secure local processing and no server upload required. Reduce PDF size by up to 90%.',
       isPartOf: {
         '@type': 'WebSite',
         name: 'PDF Compress',
         url: siteUrl,
       },
-      about: ['PDF compression', 'Reduce PDF size', 'Batch PDF compression'],
+      about: [
+        'PDF compression',
+        'Reduce PDF size',
+        'Batch PDF compression',
+        'Compress PDF for email',
+        'Online PDF optimizer',
+      ],
       inLanguage: 'en-US',
+      breadcrumb: {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          {
+            '@type': 'ListItem',
+            position: 1,
+            name: 'Home',
+            item: siteUrl,
+          },
+        ],
+      },
     },
     {
       '@type': 'HowTo',
-      name: 'How to compress PDF online for free',
+      name: 'How to Compress PDF Online for Free',
       description:
-        'Select a PDF, choose compression settings, and download a smaller file in seconds.',
+        'Learn how to reduce PDF file size for free using browser-based compression. No software needed.',
       totalTime: 'PT1M',
+      tool: {
+        '@type': 'HowToTool',
+        name: 'PDF Compress (freecompresspdf.com)',
+      },
       step: [
         {
           '@type': 'HowToStep',
+          position: 1,
           name: 'Upload your PDF',
-          text: 'Drag and drop your file or browse from your device.',
+          text: 'Drag and drop your PDF file or click to browse from your device. Files up to 200MB are supported.',
+          url: `${siteUrl}/#upload`,
         },
         {
           '@type': 'HowToStep',
+          position: 2,
           name: 'Choose compression level',
-          text: 'Use presets or advanced controls to optimize quality and size.',
+          text: 'Select a preset like Light, Balanced, or Aggressive. Or use advanced controls to fine-tune image quality, DPI, and metadata removal.',
+          url: `${siteUrl}/#settings`,
         },
         {
           '@type': 'HowToStep',
-          name: 'Download smaller PDF',
-          text: 'Save the optimized file after processing completes.',
+          position: 3,
+          name: 'Download your smaller PDF',
+          text: 'Click download to save your compressed PDF. The file is processed entirely in your browser — nothing is uploaded to any server.',
+          url: `${siteUrl}/#download`,
         },
       ],
     },

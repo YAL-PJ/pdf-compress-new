@@ -23,15 +23,36 @@ export const metadata: Metadata = {
 
 const faqJsonLd = {
   '@context': 'https://schema.org',
-  '@type': 'FAQPage',
-  mainEntity: seoFaqs.map((faq) => ({
-    '@type': 'Question',
-    name: faq.question,
-    acceptedAnswer: {
-      '@type': 'Answer',
-      text: faq.answer,
+  '@graph': [
+    {
+      '@type': 'FAQPage',
+      mainEntity: seoFaqs.map((faq) => ({
+        '@type': 'Question',
+        name: faq.question,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: faq.answer,
+        },
+      })),
     },
-  })),
+    {
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: siteUrl,
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'FAQ',
+          item: `${siteUrl}/faq`,
+        },
+      ],
+    },
+  ],
 };
 
 export default function FaqPage() {

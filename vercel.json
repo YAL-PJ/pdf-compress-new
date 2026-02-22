@@ -29,6 +29,18 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/compress",
+      "destination": "/",
+      "statusCode": 301
+    },
+    {
+      "source": "/compress/",
+      "destination": "/",
+      "statusCode": 301
+    }
+  ],
   "rewrites": [
     {
       "source": "/sitemap.xml",
