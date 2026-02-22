@@ -174,13 +174,6 @@ const jsonLd = {
         "Mobile-friendly responsive design",
         "Scanned document optimization",
       ],
-      aggregateRating: {
-        "@type": "AggregateRating",
-        ratingValue: "4.8",
-        ratingCount: "1247",
-        bestRating: "5",
-        worstRating: "1",
-      },
     },
     {
       "@type": "Organization",
