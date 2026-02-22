@@ -119,6 +119,13 @@ const SAFE_METHODS: MethodConfig[] = [
     icon: Type,
   },
   {
+    key: 'subsetFonts',
+    label: 'Subset Fonts',
+    description: 'Remove unused glyphs from fonts',
+    impact: 'Strips unused characters from embedded fonts. Huge savings on text-heavy PDFs. No visible change.',
+    icon: Scissors,
+  },
+  {
     key: 'inlineToXObject',
     label: 'Inline to XObject',
     description: 'Convert inline images',

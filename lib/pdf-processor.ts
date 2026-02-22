@@ -42,6 +42,7 @@ import {
   removeDuplicateResources,
   compressUncompressedStreams,
   removeUnusedFonts,
+  subsetEmbeddedFonts,
   removeFontUnicodeMaps,
 } from './resource-processor';
 import {
@@ -526,6 +527,18 @@ export const analyzePdf = async (
     });
   }
 
+  if (options.subsetFonts) {
+    onProgress?.('Subsetting embedded fonts...');
+    await applyMethod('subsetFonts', true, (doc) => {
+      const r = subsetEmbeddedFonts(doc);
+      if (r.fontsSubsetted > 0) {
+        log('success', `Subsetted ${r.fontsSubsetted} fonts (${r.totalOriginalSize} → ${r.totalSubsettedSize} bytes)`, { fonts: r.fontNames });
+      } else {
+        log('info', 'No fonts eligible for subsetting');
+      }
+    });
+  }
+
   if (options.removeFontUnicodeMaps) {
     onProgress?.('Removing font unicode maps...');
     await applyMethod('removeFontUnicodeMaps', true, (doc) => {
@@ -730,6 +743,7 @@ export const analyzePdf = async (
     mkResult('removeDuplicateResources'),
     mkResult('compressUncompressedStreams'),
     mkResult('removeUnusedFonts'),
+    mkResult('subsetFonts'),
     mkResult('removeFontUnicodeMaps'),
     mkResult('removeAttachments', { details: { imagesProcessed: structAttachmentsRemoved } }),
     mkResult('flattenForms'),
@@ -1094,6 +1108,18 @@ export const analyzePdfIncremental = async (
     });
   }
 
+  if (options.subsetFonts) {
+    onProgress?.('Subsetting embedded fonts...');
+    await applyMethod('subsetFonts', true, (doc) => {
+      const r = subsetEmbeddedFonts(doc);
+      if (r.fontsSubsetted > 0) {
+        log('success', `Subsetted ${r.fontsSubsetted} fonts (${r.totalOriginalSize} → ${r.totalSubsettedSize} bytes)`, { fonts: r.fontNames });
+      } else {
+        log('info', 'No fonts eligible for subsetting');
+      }
+    });
+  }
+
   if (options.removeFontUnicodeMaps) {
     onProgress?.('Removing font unicode maps...');
     await applyMethod('removeFontUnicodeMaps', true, (doc) => {
@@ -1286,6 +1312,7 @@ export const analyzePdfIncremental = async (
     mkResult('removeDuplicateResources'),
     mkResult('compressUncompressedStreams'),
     mkResult('removeUnusedFonts'),
+    mkResult('subsetFonts'),
     mkResult('removeFontUnicodeMaps'),
     mkResult('removeAttachments', { details: { imagesProcessed: structAttachmentsRemoved } }),
     mkResult('flattenForms'),
@@ -1373,6 +1400,7 @@ export const measureMethodSavings = async (
     ['removeDuplicateResources', (doc) => { removeDuplicateResources(doc); }, true],
     ['compressUncompressedStreams', (doc) => { compressUncompressedStreams(doc); }, false],
     ['removeUnusedFonts', (doc) => { removeUnusedFonts(doc); }, true],
+    ['subsetFonts', (doc) => { subsetEmbeddedFonts(doc); }, true],
     ['removeFontUnicodeMaps', (doc) => { removeFontUnicodeMaps(doc); }, true],
     ['inlineToXObject', async (doc) => { await convertInlineImagesToXObjects(doc); }, false],
     ['compressContentStreams', async (doc) => { await compressContentStreams(doc); }, false],
