@@ -24,6 +24,7 @@ export interface CompressionOptions {
   removeDuplicateResources: boolean;
   compressUncompressedStreams: boolean;
   removeUnusedFonts: boolean;
+  subsetFonts: boolean;
   removeFontUnicodeMaps: boolean;
   removeAttachments: boolean;
 
@@ -86,6 +87,7 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
   removeDuplicateResources: true,  // Safe — only removes exact duplicates, no quality impact
   compressUncompressedStreams: true,  // Safe — Flate-compresses raw streams (especially embedded fonts) with no visual change
   removeUnusedFonts: true,  // Safe — only removes fonts with zero Tf references, fail-safe on parse errors
+  subsetFonts: true,  // Safe — removes unused glyphs from embedded fonts, massive savings on text-heavy PDFs
   removeFontUnicodeMaps: false,  // High impact — can degrade copy/search text extraction for better compression
   removeAttachments: false,  // User may want to keep attachments
 

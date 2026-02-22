@@ -25,6 +25,7 @@ export const SAFE_METHOD_KEYS: (keyof CompressionOptions)[] = [
   'removeWebCaptureInfo',
   'removeColorProfiles',
   'removeUnusedFonts',
+  'subsetFonts',
   'inlineToXObject',
   'deduplicateShadings',
   'removeUnusedShadings',
