@@ -40,6 +40,11 @@ const METHOD_LABELS: Record<string, string> = {
   removeAlternateContent: 'Remove Alternate Content',
   removeInvisibleText: 'Remove Invisible Text',
   removeFontUnicodeMaps: 'Remove Font Unicode Maps',
+  subsetFonts: 'Subset Fonts',
+  deduplicateShadings: 'Deduplicate Gradients',
+  removeUnusedShadings: 'Remove Unused Gradients',
+  reduceVectorPrecision: 'Reduce Vector Precision',
+  rasterizePages: 'Rasterize Pages',
 };
 
 interface CompressionStatsProps {
