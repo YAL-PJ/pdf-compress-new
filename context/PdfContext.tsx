@@ -55,6 +55,7 @@ export const PdfProvider = ({ children, initialFile, onReset, autoProcessInitial
     // Refs for tracking previous settings for auto-recompression
     const prevSettingsRef = useRef<ImageCompressionSettings>(PRESETS.minimal.imageSettings);
     const prevOptionsRef = useRef<CompressionOptions>(PRESETS.minimal.options);
+    const prevTargetPercentRef = useRef<number | undefined>(undefined);
     const initialFileProcessed = useRef(false);
 
     // Process initial file (once)
@@ -79,6 +80,7 @@ export const PdfProvider = ({ children, initialFile, onReset, autoProcessInitial
         setTargetPercent(undefined);
         prevSettingsRef.current = PRESETS.minimal.imageSettings;
         prevOptionsRef.current = PRESETS.minimal.options;
+        prevTargetPercentRef.current = undefined;
         initialFileProcessed.current = false;
         onReset?.();
     }, [resetInternal, onReset]);
@@ -90,14 +92,16 @@ export const PdfProvider = ({ children, initialFile, onReset, autoProcessInitial
         // Compare by reference first (cheap), then by value
         const imageSettingsChanged = imageSettings !== prevSettingsRef.current;
         const optionsChanged = options !== prevOptionsRef.current;
+        const targetPercentChanged = targetPercent !== prevTargetPercentRef.current;
 
-        if (!imageSettingsChanged && !optionsChanged) return;
+        if (!imageSettingsChanged && !optionsChanged && !targetPercentChanged) return;
 
         const fileToProcess = state.originalFile;
 
         const timer = setTimeout(() => {
             prevSettingsRef.current = imageSettings;
             prevOptionsRef.current = options;
+            prevTargetPercentRef.current = targetPercent;
             processFileInternal(fileToProcess, { imageSettings, options, targetPercent }, true);
         }, 500);
 
