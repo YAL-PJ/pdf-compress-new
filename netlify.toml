@@ -7,6 +7,19 @@
   NPM_FLAGS = "--legacy-peer-deps"
 
 # =========================
+# Redirects
+# =========================
+[[redirects]]
+  from = "/compress"
+  to = "/"
+  status = 301
+
+[[redirects]]
+  from = "/compress/"
+  to = "/"
+  status = 301
+
+# =========================
 # Security headers (global)
 # =========================
 [[headers]]

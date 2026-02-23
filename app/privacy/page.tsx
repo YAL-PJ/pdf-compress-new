@@ -2,15 +2,51 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowLeft, Shield, Lock, Eye, Server } from 'lucide-react';
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://www.freecompresspdf.com';
+
 export const metadata: Metadata = {
-  title: 'Privacy Policy',
+  metadataBase: new URL(siteUrl),
+  title: 'Privacy Policy - How PDF Compress Protects Your Files',
   description:
-    'Privacy policy for PDF Compress. Learn how we protect your privacy by processing PDFs locally in your browser with no server uploads.',
+    'Privacy policy for PDF Compress. Your PDFs are processed locally in your browser with no server uploads. Learn how we protect your privacy by design.',
+  alternates: {
+    canonical: '/privacy',
+  },
+  openGraph: {
+    title: 'Privacy Policy - PDF Compress',
+    description:
+      'Your PDFs never leave your device. Learn how PDF Compress protects your privacy with 100% browser-based processing.',
+    type: 'article',
+    url: '/privacy',
+  },
+};
+
+const breadcrumbJsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'BreadcrumbList',
+  itemListElement: [
+    {
+      '@type': 'ListItem',
+      position: 1,
+      name: 'Home',
+      item: siteUrl,
+    },
+    {
+      '@type': 'ListItem',
+      position: 2,
+      name: 'Privacy Policy',
+      item: `${siteUrl}/privacy`,
+    },
+  ],
 };
 
 export default function PrivacyPolicy() {
   return (
     <main className="min-h-screen bg-slate-50 text-slate-900">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
       {/* Header */}
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

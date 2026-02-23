@@ -59,6 +59,14 @@ export const metadata: Metadata = {
     "batch pdf compressor",
     "compress large pdf",
     "high quality pdf compression",
+    "compress pdf for email",
+    "reduce pdf size for free",
+    "pdf compressor no sign up",
+    "compress pdf without losing quality",
+    "compress scanned pdf",
+    "pdf file size reducer",
+    "compress pdf no watermark",
+    "offline pdf compressor",
   ],
 
   authors: [{ name: "PDF Compress" }],
@@ -142,14 +150,17 @@ const jsonLd = {
       "@type": "SoftwareApplication",
       name: "PDF Compress",
       applicationCategory: "BusinessApplication",
-      operatingSystem: "Any",
+      applicationSubCategory: "PDF Tool",
+      operatingSystem: "Any (Web Browser)",
+      browserRequirements: "Requires a modern web browser with WebAssembly support",
       offers: {
         "@type": "Offer",
         price: "0",
         priceCurrency: "USD",
+        availability: "https://schema.org/InStock",
       },
       description:
-        "Compress PDF online free with high-quality output and no server upload.",
+        "Compress PDF files online free with high-quality output and 100% privacy. All processing happens in your browser with no server upload required.",
       url: siteUrl,
       featureList: [
         "24+ compression methods",
@@ -157,12 +168,18 @@ const jsonLd = {
         "Batch PDF compression",
         "Advanced quality controls",
         "Page management tools",
+        "Works offline after loading",
+        "No sign-up or account needed",
+        "No watermarks ever",
+        "Mobile-friendly responsive design",
+        "Scanned document optimization",
       ],
     },
     {
       "@type": "Organization",
       name: "PDF Compress",
       url: siteUrl,
+      logo: `${siteUrl}/favicon.ico`,
       sameAs: [siteUrl],
     },
   ],
@@ -186,6 +203,8 @@ export default function RootLayout({
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
+        {/* AI/LLM discovery */}
+        <link rel="author" href="/llms.txt" />
       </head>
 
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
