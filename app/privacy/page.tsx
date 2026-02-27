@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     'Privacy policy for PDF Compress. Your PDFs are processed locally in your browser with no server uploads. Learn how we protect your privacy by design.',
   alternates: {
-    canonical: '/privacy',
+    canonical: '/privacy/',
   },
   openGraph: {
     title: 'Privacy Policy - PDF Compress',
@@ -235,7 +235,7 @@ export default function PrivacyPolicy() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
           <p>© {new Date().getFullYear()} PDF Compress. All rights reserved.</p>
           <nav className="flex gap-6">
-            <Link href="/compress" className="hover:text-slate-900">
+            <Link href="/" className="hover:text-slate-900">
               Compress PDF
             </Link>
             <Link href="/terms" className="hover:text-slate-900">
