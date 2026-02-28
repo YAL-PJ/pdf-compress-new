@@ -1096,9 +1096,74 @@ export const convertPngsToJpeg = async (
 };
 
 /**
- * Remove alpha channels (SMask) from images
+ * Decode SMask stream data to raw grayscale alpha values.
+ * Returns null if decoding fails.
  */
-export const removeAlphaChannels = (pdfDoc: PDFDocument): AlphaRemovalResult => {
+const decodeSMask = (
+  smaskObj: PDFRawStream | PDFStream,
+  width: number,
+  height: number
+): Uint8Array | null => {
+  try {
+    const rawBytes =
+      smaskObj instanceof PDFRawStream ? smaskObj.contents : smaskObj.getContents();
+    if (!rawBytes) return null;
+
+    const smaskDict = smaskObj.dict;
+    const filter = smaskDict.get(PDFName.of('Filter'));
+
+    let pixels: Uint8Array | null = null;
+    if (filter instanceof PDFName && filter.toString() === '/FlateDecode') {
+      pixels = decodePngImage(rawBytes, width, height, 'DeviceGray', 8);
+    } else if (!filter) {
+      // Uncompressed raw data
+      pixels = rawBytes;
+    }
+
+    if (pixels && pixels.length >= width * height) {
+      return pixels;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Composite an RGBA ImageData against a white background and encode as JPEG.
+ * The alpha channel in imageData controls blending with white.
+ */
+const compositeOnWhiteAndEncode = async (
+  imageData: ImageData,
+  width: number,
+  height: number,
+  quality: number
+): Promise<Uint8Array> => {
+  // Canvas A: the image with its alpha channel
+  const srcCanvas = new OffscreenCanvas(width, height);
+  const srcCtx = srcCanvas.getContext('2d')!;
+  srcCtx.putImageData(imageData, 0, 0);
+
+  // Canvas B: white background, then composite the image on top
+  const dstCanvas = new OffscreenCanvas(width, height);
+  const dstCtx = dstCanvas.getContext('2d')!;
+  dstCtx.fillStyle = '#ffffff';
+  dstCtx.fillRect(0, 0, width, height);
+  dstCtx.drawImage(srcCanvas, 0, 0);
+
+  const blob = await dstCanvas.convertToBlob({ type: 'image/jpeg', quality: quality / 100 });
+  return new Uint8Array(await blob.arrayBuffer());
+};
+
+/**
+ * Remove alpha channels (SMask) from images.
+ * Composites images against a white background before removing the SMask
+ * to prevent transparent areas from turning black.
+ */
+export const removeAlphaChannels = async (
+  pdfDoc: PDFDocument,
+  quality: number = 85
+): Promise<AlphaRemovalResult> => {
   const result: AlphaRemovalResult = {
     processed: 0,
     savedBytes: 0,
@@ -1122,13 +1187,106 @@ export const removeAlphaChannels = (pdfDoc: PDFDocument): AlphaRemovalResult => 
     }
 
     // Check for SMask or Mask
-    const smask = dict.get(PDFName.of('SMask'));
+    const smaskRef = dict.get(PDFName.of('SMask'));
     const mask = dict.get(PDFName.of('Mask'));
 
-    if (smask || mask) {
-      // Estimate savings from removing SMask
-      if (smask instanceof PDFRef) {
-        const smaskObj = context.lookup(smask);
+    if (!smaskRef && !mask) continue;
+
+    const { width, height } = getImageDimensions(dict);
+    let composited = false;
+
+    // Try to composite against white when we have an SMask with decodable data
+    if (
+      smaskRef instanceof PDFRef &&
+      width > 0 && height > 0 &&
+      width <= IMAGE_COMPRESSION.MAX_CANVAS_DIMENSION &&
+      height <= IMAGE_COMPRESSION.MAX_CANVAS_DIMENSION
+    ) {
+      try {
+        const smaskObj = context.lookup(smaskRef);
+        if (smaskObj instanceof PDFRawStream || smaskObj instanceof PDFStream) {
+          const smaskPixels = decodeSMask(smaskObj, width, height);
+
+          if (smaskPixels) {
+            // Decode the main image pixels into RGBA
+            let imageRgba: ImageData | null = null;
+
+            const imgBytes =
+              stream instanceof PDFRawStream ? stream.contents : stream.getContents();
+
+            if (imgBytes) {
+              if (isJpegStream(dict)) {
+                // JPEG: decode via browser, extract pixel data
+                const blob = new Blob([imgBytes as BlobPart], { type: 'image/jpeg' });
+                const bitmap = await createImageBitmap(blob);
+                const tmp = new OffscreenCanvas(width, height);
+                const tmpCtx = tmp.getContext('2d')!;
+                tmpCtx.drawImage(bitmap, 0, 0, width, height);
+                bitmap.close();
+                imageRgba = tmpCtx.getImageData(0, 0, width, height);
+              } else if (isPngStream(dict)) {
+                // FlateDecode: decode raw pixels
+                const colorSpace = getColorSpace(dict);
+                const bpc = getBitsPerComponent(dict);
+                const pixels = decodePngImage(imgBytes, width, height, colorSpace, bpc);
+                if (pixels) {
+                  imageRgba = pixelsToImageData(pixels, width, height, colorSpace);
+                }
+              }
+            }
+
+            if (imageRgba) {
+              // Apply SMask alpha values to the ImageData
+              const data = imageRgba.data;
+              for (let i = 0; i < width * height; i++) {
+                data[i * 4 + 3] = smaskPixels[i];
+              }
+
+              // Composite against white and encode as JPEG
+              const newBytes = await compositeOnWhiteAndEncode(
+                imageRgba, width, height, quality
+              );
+
+              // Calculate savings (image bytes + SMask bytes → composited JPEG)
+              const smaskRaw =
+                smaskObj instanceof PDFRawStream ? smaskObj.contents : smaskObj.getContents();
+              const origSize = (imgBytes?.length || 0) + (smaskRaw?.length || 0);
+
+              // Replace image stream in the PDF
+              const newDict = dict.clone(context);
+              newDict.set(PDFName.of('Length'), context.obj(newBytes.length));
+              newDict.set(PDFName.of('Width'), context.obj(width));
+              newDict.set(PDFName.of('Height'), context.obj(height));
+              newDict.set(PDFName.of('Filter'), PDFName.of('DCTDecode'));
+              newDict.set(PDFName.of('ColorSpace'), PDFName.of('DeviceRGB'));
+              newDict.set(PDFName.of('BitsPerComponent'), context.obj(8));
+              newDict.delete(PDFName.of('DecodeParms'));
+              newDict.delete(PDFName.of('Decode'));
+              newDict.delete(PDFName.of('SMask'));
+              newDict.delete(PDFName.of('Mask'));
+
+              const newStream = PDFRawStream.of(newDict, newBytes);
+              context.assign(ref, newStream);
+
+              result.processed++;
+              if (origSize > newBytes.length) {
+                result.savedBytes += origSize - newBytes.length;
+              }
+              composited = true;
+            }
+          }
+        }
+      } catch (err) {
+        // Fall through to simple removal below
+        console.warn('Failed to composite image against white:', err);
+      }
+    }
+
+    if (!composited) {
+      // Fallback: just remove SMask/Mask references (e.g. oversized images,
+      // Mask-only entries, or decode failures)
+      if (smaskRef instanceof PDFRef) {
+        const smaskObj = context.lookup(smaskRef);
         if (smaskObj instanceof PDFRawStream || smaskObj instanceof PDFStream) {
           const bytes = smaskObj instanceof PDFRawStream ? smaskObj.contents : smaskObj.getContents();
           if (bytes) {
@@ -1137,7 +1295,6 @@ export const removeAlphaChannels = (pdfDoc: PDFDocument): AlphaRemovalResult => 
         }
       }
 
-      // Remove SMask and Mask references
       dict.delete(PDFName.of('SMask'));
       dict.delete(PDFName.of('Mask'));
       result.processed++;

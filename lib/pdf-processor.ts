@@ -470,8 +470,8 @@ export const analyzePdf = async (
   // Image-related in-place mutations
   // NOTE: orphan cleanup is deferred to a single pass after ALL methods (massive speedup)
   if (options.removeAlphaChannels) {
-    await applyMethod('removeAlphaChannels', true, (doc) => {
-      const r = removeAlphaChannels(doc);
+    await applyMethod('removeAlphaChannels', true, async (doc) => {
+      const r = await removeAlphaChannels(doc, settings.quality);
       if (r.processed > 0) log('success', `Removed alpha channels from ${r.processed} images`);
     });
   }
@@ -1051,8 +1051,8 @@ export const analyzePdfIncremental = async (
 
   // Image-related in-place mutations
   if (options.removeAlphaChannels) {
-    await applyMethod('removeAlphaChannels', true, (doc) => {
-      const r = removeAlphaChannels(doc);
+    await applyMethod('removeAlphaChannels', true, async (doc) => {
+      const r = await removeAlphaChannels(doc, settings.quality);
       if (r.processed > 0) log('success', `Removed alpha channels from ${r.processed} images`);
     });
   }
@@ -1394,7 +1394,7 @@ export const measureMethodSavings = async (
   const methods: Array<[keyof CompressionOptions, (doc: PDFDocument) => void | Promise<void>, boolean]> = [
     ['stripMetadata', (doc) => stripMetadata(doc), false],
     ['removeOrphanObjects', async (doc) => { await removeOrphanObjects(doc); }, false],
-    ['removeAlphaChannels', (doc) => { removeAlphaChannels(doc); }, true],
+    ['removeAlphaChannels', async (doc) => { await removeAlphaChannels(doc, settings.quality); }, true],
     ['removeColorProfiles', (doc) => { removeIccProfiles(doc); }, true],
     ['cmykToRgb', async (doc) => { await convertCmykToRgb(doc, settings.quality); }, true],
     ['removeDuplicateResources', (doc) => { removeDuplicateResources(doc); }, true],
