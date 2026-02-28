@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     'Read common questions about compressing PDF files online, including quality impact, file size limits, security, and local browser processing.',
   alternates: {
-    canonical: '/faq',
+    canonical: '/faq/',
   },
   openGraph: {
     title: 'PDF Compression FAQ',

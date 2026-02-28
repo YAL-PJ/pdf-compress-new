@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description:
     'Terms of Service for PDF Compress. Understand your rights and responsibilities when using our free, browser-based PDF compression service.',
   alternates: {
-    canonical: '/terms',
+    canonical: '/terms/',
   },
   openGraph: {
     title: 'Terms of Service - PDF Compress',
@@ -208,7 +208,7 @@ export default function TermsOfService() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
           <p>© {new Date().getFullYear()} PDF Compress. All rights reserved.</p>
           <nav className="flex gap-6">
-            <Link href="/compress" className="hover:text-slate-900">
+            <Link href="/" className="hover:text-slate-900">
               Compress PDF
             </Link>
             <Link href="/privacy" className="hover:text-slate-900">
