@@ -8,7 +8,7 @@ import { memo, useState, useEffect, startTransition } from 'react';
 import { usePdf } from '@/context/PdfContext';
 
 export const PresetSelector = memo(() => {
-    const { options, imageSettings, setOptions, setImageSettings, isProcessing, isUpdating } = usePdf();
+    const { options, imageSettings, setOptions, setImageSettings, setTargetPercent, isProcessing, isUpdating } = usePdf();
 
     // Check disabled state
     const disabled = isProcessing && !isUpdating;
@@ -37,6 +37,7 @@ export const PresetSelector = memo(() => {
         startTransition(() => {
             setOptions(preset.options);
             setImageSettings(preset.imageSettings);
+            setTargetPercent(undefined);
         });
     };
 
