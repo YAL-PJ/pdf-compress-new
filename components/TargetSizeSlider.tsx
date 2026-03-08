@@ -195,18 +195,43 @@ export const TargetSizeSlider = memo(() => {
           )}
         </div>
 
-        {/* Target size display */}
-        <div className="flex items-baseline justify-between mb-2">
-          <span className="text-2xl font-bold text-slate-900 tabular-nums">
-            {formatBytes(targetBytes)}
-          </span>
-          <span className="text-sm text-slate-400 font-medium">
-            {targetPercent}% of {formatBytes(originalSize)}
-          </span>
+        {/* Target size display + compression potential inline */}
+        <div className="flex items-baseline justify-between mb-1">
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-slate-900 tabular-nums">
+              {formatBytes(targetBytes)}
+            </span>
+            <span className="text-sm text-slate-400 font-medium">
+              {targetPercent}% of {formatBytes(originalSize)}
+            </span>
+          </div>
+          {potentialPercents && potential && (
+            <div className="flex items-center gap-2 text-[9px] text-slate-400 font-medium">
+              <span className="flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {formatBytes(potential.safeFloor)}
+              </span>
+              {potential.mediumSavings > potential.safeSavings && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
+                  {formatBytes(potential.mediumFloor)}
+                </span>
+              )}
+              {potential.totalSavings > potential.mediumSavings && (
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
+                  {formatBytes(potential.absoluteFloor)}
+                </span>
+              )}
+              {potential.hasPending && (
+                <span className="text-slate-300 animate-pulse">measuring...</span>
+              )}
+            </div>
+          )}
         </div>
 
         {targetPercent > 35 && (
-          <p className="text-[10px] text-slate-500 mb-2">
+          <p className="text-[10px] text-slate-500 mb-1">
             For SmallPDF-like aggressive compression, move target to <span className="font-semibold">35% or lower</span>.
           </p>
         )}
@@ -312,56 +337,24 @@ export const TargetSizeSlider = memo(() => {
             aria-label="Target compression size"
           />
         </div>
-        <div className="flex justify-between text-[10px] text-slate-400 font-medium px-0.5">
+        <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium px-0.5">
           <span>Smallest</span>
+          {isActive && targetFeasibility && (
+            <span className={twMerge(
+              "flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded",
+              targetFeasibility === 'safe' && "bg-emerald-50 text-emerald-700",
+              targetFeasibility === 'medium' && "bg-amber-50 text-amber-700",
+              targetFeasibility === 'reachable' && "bg-red-50 text-red-700",
+              targetFeasibility === 'unreachable' && "bg-slate-100 text-slate-500",
+            )}>
+              {targetFeasibility === 'safe' && <><Shield className="w-2.5 h-2.5" /> Safe methods only</>}
+              {targetFeasibility === 'medium' && <><AlertTriangle className="w-2.5 h-2.5" /> Medium-risk</>}
+              {targetFeasibility === 'reachable' && <><Zap className="w-2.5 h-2.5" /> Aggressive</>}
+              {targetFeasibility === 'unreachable' && <><AlertTriangle className="w-2.5 h-2.5" /> May not be reachable</>}
+            </span>
+          )}
           <span>Original</span>
         </div>
-
-        {/* Compression potential legend */}
-        {potentialPercents && potential && (
-          <div className="mt-3 space-y-1.5">
-            {/* Feasibility indicator for the current target */}
-            {isActive && targetFeasibility && (
-              <div className={twMerge(
-                "flex items-center gap-1.5 text-[10px] font-medium px-2 py-1 rounded",
-                targetFeasibility === 'safe' && "bg-emerald-50 text-emerald-700",
-                targetFeasibility === 'medium' && "bg-amber-50 text-amber-700",
-                targetFeasibility === 'reachable' && "bg-red-50 text-red-700",
-                targetFeasibility === 'unreachable' && "bg-slate-100 text-slate-500",
-              )}>
-                {targetFeasibility === 'safe' && <><Shield className="w-3 h-3" /> Achievable with safe methods only</>}
-                {targetFeasibility === 'medium' && <><AlertTriangle className="w-3 h-3" /> Requires medium-risk methods</>}
-                {targetFeasibility === 'reachable' && <><Zap className="w-3 h-3" /> Requires aggressive methods</>}
-                {targetFeasibility === 'unreachable' && <><AlertTriangle className="w-3 h-3" /> Below measurable limit — may not be reachable</>}
-              </div>
-            )}
-
-            {/* Tier legend */}
-            <div className="flex items-center gap-3 text-[9px] text-slate-400 font-medium">
-              <span className="flex items-center gap-1">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                Safe {formatBytes(potential.safeFloor)}
-              </span>
-              {potential.mediumSavings > potential.safeSavings && (
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  +Medium {formatBytes(potential.mediumFloor)}
-                </span>
-              )}
-              {potential.totalSavings > potential.mediumSavings && (
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
-                  +All {formatBytes(potential.absoluteFloor)}
-                </span>
-              )}
-              {potential.hasPending && (
-                <span className="text-slate-300 animate-pulse">
-                  measuring...
-                </span>
-              )}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* === Divider === */}
@@ -383,7 +376,7 @@ export const TargetSizeSlider = memo(() => {
               </span>
             )}
             {/* Hover tooltip */}
-            <div className="absolute left-0 top-full mt-1 z-20 opacity-0 group-hover/quality:opacity-100 pointer-events-none transition-opacity duration-200">
+            <div className="absolute right-0 bottom-full mb-1 z-20 opacity-0 group-hover/quality:opacity-100 pointer-events-none transition-opacity duration-200">
               <p className="text-[10px] text-slate-500 bg-slate-800 text-white px-2 py-1 rounded shadow-lg whitespace-nowrap">
                 Re-encodes images at lower quality.
                 {imageStats
@@ -455,7 +448,7 @@ export const TargetSizeSlider = memo(() => {
               </span>
             )}
             {/* Hover tooltip */}
-            <div className="absolute left-0 top-full mt-1 z-20 opacity-0 group-hover/dpi:opacity-100 pointer-events-none transition-opacity duration-200">
+            <div className="absolute right-0 bottom-full mb-1 z-20 opacity-0 group-hover/dpi:opacity-100 pointer-events-none transition-opacity duration-200">
               <p className="text-[10px] text-white bg-slate-800 px-2 py-1 rounded shadow-lg whitespace-nowrap">
                 Reduces image resolution to target DPI.
                 {imageStats && imageStats.avgDpi > 0 ? ` Current avg: ~${imageStats.avgDpi} DPI.` : ''}
