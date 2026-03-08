@@ -466,30 +466,29 @@ export const CompressionMethods = () => {
   }, [options]);
 
   return (
-    <div className="bg-white border rounded-lg shadow-sm w-full lg:max-w-xs h-fit self-start sticky top-8">
+    <div className="w-full border-t pt-2">
       {/* Collapsible header */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full p-3 flex items-center justify-between bg-slate-50/50 hover:bg-slate-100/60 transition-colors rounded-t-lg"
+        className="group/adv w-full px-1 py-1.5 flex items-center justify-between hover:bg-slate-50 transition-colors rounded"
+        title="Fine-tune individual compression techniques"
       >
-        <div className="flex items-center gap-2">
-          <Settings2 className="w-3.5 h-3.5 text-slate-600" />
-          <div className="text-left">
-            <h2 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
-              Advanced Methods
-            </h2>
-            <p className="text-[10px] text-slate-500 mt-0.5">
-              Fine-tune individual compression techniques
-            </p>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <Settings2 className="w-3 h-3 text-slate-500" />
+          <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+            Advanced Methods
+          </span>
+          <span className="text-[10px] text-slate-400 opacity-0 group-hover/adv:opacity-100 transition-opacity duration-200">
+            — Fine-tune individual techniques
+          </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[9px] font-medium text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
             {totalEnabled} active
           </span>
           <ChevronDown
             className={twMerge(
-              "w-4 h-4 text-slate-400 transition-transform duration-200",
+              "w-3.5 h-3.5 text-slate-400 transition-transform duration-200",
               isExpanded && "rotate-180"
             )}
           />
@@ -504,7 +503,7 @@ export const CompressionMethods = () => {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.2, ease: 'easeInOut' }}
-            className="overflow-hidden border-t"
+            className="overflow-hidden border-t mt-1"
           >
             {/* Risk-level tabs */}
             <div className="flex border-b">

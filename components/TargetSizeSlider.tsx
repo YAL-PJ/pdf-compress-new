@@ -370,8 +370,8 @@ export const TargetSizeSlider = memo(() => {
       {/* === Secondary Controls - Quality & DPI === */}
       <div className="px-4 py-3 space-y-3">
         {/* Image Quality */}
-        <div>
-          <div className="flex items-center gap-1.5 mb-0.5">
+        <div className="group/quality">
+          <div className="flex items-center gap-1.5 mb-0.5 relative">
             <ImageIcon className="w-3 h-3 text-slate-400" />
             <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Image Quality</span>
             <span className="ml-auto text-[10px] font-mono font-bold text-slate-800 bg-slate-100 px-1 py-0.5 rounded">
@@ -382,13 +382,16 @@ export const TargetSizeSlider = memo(() => {
                 -{formatBytes(qualitySaved)}
               </span>
             )}
+            {/* Hover tooltip */}
+            <div className="absolute left-0 top-full mt-1 z-20 opacity-0 group-hover/quality:opacity-100 pointer-events-none transition-opacity duration-200">
+              <p className="text-[10px] text-slate-500 bg-slate-800 text-white px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                Re-encodes images at lower quality.
+                {imageStats
+                  ? ` ${imageStats.totalImages} image${imageStats.totalImages !== 1 ? 's' : ''} (${imageStats.jpegCount} JPEG, ${formatBytes(imageStats.totalOriginalSize)} total)`
+                  : ''}
+              </p>
+            </div>
           </div>
-          <p className="text-[10px] text-slate-400 mb-1.5">
-            Re-encodes images at lower quality.
-            {imageStats
-              ? ` ${imageStats.totalImages} image${imageStats.totalImages !== 1 ? 's' : ''} (${imageStats.jpegCount} JPEG, ${formatBytes(imageStats.totalOriginalSize)} total)`
-              : ''}
-          </p>
           {imageStats && imageStats.totalOriginalSize > 0 && imageStats.totalOriginalSize / originalSize < 0.1 && (
             <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-100 rounded px-2 py-1 mb-1.5">
               This PDF is mostly text/fonts, so image quality changes will have limited effect.
@@ -439,8 +442,8 @@ export const TargetSizeSlider = memo(() => {
         <div className="border-t border-slate-100" />
 
         {/* DPI / Downsample */}
-        <div>
-          <div className="flex items-center gap-1.5 mb-0.5">
+        <div className="group/dpi">
+          <div className="flex items-center gap-1.5 mb-0.5 relative">
             <Minimize2 className="w-3 h-3 text-slate-400" />
             <span className="text-[10px] font-semibold text-slate-600 uppercase tracking-wide">Downsample</span>
             <span className="ml-auto text-[10px] font-mono font-bold text-slate-800 bg-slate-100 px-1 py-0.5 rounded">
@@ -451,12 +454,15 @@ export const TargetSizeSlider = memo(() => {
                 -{formatBytes(downsampleSaved)}
               </span>
             )}
+            {/* Hover tooltip */}
+            <div className="absolute left-0 top-full mt-1 z-20 opacity-0 group-hover/dpi:opacity-100 pointer-events-none transition-opacity duration-200">
+              <p className="text-[10px] text-white bg-slate-800 px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                Reduces image resolution to target DPI.
+                {imageStats && imageStats.avgDpi > 0 ? ` Current avg: ~${imageStats.avgDpi} DPI.` : ''}
+                {imageStats && imageStats.highDpiCount > 0 ? ` ${imageStats.highDpiCount} high-DPI image${imageStats.highDpiCount !== 1 ? 's' : ''} found.` : ''}
+              </p>
+            </div>
           </div>
-          <p className="text-[10px] text-slate-400 mb-1.5">
-            Reduces image resolution to target DPI.
-            {imageStats && imageStats.avgDpi > 0 ? ` Current avg: ~${imageStats.avgDpi} DPI.` : ''}
-            {imageStats && imageStats.highDpiCount > 0 ? ` ${imageStats.highDpiCount} high-DPI image${imageStats.highDpiCount !== 1 ? 's' : ''} found.` : ''}
-          </p>
           {dpiAboveOriginal && (
             <p className="text-[10px] text-amber-600 mb-1.5">
               Target DPI is equal to or higher than original (~{imageStats!.avgDpi} DPI) — downsampling will have no effect.
