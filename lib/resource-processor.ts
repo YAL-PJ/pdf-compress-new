@@ -1108,7 +1108,14 @@ const mapBytesToGlyphIds = (
         for (const code of bytes) {
           const unicode = winAnsiToUnicode(code);
           const gid = cmap.get(unicode);
-          if (gid !== undefined) glyphIds.add(gid);
+          if (gid !== undefined) {
+            glyphIds.add(gid);
+          } else {
+            // Can't map this character code to a glyph via WinAnsi encoding.
+            // The font likely uses a custom encoding (e.g. Hebrew, Arabic, CJK).
+            // Bail out to avoid removing needed glyphs — keep all.
+            return new Set<number>([-1]);
+          }
         }
       } else {
         // No cmap found — can't map codes to glyphs, skip subsetting
