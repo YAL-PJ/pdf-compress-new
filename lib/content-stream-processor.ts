@@ -18,6 +18,19 @@ import {
 } from 'pdf-lib';
 import pako from 'pako';
 
+/**
+ * Encode a latin1 string back to bytes, preserving byte values 0x00-0xFF.
+ * Unlike TextEncoder (which produces UTF-8), this maps each character's
+ * code point directly to a single byte, matching TextDecoder('latin1').
+ */
+const latin1Encode = (str: string): Uint8Array => {
+  const bytes = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) {
+    bytes[i] = str.charCodeAt(i) & 0xFF;
+  }
+  return bytes;
+};
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -204,7 +217,9 @@ export const convertInlineImagesToXObjects = async (
       }
 
       // Update content stream with new content
-      const newContentBytes = new TextEncoder().encode(newContent);
+      // Must use latin1 encoding to match the latin1 decode — TextEncoder uses UTF-8
+      // which would corrupt any bytes > 0x7F (expanding 1 byte → 2 bytes)
+      const newContentBytes = latin1Encode(newContent);
       const compressedContent = pako.deflate(newContentBytes);
 
       const newDict = contentObj.dict.clone(context);
@@ -310,6 +325,26 @@ export const compressContentStreams = async (
     }
 
     const filter = dict.get(PDFName.of('Filter'));
+
+    // Skip streams with DecodeParms containing predictors — pako.inflate
+    // only undoes Deflate, not the predictor, so recompressing without
+    // DecodeParms would produce unreadable output.
+    const decodeParms = dict.get(PDFName.of('DecodeParms'));
+    if (decodeParms instanceof PDFDict) {
+      const predictor = decodeParms.get(PDFName.of('Predictor'));
+      if (predictor instanceof PDFNumber && predictor.asNumber() > 1) {
+        processed++;
+        continue;
+      }
+    }
+
+    // Skip multi-filter arrays — we only decompress the first filter,
+    // so recompressing with a single FlateDecode would corrupt the data.
+    if (filter instanceof PDFArray && filter.size() > 1) {
+      processed++;
+      continue;
+    }
+
     let originalBytes: Uint8Array | undefined;
     let isCompressed = false;
 
@@ -609,7 +644,8 @@ export const removeInvisibleText = async (
         continue; // No changes made
       }
 
-      const newContentBytes = new TextEncoder().encode(newContent);
+      // Must use latin1 encoding to match the latin1 decode
+      const newContentBytes = latin1Encode(newContent);
       const compressedContent = pako.deflate(newContentBytes, { level: 9 });
 
       const newDict = contentObj.dict.clone(context);
