@@ -209,18 +209,18 @@ export const TargetSizeSlider = memo(() => {
             <div className="flex items-center gap-2 text-[9px] text-slate-400 font-medium">
               <span className="flex items-center gap-1">
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                {formatBytes(potential.safeFloor)}
+                Safe {formatBytes(potential.safeFloor)}
               </span>
               {potential.mediumSavings > potential.safeSavings && (
                 <span className="flex items-center gap-1">
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-500" />
-                  {formatBytes(potential.mediumFloor)}
+                  +Medium {formatBytes(potential.mediumFloor)}
                 </span>
               )}
               {potential.totalSavings > potential.mediumSavings && (
                 <span className="flex items-center gap-1">
                   <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-500" />
-                  {formatBytes(potential.absoluteFloor)}
+                  +All {formatBytes(potential.absoluteFloor)}
                 </span>
               )}
               {potential.hasPending && (
@@ -230,14 +230,16 @@ export const TargetSizeSlider = memo(() => {
           )}
         </div>
 
-        {targetPercent > 35 && (
-          <p className="text-[10px] text-slate-500 mb-1">
-            For SmallPDF-like aggressive compression, move target to <span className="font-semibold">35% or lower</span>.
-          </p>
-        )}
-
         {/* Main slider with potential markers */}
-        <div className="relative mt-2 mb-1">
+        <div className="group/slider relative mt-2 mb-1">
+          {/* SmallPDF tip - hover only */}
+          {targetPercent > 35 && (
+            <div className="absolute left-0 bottom-full mb-1 z-20 opacity-0 group-hover/slider:opacity-100 pointer-events-none transition-opacity duration-200">
+              <p className="text-[10px] text-white bg-slate-800 px-2 py-1 rounded shadow-lg whitespace-nowrap">
+                For SmallPDF-like aggressive compression, move target to <span className="font-semibold">35% or lower</span>.
+              </p>
+            </div>
+          )}
           {/* Track background */}
           <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-2 bg-slate-100 rounded-full border border-slate-200" />
 
@@ -339,7 +341,7 @@ export const TargetSizeSlider = memo(() => {
         </div>
         <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium px-0.5">
           <span>Smallest</span>
-          {isActive && targetFeasibility && (
+          {targetFeasibility && (
             <span className={twMerge(
               "flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded",
               targetFeasibility === 'safe' && "bg-emerald-50 text-emerald-700",
