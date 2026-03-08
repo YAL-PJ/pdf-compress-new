@@ -7,6 +7,7 @@ import {
   Package, Eraser, Image as ImageIcon, Settings2, Minimize2, Palette, FileImage, Square, Layers,
   Bookmark, Link2, Newspaper, Globe, EyeOff, Hash, Trash2, FileText, MessageSquare, Code, Copy, Type,
   Paperclip, Boxes, Archive, Recycle, SplitSquareHorizontal, ScanEye, Blend, Scissors, Spline, ImageDown,
+  ImageMinus, Film,
 } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { useState, useMemo, useCallback } from 'react';
@@ -296,6 +297,22 @@ const HIGH_METHODS: MethodConfig[] = [
     icon: ImageDown,
     warning: 'Destroys text & vectors',
   },
+  {
+    key: 'removeAllImages',
+    label: 'Remove All Images',
+    description: 'Strip all images from pages',
+    impact: 'Permanently removes every image from all pages. The document becomes text-only. Huge savings for image-heavy PDFs.',
+    icon: ImageMinus,
+    warning: 'All images permanently deleted',
+  },
+  {
+    key: 'removeMultimedia',
+    label: 'Remove Multimedia',
+    description: 'Strip audio, video, 3D & rich media',
+    impact: 'Removes embedded audio, video, 3D models, and rich media annotations. Significant savings for multimedia-heavy PDFs.',
+    icon: Film,
+    warning: 'All multimedia permanently deleted',
+  },
 ];
 
 const ALL_METHODS = [...SAFE_METHODS, ...MEDIUM_METHODS, ...HIGH_METHODS];
@@ -387,6 +404,11 @@ export const CompressionMethods = () => {
         return !pdfFeatures.hasShadings ? 'No gradients/shadings found' : undefined;
       case 'reduceVectorPrecision':
         return !pdfFeatures.hasComplexPaths ? 'No complex vector paths' : undefined;
+      // Heavy object removal methods
+      case 'removeAllImages':
+        return !pdfFeatures.hasImages ? 'No images found' : undefined;
+      case 'removeMultimedia':
+        return !pdfFeatures.hasMultimedia ? 'No multimedia found' : undefined;
       default:
         return undefined;
     }

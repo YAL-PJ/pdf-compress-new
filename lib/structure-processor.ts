@@ -348,6 +348,128 @@ export const flattenAnnotations = (pdfDoc: PDFDocument): number => {
 };
 
 /**
+ * Remove ALL images from every page in the PDF.
+ * Deletes XObject image entries from page resources, making pages text-only.
+ * Returns the number of images removed.
+ */
+export const removeAllImages = (pdfDoc: PDFDocument): number => {
+  let removedCount = 0;
+  const pages = pdfDoc.getPages();
+
+  for (const page of pages) {
+    const pageDict = page.node;
+    const resources = pageDict.get(PDFName.of('Resources'));
+    if (!(resources instanceof PDFDict)) continue;
+
+    const xobjects = resources.get(PDFName.of('XObject'));
+    if (!(xobjects instanceof PDFDict)) continue;
+
+    // Collect image XObject keys to remove
+    const keysToRemove: PDFName[] = [];
+    const entries = xobjects.entries();
+    for (const [key, value] of entries) {
+      // Resolve the reference to get the actual object
+      const resolved = value instanceof PDFRef
+        ? pdfDoc.context.lookup(value)
+        : value;
+
+      if (resolved instanceof PDFDict) {
+        const subtype = resolved.get(PDFName.of('Subtype'));
+        if (subtype instanceof PDFName && subtype.toString() === '/Image') {
+          keysToRemove.push(key);
+        }
+      }
+    }
+
+    for (const key of keysToRemove) {
+      xobjects.delete(key);
+      removedCount++;
+    }
+  }
+
+  return removedCount;
+};
+
+/**
+ * Remove multimedia annotations (Sound, Movie, Screen, RichMedia, 3D) from all pages.
+ * Returns the number of multimedia annotations removed.
+ */
+export const removeMultimedia = (pdfDoc: PDFDocument): number => {
+  let removedCount = 0;
+  const pages = pdfDoc.getPages();
+
+  const multimediaTypes = new Set([
+    '/Sound',
+    '/Movie',
+    '/Screen',
+    '/RichMedia',
+    '/3D',
+  ]);
+
+  for (const page of pages) {
+    const pageDict = page.node;
+    const annots = pageDict.get(PDFName.of('Annots'));
+
+    if (!(annots instanceof PDFArray)) continue;
+
+    const newAnnots: PDFRef[] = [];
+    for (let i = 0; i < annots.size(); i++) {
+      const annotRef = annots.get(i);
+      if (annotRef instanceof PDFRef) {
+        const annot = pdfDoc.context.lookup(annotRef);
+        if (annot instanceof PDFDict) {
+          const subtype = annot.get(PDFName.of('Subtype'));
+          if (subtype instanceof PDFName && multimediaTypes.has(subtype.toString())) {
+            removedCount++;
+            continue;
+          }
+        }
+        newAnnots.push(annotRef);
+      }
+    }
+
+    if (newAnnots.length !== annots.size()) {
+      if (newAnnots.length === 0) {
+        pageDict.delete(PDFName.of('Annots'));
+      } else {
+        pageDict.set(PDFName.of('Annots'), pdfDoc.context.obj(newAnnots));
+      }
+    }
+  }
+
+  return removedCount;
+};
+
+/**
+ * Detect if PDF has multimedia annotations (Sound, Movie, Screen, RichMedia, 3D)
+ */
+export const detectMultimedia = (pdfDoc: PDFDocument): boolean => {
+  const pages = pdfDoc.getPages();
+  const multimediaTypes = new Set([
+    '/Sound', '/Movie', '/Screen', '/RichMedia', '/3D',
+  ]);
+
+  for (const page of pages) {
+    const annots = page.node.get(PDFName.of('Annots'));
+    if (!(annots instanceof PDFArray)) continue;
+
+    for (let i = 0; i < annots.size(); i++) {
+      const annotRef = annots.get(i);
+      if (annotRef instanceof PDFRef) {
+        const annot = pdfDoc.context.lookup(annotRef);
+        if (annot instanceof PDFDict) {
+          const subtype = annot.get(PDFName.of('Subtype'));
+          if (subtype instanceof PDFName && multimediaTypes.has(subtype.toString())) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+};
+
+/**
  * Apply all enabled structure cleanup methods to a PDF document
  * Returns object with count/details for each method
  */

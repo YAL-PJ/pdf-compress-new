@@ -37,6 +37,9 @@ import {
   removeAttachments as removeATT,
   flattenForms as flattenFM,
   flattenAnnotations as flattenAN,
+  removeAllImages as removeAI,
+  removeMultimedia as removeMM,
+  detectMultimedia,
 } from './structure-processor';
 import {
   removeDuplicateResources,
@@ -190,6 +193,7 @@ const detectFeatures = (pdfDoc: PDFDocument, imageStats?: ImageStats): PdfFeatur
     hasMetadata,
     hasShadings: vectorFeatures.hasShadings,
     hasComplexPaths: vectorFeatures.hasComplexPaths,
+    hasMultimedia: detectMultimedia(pdfDoc),
   };
 };
 
@@ -659,6 +663,10 @@ export const analyzePdf = async (
   if (typeof attResult === 'number') structAttachmentsRemoved = attResult;
   applyStructMethod('flattenForms', options.flattenForms, flattenFM);
   applyStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
+  const aiResult = applyStructMethod('removeAllImages', options.removeAllImages, removeAI);
+  if (typeof aiResult === 'number' && aiResult > 0) log('success', `Removed ${aiResult} images from pages`);
+  const mmResult = applyStructMethod('removeMultimedia', options.removeMultimedia, removeMM);
+  if (typeof mmResult === 'number' && mmResult > 0) log('success', `Removed ${mmResult} multimedia annotations`);
 
   // Single orphan cleanup pass after ALL methods (non-struct + struct).
   // Per-method orphan cleanup is only needed in background measurement
@@ -765,6 +773,8 @@ export const analyzePdf = async (
     mkResult('removeUnusedShadings'),
     mkResult('reduceVectorPrecision'),
     mkResult('rasterizePages', { savedBytes: rasterSavings, compressedSize: originalSize - rasterSavings, pending: false }),
+    mkResult('removeAllImages'),
+    mkResult('removeMultimedia'),
   ];
 
   onProgress?.('Done!');
@@ -1237,6 +1247,10 @@ export const analyzePdfIncremental = async (
   if (typeof attResult === 'number') structAttachmentsRemoved = attResult;
   applyStructMethod('flattenForms', options.flattenForms, flattenFM);
   applyStructMethod('flattenAnnotations', options.flattenAnnotations, flattenAN);
+  const aiResult2 = applyStructMethod('removeAllImages', options.removeAllImages, removeAI);
+  if (typeof aiResult2 === 'number' && aiResult2 > 0) log('success', `Removed ${aiResult2} images from pages`);
+  const mmResult2 = applyStructMethod('removeMultimedia', options.removeMultimedia, removeMM);
+  if (typeof mmResult2 === 'number' && mmResult2 > 0) log('success', `Removed ${mmResult2} multimedia annotations`);
 
   // Single orphan cleanup pass after ALL methods
   await removeOrphanObjects(structDoc);
@@ -1334,6 +1348,8 @@ export const analyzePdfIncremental = async (
     mkResult('removeUnusedShadings'),
     mkResult('reduceVectorPrecision'),
     mkResult('rasterizePages', { savedBytes: rasterSavings, compressedSize: originalSize - rasterSavings, pending: false }),
+    mkResult('removeAllImages'),
+    mkResult('removeMultimedia'),
   ];
 
   onProgress?.('Done!');
@@ -1418,6 +1434,8 @@ export const measureMethodSavings = async (
     ['removeAttachments', (doc) => { removeATT(doc); }, true],
     ['flattenForms', (doc) => { flattenFM(doc); }, true],
     ['flattenAnnotations', (doc) => { flattenAN(doc); }, true],
+    ['removeAllImages', (doc) => { removeAI(doc); }, true],
+    ['removeMultimedia', (doc) => { removeMM(doc); }, true],
     ['deduplicateShadings', (doc) => { deduplicateShadings(doc); }, true],
     ['removeUnusedShadings', (doc) => { removeUnusedShadings(doc); }, true],
     ['reduceVectorPrecision', (doc) => { reduceVectorPrecision(doc); }, false],
