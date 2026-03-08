@@ -92,6 +92,13 @@ export const ResultsDisplay = memo(({
     setDiffImages(null);
   }, [originalFile, blob]);
 
+  // Clear stale cached previews when recompression starts so fresh ones render when done
+  useEffect(() => {
+    if (isUpdating) {
+      pageImageCache.current.clear();
+    }
+  }, [isUpdating]);
+
   // Generate visual diff preview images for the current page
   useEffect(() => {
     let cancelled = false;
