@@ -102,6 +102,9 @@ export function settingsForTargetPercent(targetPercent: number): TargetSizeResul
     reduceVectorPrecision: enableAggressiveMethods,
     // Rasterization only at extreme compression (≤15%)
     rasterizePages: pct <= 15,
+    // Heavy object removal — only at extreme compression
+    removeAllImages: false,
+    removeMultimedia: enableMaxCompression,
   };
 
   const imageSettings: ImageCompressionSettings = {
@@ -195,6 +198,8 @@ export function getEscalationTier(
           deduplicateShadings: true,
           removeUnusedShadings: true,
           reduceVectorPrecision: true,
+          // Heavy object removal
+          removeMultimedia: true,
         },
         imageSettings: {
           ...baseImageSettings,

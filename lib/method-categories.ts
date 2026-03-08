@@ -56,6 +56,8 @@ export const HIGH_METHOD_KEYS: (keyof CompressionOptions)[] = [
   'removeInvisibleText',
   'removeFontUnicodeMaps',
   'rasterizePages',
+  'removeAllImages',
+  'removeMultimedia',
 ];
 
 /** All method keys across all risk levels */

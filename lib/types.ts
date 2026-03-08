@@ -56,6 +56,10 @@ export interface CompressionOptions {
 
   // Page Rasterization (Phase 3 - Nuclear)
   rasterizePages: boolean;        // 3.4 Render all pages to JPEG images (destroys text/vectors)
+
+  // Heavy Object Removal (Phase 4 - Nuclear)
+  removeAllImages: boolean;       // 4.1 Strip all images from pages (text-only output)
+  removeMultimedia: boolean;      // 4.2 Remove embedded audio, video, 3D, and rich media
 }
 
 export interface ImageCompressionSettings {
@@ -119,6 +123,10 @@ export const DEFAULT_COMPRESSION_OPTIONS: CompressionOptions = {
 
   // Page Rasterization (Phase 3 - Nuclear)
   rasterizePages: false,         // Off - destroys text/vectors, only for extreme compression
+
+  // Heavy Object Removal (Phase 4 - Nuclear)
+  removeAllImages: false,        // Off - strips all images, document becomes text-only
+  removeMultimedia: false,       // Off - removes audio, video, 3D, rich media
 };
 
 export const DEFAULT_IMAGE_SETTINGS: ImageCompressionSettings = {
@@ -159,6 +167,8 @@ export interface PdfFeatures {
   // Vector features
   hasShadings: boolean;
   hasComplexPaths: boolean;
+  // Multimedia features
+  hasMultimedia: boolean;
 }
 
 /** Result for a single compression method */
