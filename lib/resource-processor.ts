@@ -1080,15 +1080,54 @@ const extractAllTextBytes = (pdfDoc: PDFDocument): Map<string, number[]> => {
 };
 
 /**
+ * Check if a font dictionary uses WinAnsi encoding.
+ * Returns true only if we can confidently use winAnsiToUnicode mapping.
+ *
+ * Fonts with custom encodings (Hebrew, Arabic, Cyrillic, etc.), Differences
+ * arrays, or non-standard encoding names must NOT use the WinAnsi path.
+ */
+const isWinAnsiEncoded = (fontDict: PDFDict): boolean => {
+  const encoding = fontDict.get(PDFName.of('Encoding'));
+  if (!encoding) return false; // No explicit encoding — can't assume WinAnsi
+
+  // Direct name: /WinAnsiEncoding
+  if (encoding instanceof PDFName) {
+    return encoding.toString() === '/WinAnsiEncoding';
+  }
+
+  // Encoding dictionary with BaseEncoding and optional Differences
+  if (encoding instanceof PDFDict) {
+    const base = encoding.get(PDFName.of('BaseEncoding'));
+    if (!(base instanceof PDFName) || base.toString() !== '/WinAnsiEncoding') {
+      return false;
+    }
+    // Has Differences array — custom overrides modify the WinAnsi mapping,
+    // making our hardcoded winAnsiToUnicode table unreliable.
+    const differences = encoding.get(PDFName.of('Differences'));
+    if (differences instanceof PDFArray && differences.size() > 0) {
+      return false;
+    }
+    return true;
+  }
+
+  return false;
+};
+
+/**
  * Convert raw text bytes to glyph IDs based on font type.
  *
  * For CID fonts (Identity-H): 2-byte big-endian pairs → glyph IDs.
  * For simple TrueType fonts: 1-byte codes → Unicode → GID via cmap.
+ *
+ * Only uses WinAnsi mapping when the font explicitly declares WinAnsiEncoding.
+ * For all other encodings, bails out (returns sentinel -1) to avoid removing
+ * needed glyphs for non-Latin scripts like Hebrew, Arabic, Thai, etc.
  */
 const mapBytesToGlyphIds = (
   bytes: number[],
   isCID: boolean,
   fontData: Uint8Array | null,
+  fontDict: PDFDict | null,
 ): Set<number> => {
   const glyphIds = new Set<number>();
   glyphIds.add(0); // Always keep .notdef
@@ -1103,6 +1142,13 @@ const mapBytesToGlyphIds = (
     // Simple TrueType font: bytes are character codes
     // Map character code → Unicode → GID via cmap
     if (fontData) {
+      // Only use WinAnsi mapping when the font explicitly declares it.
+      // Non-WinAnsi fonts (Hebrew, Arabic, custom encodings) would get
+      // wrong Unicode values, causing the subsetter to keep wrong glyphs.
+      if (!fontDict || !isWinAnsiEncoded(fontDict)) {
+        return new Set<number>([-1]); // Keep all glyphs
+      }
+
       const cmap = getFontCmap(fontData);
       if (cmap) {
         for (const code of bytes) {
@@ -1111,15 +1157,14 @@ const mapBytesToGlyphIds = (
           if (gid !== undefined) {
             glyphIds.add(gid);
           } else {
-            // Can't map this character code to a glyph via WinAnsi encoding.
-            // The font likely uses a custom encoding (e.g. Hebrew, Arabic, CJK).
-            // Bail out to avoid removing needed glyphs — keep all.
+            // Even with WinAnsi encoding, some codes may not have glyphs
+            // (e.g. font doesn't include all WinAnsi characters).
+            // Bail out to avoid removing needed glyphs.
             return new Set<number>([-1]);
           }
         }
       } else {
         // No cmap found — can't map codes to glyphs, skip subsetting
-        // Return a large set to signal "keep all"
         return new Set<number>([-1]);
       }
     }
@@ -1203,7 +1248,7 @@ export const subsetEmbeddedFonts = (pdfDoc: PDFDocument): FontSubsetResult => {
     // Get text bytes for this font resource name
     const bytes = textBytesPerFont.get(entry.resourceName);
     if (bytes && bytes.length > 0) {
-      const glyphs = mapBytesToGlyphIds(bytes, entry.isCID, group.fontData);
+      const glyphs = mapBytesToGlyphIds(bytes, entry.isCID, group.fontData, entry.fontDict);
       // If mapping failed (returned sentinel -1), mark as "keep all"
       if (glyphs.has(-1)) {
         group.glyphIds.add(-1);
