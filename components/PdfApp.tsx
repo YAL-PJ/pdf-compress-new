@@ -282,11 +282,10 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                                                 Compression Levels
                                             </h2>
                                             <PresetSelector />
+                                            <CompressionMethods />
                                         </div>
 
                                         <TargetSizeSlider />
-
-                                        <CompressionMethods />
 
                                         {state.status === 'idle' && (
                                             <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 text-sm text-blue-700">
