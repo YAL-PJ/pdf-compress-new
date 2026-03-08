@@ -92,6 +92,12 @@ const getDecompressedStreamBytes = (stream: PDFStream | PDFRawStream): Uint8Arra
       return rawBytes;
     }
 
+    // Multi-filter arrays — we can't reliably decompress these,
+    // return null so callers know the data is unreliable.
+    if (filter instanceof PDFArray && filter.size() > 1) {
+      return null;
+    }
+
     let filterName: string | undefined;
     if (filter instanceof PDFName) {
       filterName = filter.toString();
@@ -106,17 +112,134 @@ const getDecompressedStreamBytes = (stream: PDFStream | PDFRawStream): Uint8Arra
       try {
         return pako.inflate(rawBytes);
       } catch {
-        // Decompression failed, return raw bytes as fallback
-        return rawBytes;
+        // Decompression failed — return null instead of raw compressed bytes.
+        // Returning compressed data would cause downstream regex-based parsers
+        // (font detection, text extraction) to fail silently, leading to
+        // fonts being incorrectly removed or glyphs being missed.
+        return null;
       }
     }
 
-    // For other filters, return raw bytes
-    return rawBytes;
+    if (filterName === '/LZWDecode') {
+      try {
+        return decodeLzw(rawBytes);
+      } catch {
+        return null;
+      }
+    }
+
+    // For other unsupported filters (ASCII85, ASCIIHex, etc.),
+    // return null — we can't decompress and raw bytes would mislead callers.
+    return null;
   } catch {
     return null;
   }
 };
+
+/**
+ * Basic LZW decoder for PDF streams.
+ * Uses chunked output to avoid stack overflow from spread operator on large entries.
+ */
+function decodeLzw(data: Uint8Array): Uint8Array {
+  const chunks: Uint8Array[] = [];
+  let currentChunk = new Uint8Array(65536);
+  let chunkOffset = 0;
+
+  const writeBytes = (entry: Uint8Array) => {
+    let srcOffset = 0;
+    let remaining = entry.length;
+    while (remaining > 0) {
+      const space = currentChunk.length - chunkOffset;
+      const toCopy = Math.min(remaining, space);
+      currentChunk.set(entry.subarray(srcOffset, srcOffset + toCopy), chunkOffset);
+      chunkOffset += toCopy;
+      srcOffset += toCopy;
+      remaining -= toCopy;
+      if (chunkOffset === currentChunk.length) {
+        chunks.push(currentChunk);
+        currentChunk = new Uint8Array(65536);
+        chunkOffset = 0;
+      }
+    }
+  };
+
+  const dictionary: Uint8Array[] = [];
+  for (let i = 0; i < 256; i++) {
+    dictionary[i] = new Uint8Array([i]);
+  }
+
+  const CLEAR_CODE = 256;
+  const EOD_CODE = 257;
+  let nextCode = 258;
+  let codeSize = 9;
+
+  let bitBuffer = 0;
+  let bitsInBuffer = 0;
+  let dataIndex = 0;
+
+  const readCode = (): number => {
+    while (bitsInBuffer < codeSize && dataIndex < data.length) {
+      bitBuffer = (bitBuffer << 8) | data[dataIndex++];
+      bitsInBuffer += 8;
+    }
+    if (bitsInBuffer < codeSize) return EOD_CODE;
+    bitsInBuffer -= codeSize;
+    return (bitBuffer >> bitsInBuffer) & ((1 << codeSize) - 1);
+  };
+
+  let prevEntry: Uint8Array | null = null;
+
+  while (true) {
+    const code = readCode();
+    if (code === EOD_CODE) break;
+
+    if (code === CLEAR_CODE) {
+      dictionary.length = 258;
+      nextCode = 258;
+      codeSize = 9;
+      prevEntry = null;
+      continue;
+    }
+
+    let entry: Uint8Array;
+    if (code < dictionary.length) {
+      entry = dictionary[code];
+    } else if (code === nextCode && prevEntry) {
+      entry = new Uint8Array(prevEntry.length + 1);
+      entry.set(prevEntry);
+      entry[prevEntry.length] = prevEntry[0];
+    } else {
+      break;
+    }
+
+    writeBytes(entry);
+
+    if (prevEntry) {
+      const newEntry = new Uint8Array(prevEntry.length + 1);
+      newEntry.set(prevEntry);
+      newEntry[prevEntry.length] = entry[0];
+      dictionary[nextCode++] = newEntry;
+      if (nextCode >= (1 << codeSize) && codeSize < 12) {
+        codeSize++;
+      }
+    }
+
+    prevEntry = entry;
+  }
+
+  if (chunkOffset > 0) {
+    chunks.push(currentChunk.subarray(0, chunkOffset));
+  }
+
+  const totalLength = chunks.reduce((sum, c) => sum + c.length, 0);
+  const result = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
 
 /**
  * Check if an object is an image XObject
@@ -312,9 +435,11 @@ const extractUsedFonts = (contentBytes: Uint8Array): Set<string> => {
     // Convert to string for parsing
     const content = new TextDecoder('latin1').decode(contentBytes);
 
-    // Match font references: /FontName Tf or /F1 Tf patterns
-    // Font names appear before 'Tf' operator
-    const fontRegex = /\/([A-Za-z0-9_+-]+)\s+[\d.]+\s+Tf/g;
+    // Match font references: /FontName size Tf patterns
+    // Font names can contain virtually any non-delimiter character in PDF:
+    // letters, digits, _, +, -, ., #XX hex escapes, etc.
+    // Use a broad character class to avoid missing fonts with unusual names.
+    const fontRegex = /\/([^\s()<>\[\]{}/%]+)\s+[\d.]+\s+Tf/g;
     let match;
 
     while ((match = fontRegex.exec(content)) !== null) {
@@ -334,6 +459,13 @@ const extractUsedFonts = (contentBytes: Uint8Array): Set<string> => {
 /**
  * Extract font references from a content stream (ref or array of refs)
  */
+/**
+ * Sentinel value added to usedFonts when a content stream can't be decompressed.
+ * When present, removeUnusedFonts will skip font removal entirely to avoid
+ * accidentally removing fonts that ARE used but couldn't be detected.
+ */
+const FONT_SCAN_UNCERTAIN = '__UNCERTAIN__';
+
 const extractFontsFromContentRef = (
   pdfDoc: PDFDocument,
   contents: PDFRef | PDFArray,
@@ -345,6 +477,10 @@ const extractFontsFromContentRef = (
       const bytes = getDecompressedStreamBytes(contentObj);
       if (bytes) {
         extractUsedFonts(bytes).forEach(f => usedFonts.add(f));
+      } else {
+        // Content stream couldn't be decompressed — we can't determine which
+        // fonts it uses. Mark as uncertain to prevent incorrect font removal.
+        usedFonts.add(FONT_SCAN_UNCERTAIN);
       }
     }
   } else if (contents instanceof PDFArray) {
@@ -475,6 +611,12 @@ export const removeUnusedFonts = (pdfDoc: PDFDocument): UnusedFontResult => {
 
     // Scan annotation appearance streams
     extractFontsFromAnnotations(pdfDoc, pageDict, allUsedFonts);
+  }
+
+  // If any content stream couldn't be decompressed, we can't be sure
+  // which fonts are used. Bail out to avoid removing needed fonts.
+  if (allUsedFonts.has(FONT_SCAN_UNCERTAIN)) {
+    return result;
   }
 
   // Now check each page's font resources

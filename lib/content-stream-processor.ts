@@ -239,17 +239,33 @@ export const convertInlineImagesToXObjects = async (
 };
 
 /**
- * Parse inline image dictionary from BI content
+ * Parse inline image dictionary from BI content.
+ * Validates that all keys are known inline image dictionary keys (per PDF spec)
+ * and that required Width/Height are present. This prevents false BI/ID/EI
+ * regex matches from being processed as inline images.
  */
 function parseInlineImageDict(dictContent: string): Record<string, string> | null {
+  // Valid inline image dictionary keys (abbreviated and full forms, per PDF spec Table 91/92)
+  const validKeys = new Set([
+    'W', 'Width', 'H', 'Height', 'BPC', 'BitsPerComponent',
+    'CS', 'ColorSpace', 'F', 'Filter', 'D', 'DecodeParms', 'DP',
+    'I', 'Interpolate', 'IM', 'ImageMask', 'Intent',
+  ]);
+
   const result: Record<string, string> = {};
   const tokens = dictContent.split(/\s+/).filter(t => t.length > 0);
 
   for (let i = 0; i < tokens.length - 1; i += 2) {
     const key = tokens[i].replace('/', '');
+    // If any key is not a recognized inline image key, this isn't a real inline image
+    if (!validKeys.has(key)) return null;
     const value = tokens[i + 1];
     result[key] = value.replace('/', '');
   }
+
+  // Must have at least Width and Height to be a valid inline image
+  if (!result['W'] && !result['Width']) return null;
+  if (!result['H'] && !result['Height']) return null;
 
   return Object.keys(result).length > 0 ? result : null;
 }
