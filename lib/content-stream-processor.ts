@@ -19,6 +19,37 @@ import {
 import pako from 'pako';
 
 /**
+ * Resolve a page's Contents entry to an array of PDFRefs to content streams.
+ * Handles: direct PDFRef to stream, direct PDFArray of refs, and indirect
+ * PDFRef that resolves to a PDFArray (common in many PDF generators).
+ */
+function resolveContentRefs(
+  contentsRef: PDFRef | PDFArray | ReturnType<PDFDict['get']>,
+  context: PDFDocument['context'],
+): PDFRef[] {
+  const refs: PDFRef[] = [];
+  if (contentsRef instanceof PDFRef) {
+    const resolved = context.lookup(contentsRef);
+    if (resolved instanceof PDFArray) {
+      // Indirect ref to array — extract individual stream refs
+      for (let i = 0; i < resolved.size(); i++) {
+        const item = resolved.get(i);
+        if (item instanceof PDFRef) refs.push(item);
+      }
+    } else {
+      // Direct ref to a single content stream
+      refs.push(contentsRef);
+    }
+  } else if (contentsRef instanceof PDFArray) {
+    for (let i = 0; i < contentsRef.size(); i++) {
+      const ref = contentsRef.get(i);
+      if (ref instanceof PDFRef) refs.push(ref);
+    }
+  }
+  return refs;
+}
+
+/**
  * Encode a latin1 string back to bytes, preserving byte values 0x00-0xFF.
  * Unlike TextEncoder (which produces UTF-8), this maps each character's
  * code point directly to a single byte, matching TextDecoder('latin1').
@@ -81,16 +112,8 @@ export const convertInlineImagesToXObjects = async (
 
     if (!contentsRef) continue;
 
-    // Get content stream(s)
-    const contentRefs: PDFRef[] = [];
-    if (contentsRef instanceof PDFRef) {
-      contentRefs.push(contentsRef);
-    } else if (contentsRef instanceof PDFArray) {
-      for (let i = 0; i < contentsRef.size(); i++) {
-        const ref = contentsRef.get(i);
-        if (ref instanceof PDFRef) contentRefs.push(ref);
-      }
-    }
+    // Get content stream(s) — resolve indirect refs to arrays
+    const contentRefs: PDFRef[] = resolveContentRefs(contentsRef, context);
 
     for (const contentRef of contentRefs) {
       const contentObj = context.lookup(contentRef);
@@ -391,6 +414,22 @@ export const compressContentStreams = async (
     let decompressedBytes: Uint8Array;
 
     if (filter && (filter instanceof PDFName || filter instanceof PDFArray)) {
+      // Only process filters we can actually decompress (FlateDecode, LZWDecode).
+      // For any other filter (ASCIIHexDecode, ASCII85Decode, RunLengthDecode, etc.)
+      // decompressStream returns data as-is, but we'd then overwrite the filter
+      // with FlateDecode — silently corrupting the stream. Skip those.
+      let filterName: string | undefined;
+      if (filter instanceof PDFName) {
+        filterName = filter.toString();
+      } else if (filter instanceof PDFArray && filter.size() > 0) {
+        const first = filter.get(0);
+        if (first instanceof PDFName) filterName = first.toString();
+      }
+      if (filterName !== '/FlateDecode' && filterName !== '/LZWDecode') {
+        processed++;
+        continue;
+      }
+
       isCompressed = true;
       // Try to decompress to check compression efficiency
       try {
@@ -607,16 +646,8 @@ export const removeInvisibleText = async (
 
     if (!contentsRef) continue;
 
-    // Get content stream(s)
-    const contentRefs: PDFRef[] = [];
-    if (contentsRef instanceof PDFRef) {
-      contentRefs.push(contentsRef);
-    } else if (contentsRef instanceof PDFArray) {
-      for (let i = 0; i < contentsRef.size(); i++) {
-        const ref = contentsRef.get(i);
-        if (ref instanceof PDFRef) contentRefs.push(ref);
-      }
-    }
+    // Get content stream(s) — resolve indirect refs to arrays
+    const contentRefs: PDFRef[] = resolveContentRefs(contentsRef, context);
 
     for (const contentRef of contentRefs) {
       const contentObj = context.lookup(contentRef);
@@ -688,15 +719,15 @@ export const removeInvisibleText = async (
  * Matches patterns where rendering mode 3 is set and text is drawn.
  */
 function removeInvisibleTextBlocks(content: string): string {
-  // Track rendering mode state
+  // Extract non-nested BT...ET blocks safely.
+  // We find each BT and then the *first* matching ET, which avoids greedily
+  // matching across multiple text blocks and accidentally removing visible text.
+  //
+  // \bBT\b ensures we match the operator, not a substring like "BOTTOM".
+  // We then match the *shortest* run to the next \bET\b.
   let result = content;
 
-  // Pattern 1: Remove complete invisible text blocks
-  // BT ... 3 Tr ... text operators ... ET
-  const invisibleBlockPattern = /BT[^]*?3\s+Tr[^]*?ET/g;
-
-  // Check each text block for invisible rendering mode
-  result = result.replace(/BT([^]*?)ET/g, (match, blockContent) => {
+  result = result.replace(/\bBT\b([\s\S]*?)\bET\b/g, (match, blockContent: string) => {
     // Check if this block sets rendering mode to 3 (invisible)
     if (/\b3\s+Tr\b/.test(blockContent)) {
       // Check if there's a visible mode set after (0, 1, 2)
@@ -709,15 +740,18 @@ function removeInvisibleTextBlocks(content: string): string {
           return '';
         }
       }
-      // Block starts invisible but switches to visible - keep it but clean
+      // Block starts invisible but switches to visible - keep it
       return match;
     }
     return match;
   });
 
-  // Pattern 2: Remove inline invisible text sequences
-  // q ... 3 Tr ... text ... Q
-  result = result.replace(/q([^Q]*?)\b3\s+Tr\b([^Q]*?)Q/g, (match, before, after) => {
+  // Pattern 2: Remove inline invisible text sequences inside q...Q blocks.
+  // Use a balanced approach: find q...Q pairs by matching 'q' followed by
+  // the shortest run to 'Q' that doesn't contain nested q (to avoid crossing
+  // save/restore boundaries). The character 'Q' in text strings is inside
+  // parentheses, so we skip parenthesized content.
+  result = result.replace(/\bq\b((?:[^qQ]|\([^)]*\))*?)\b3\s+Tr\b((?:[^qQ]|\([^)]*\))*?)\bQ\b/g, (match, before, after) => {
     // Check if mode changes back to visible
     if (/\b[012]\s+Tr\b/.test(after)) {
       return match; // Keep - mode changes back

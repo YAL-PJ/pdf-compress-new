@@ -761,6 +761,20 @@ export const estimateImageSavingsRange = async (
 };
 
 /**
+ * PNG Paeth predictor function (per PNG spec).
+ * Returns the value among a, b, c that is closest to p = a + b - c.
+ */
+const paethPredictor = (a: number, b: number, c: number): number => {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  if (pb <= pc) return b;
+  return c;
+};
+
+/**
  * Decode PNG/FlateDecode image data to raw pixels
  */
 const decodePngImage = (
@@ -796,13 +810,24 @@ const decodePngImage = (
         for (let x = 0; x < rowBytes; x++) {
           let value = decompressed[srcOffset++];
 
-          if (filterType === 1 && x >= bytesPerPixel) {
+          const left = (x >= bytesPerPixel) ? result[dstOffset - bytesPerPixel] : 0;
+          const above = (y > 0) ? result[dstOffset - rowBytes] : 0;
+          const upperLeft = (x >= bytesPerPixel && y > 0) ? result[dstOffset - rowBytes - bytesPerPixel] : 0;
+
+          if (filterType === 1) {
             // Sub filter: add left pixel
-            value = (value + result[dstOffset - bytesPerPixel]) & 0xff;
-          } else if (filterType === 2 && y > 0) {
+            value = (value + left) & 0xff;
+          } else if (filterType === 2) {
             // Up filter: add above pixel
-            value = (value + result[dstOffset - rowBytes]) & 0xff;
+            value = (value + above) & 0xff;
+          } else if (filterType === 3) {
+            // Average filter: add floor((left + above) / 2)
+            value = (value + Math.floor((left + above) / 2)) & 0xff;
+          } else if (filterType === 4) {
+            // Paeth filter: add PaethPredictor(left, above, upperLeft)
+            value = (value + paethPredictor(left, above, upperLeft)) & 0xff;
           }
+          // filterType === 0: None — value stays as-is
 
           result[dstOffset++] = value;
         }
