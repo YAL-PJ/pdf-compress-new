@@ -482,6 +482,14 @@ const extractFontsFromContentRef = (
         // fonts it uses. Mark as uncertain to prevent incorrect font removal.
         usedFonts.add(FONT_SCAN_UNCERTAIN);
       }
+    } else if (contentObj instanceof PDFArray) {
+      // Contents ref resolved to an array of content stream refs — recurse
+      // into the array. Without this, all fonts on the page would appear
+      // unused and be incorrectly removed.
+      extractFontsFromContentRef(pdfDoc, contentObj, usedFonts);
+    } else {
+      // Unknown object type — can't determine font usage, bail safely.
+      usedFonts.add(FONT_SCAN_UNCERTAIN);
     }
   } else if (contents instanceof PDFArray) {
     for (let i = 0; i < contents.size(); i++) {
@@ -1142,6 +1150,9 @@ const extractAllTextBytes = (pdfDoc: PDFDocument): Map<string, number[]> => {
       const obj = pdfDoc.context.lookup(ref);
       if (obj instanceof PDFRawStream || obj instanceof PDFStream) {
         scanStream(obj);
+      } else if (obj instanceof PDFArray) {
+        // Contents ref resolved to an array of content stream refs
+        scanContentRef(obj);
       }
     } else if (ref instanceof PDFArray) {
       for (let i = 0; i < ref.size(); i++) {

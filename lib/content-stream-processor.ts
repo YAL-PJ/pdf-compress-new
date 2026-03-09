@@ -19,6 +19,37 @@ import {
 import pako from 'pako';
 
 /**
+ * Resolve a page's Contents entry to an array of PDFRefs to content streams.
+ * Handles: direct PDFRef to stream, direct PDFArray of refs, and indirect
+ * PDFRef that resolves to a PDFArray (common in many PDF generators).
+ */
+function resolveContentRefs(
+  contentsRef: PDFRef | PDFArray | ReturnType<PDFDict['get']>,
+  context: PDFDocument['context'],
+): PDFRef[] {
+  const refs: PDFRef[] = [];
+  if (contentsRef instanceof PDFRef) {
+    const resolved = context.lookup(contentsRef);
+    if (resolved instanceof PDFArray) {
+      // Indirect ref to array — extract individual stream refs
+      for (let i = 0; i < resolved.size(); i++) {
+        const item = resolved.get(i);
+        if (item instanceof PDFRef) refs.push(item);
+      }
+    } else {
+      // Direct ref to a single content stream
+      refs.push(contentsRef);
+    }
+  } else if (contentsRef instanceof PDFArray) {
+    for (let i = 0; i < contentsRef.size(); i++) {
+      const ref = contentsRef.get(i);
+      if (ref instanceof PDFRef) refs.push(ref);
+    }
+  }
+  return refs;
+}
+
+/**
  * Encode a latin1 string back to bytes, preserving byte values 0x00-0xFF.
  * Unlike TextEncoder (which produces UTF-8), this maps each character's
  * code point directly to a single byte, matching TextDecoder('latin1').
@@ -81,16 +112,8 @@ export const convertInlineImagesToXObjects = async (
 
     if (!contentsRef) continue;
 
-    // Get content stream(s)
-    const contentRefs: PDFRef[] = [];
-    if (contentsRef instanceof PDFRef) {
-      contentRefs.push(contentsRef);
-    } else if (contentsRef instanceof PDFArray) {
-      for (let i = 0; i < contentsRef.size(); i++) {
-        const ref = contentsRef.get(i);
-        if (ref instanceof PDFRef) contentRefs.push(ref);
-      }
-    }
+    // Get content stream(s) — resolve indirect refs to arrays
+    const contentRefs: PDFRef[] = resolveContentRefs(contentsRef, context);
 
     for (const contentRef of contentRefs) {
       const contentObj = context.lookup(contentRef);
@@ -623,16 +646,8 @@ export const removeInvisibleText = async (
 
     if (!contentsRef) continue;
 
-    // Get content stream(s)
-    const contentRefs: PDFRef[] = [];
-    if (contentsRef instanceof PDFRef) {
-      contentRefs.push(contentsRef);
-    } else if (contentsRef instanceof PDFArray) {
-      for (let i = 0; i < contentsRef.size(); i++) {
-        const ref = contentsRef.get(i);
-        if (ref instanceof PDFRef) contentRefs.push(ref);
-      }
-    }
+    // Get content stream(s) — resolve indirect refs to arrays
+    const contentRefs: PDFRef[] = resolveContentRefs(contentsRef, context);
 
     for (const contentRef of contentRefs) {
       const contentObj = context.lookup(contentRef);
