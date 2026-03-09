@@ -10,6 +10,7 @@ import {
   trackFileUpload,
   trackCompressionCompleted,
   trackCompressionError,
+  trackErrorToSheet,
 } from '@/lib/analytics';
 import {
   DEFAULT_COMPRESSION_OPTIONS,
@@ -157,6 +158,11 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
           const e = payload as WorkerErrorPayload;
 
           trackCompressionError(e.code);
+          trackErrorToSheet({
+            errorCode: e.code,
+            errorMessage: e.message,
+            context: 'worker_compression',
+          });
 
           setState({
             status: 'error',
@@ -182,12 +188,15 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       }
 
       isBackgroundRef.current = false;
+      const errorCode = isStale ? 'STALE_WORKER' : 'WORKER_ERROR';
+      trackErrorToSheet({
+        errorCode,
+        errorMessage: msg,
+        context: 'worker_onerror',
+      });
       setState({
         status: 'error',
-        error: createPdfError(
-          isStale ? 'STALE_WORKER' : 'WORKER_ERROR',
-          msg
-        ),
+        error: createPdfError(errorCode, msg),
       });
 
       // If the worker crashed, we should probably kill it so it resets next time
@@ -230,6 +239,13 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       setState({ status: 'validating' });
       const validation = validateFile(file);
       if (!validation.valid) {
+        trackErrorToSheet({
+          errorCode: 'INVALID_FILE_TYPE',
+          errorMessage: validation.error || 'File validation failed',
+          fileName: file.name,
+          fileSize: file.size,
+          context: 'file_validation',
+        });
         setState({
           status: 'error',
           error: createPdfError('INVALID_FILE_TYPE', validation.error),
@@ -256,6 +272,13 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       // Validate PDF signature
       const signatureValidation = validatePdfSignature(arrayBuffer);
       if (!signatureValidation.valid) {
+        trackErrorToSheet({
+          errorCode: 'INVALID_FILE_TYPE',
+          errorMessage: signatureValidation.error || 'PDF signature validation failed',
+          fileName,
+          fileSize: arrayBuffer.byteLength,
+          context: 'pdf_signature_validation',
+        });
         setState({
           status: 'error',
           error: createPdfError('INVALID_FILE_TYPE', signatureValidation.error),

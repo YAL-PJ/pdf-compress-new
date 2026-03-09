@@ -126,6 +126,57 @@ export function trackCompressionError(errorCode: string): void {
   trackEvent('compression_error', { error_code: errorCode });
 }
 
+/**
+ * Send error details to Google Sheets "Errors" tab via Apps Script
+ * Uses a separate { error: payload } key so the script can route to the Errors tab
+ */
+export function trackErrorToSheet(opts: {
+  errorCode: string;
+  errorMessage: string;
+  userMessage?: string;
+  stack?: string;
+  fileName?: string;
+  fileSize?: number;
+  context?: string;
+}): void {
+  const sendError = () => {
+    try {
+      const payload = {
+        sessionId: typeof window !== 'undefined' ? getCurrentSessionId() : undefined,
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
+        timestamp: new Date().toISOString(),
+        errorCode: opts.errorCode,
+        errorMessage: opts.errorMessage,
+        userMessage: opts.userMessage ?? '',
+        stack: opts.stack ?? '',
+        fileName: opts.fileName ?? '',
+        fileSize: opts.fileSize ?? 0,
+        context: opts.context ?? '',
+      };
+
+      log.info('Sending error to sheet', { errorCode: opts.errorCode });
+
+      fetch(TELEMETRY_SHEET_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ error: payload }),
+        keepalive: true,
+      }).catch(() => {
+        // Silently ignore — telemetry is non-critical
+      });
+    } catch {
+      // Fail silently
+    }
+  };
+
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    window.requestIdleCallback(sendError, { timeout: 5000 });
+  } else {
+    setTimeout(sendError, 1000);
+  }
+}
+
 const TELEMETRY_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxBDNWqkuC-g7uecl6o-PeJM6oJISqJBfQndt6IlejpBnYDQp5nFhzsyc0iUMjEMvBSYw/exec';
 
 /**
