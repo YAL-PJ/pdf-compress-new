@@ -14,6 +14,7 @@ import type {
 } from '@/lib/types';
 import { validateFile, validatePdfSignature } from '@/lib/utils';
 import { createPdfError } from '@/lib/errors';
+import { trackErrorToSheet } from '@/lib/analytics';
 
 interface BatchCompressionSettings {
     imageSettings: ImageCompressionSettings;
@@ -99,6 +100,13 @@ export const useBatchCompression = () => {
 
             // Per-file timeout to prevent hanging
             const timeout = setTimeout(() => {
+                trackErrorToSheet({
+                    errorCode: 'PROCESSING_FAILED',
+                    errorMessage: 'Processing timed out',
+                    fileName: item.originalFile.name,
+                    fileSize: item.originalFile.size,
+                    context: 'batch_timeout',
+                });
                 setQueue(prev => prev.map(i =>
                     i.id === item.id ? {
                         ...i,
@@ -160,6 +168,13 @@ export const useBatchCompression = () => {
                     case 'error': {
                         clearTimeout(timeout);
                         const e = payload as WorkerErrorPayload;
+                        trackErrorToSheet({
+                            errorCode: e.code,
+                            errorMessage: e.message,
+                            fileName: item.originalFile.name,
+                            fileSize: item.originalFile.size,
+                            context: 'batch_worker_compression',
+                        });
                         setQueue(prev => prev.map(i =>
                             i.id === item.id ? {
                                 ...i,
@@ -177,8 +192,15 @@ export const useBatchCompression = () => {
                 }
             };
 
-            workerRef.current.onerror = (error) => {
+            workerRef.current.onerror = (workerError) => {
                 clearTimeout(timeout);
+                trackErrorToSheet({
+                    errorCode: 'WORKER_ERROR',
+                    errorMessage: workerError.message,
+                    fileName: item.originalFile.name,
+                    fileSize: item.originalFile.size,
+                    context: 'batch_worker_onerror',
+                });
                 // Terminate broken worker so next file gets a fresh one
                 workerRef.current?.terminate();
                 workerRef.current = null;
@@ -187,7 +209,7 @@ export const useBatchCompression = () => {
                         ...i,
                         status: 'error' as const,
                         progress: 0,
-                        error: createPdfError('WORKER_ERROR', error.message),
+                        error: createPdfError('WORKER_ERROR', workerError.message),
                     } : i
                 ));
                 resolve();
@@ -198,6 +220,13 @@ export const useBatchCompression = () => {
                 const signatureValidation = validatePdfSignature(arrayBuffer);
                 if (!signatureValidation.valid) {
                     clearTimeout(timeout);
+                    trackErrorToSheet({
+                        errorCode: 'INVALID_FILE_TYPE',
+                        errorMessage: signatureValidation.error || 'PDF signature validation failed',
+                        fileName: item.originalFile.name,
+                        fileSize: item.originalFile.size,
+                        context: 'batch_pdf_signature_validation',
+                    });
                     setQueue(prev => prev.map(i =>
                         i.id === item.id ? {
                             ...i,
@@ -219,6 +248,13 @@ export const useBatchCompression = () => {
                 );
             }).catch((err) => {
                 clearTimeout(timeout);
+                trackErrorToSheet({
+                    errorCode: 'PROCESSING_FAILED',
+                    errorMessage: `Failed to read file: ${err.message}`,
+                    fileName: item.originalFile.name,
+                    fileSize: item.originalFile.size,
+                    context: 'batch_file_read',
+                });
                 setQueue(prev => prev.map(i =>
                     i.id === item.id ? {
                         ...i,

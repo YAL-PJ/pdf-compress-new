@@ -30,30 +30,14 @@ export const ErrorDisplay = ({ error, onReset }: ErrorDisplayProps) => {
   };
 
   const handleReportIssue = () => {
-    // Send error report to telemetry system
-    import('@/lib/analytics').then(({ trackTelemetry }) => {
-      trackTelemetry({
-        timestamp: Date.now(),
-        // We don't have file stats here, so use defaults/placeholders
-        originalSize: 0,
-        compressedSize: 0,
-        pageCount: 0,
-        methodsUsed: [],
-        methodsSuccessful: [],
-        errors: [error.code],
-        logs: [
-          {
-            timestamp: Date.now(),
-            level: 'error',
-            message: `User Reported Issue: ${error.userMessage}`,
-            details: {
-              code: error.code,
-              message: error.message,
-              stack: error.stack
-            }
-          }
-        ],
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'
+    // Send error report to the dedicated Errors tab
+    import('@/lib/analytics').then(({ trackErrorToSheet }) => {
+      trackErrorToSheet({
+        errorCode: error.code,
+        errorMessage: error.message,
+        userMessage: error.userMessage,
+        stack: error.stack,
+        context: 'user_reported',
       });
     });
 
