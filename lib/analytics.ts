@@ -177,7 +177,7 @@ export function trackErrorToSheet(opts: {
   }
 }
 
-const TELEMETRY_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxBDNWqkuC-g7uecl6o-PeJM6oJISqJBfQndt6IlejpBnYDQp5nFhzsyc0iUMjEMvBSYw/exec';
+const TELEMETRY_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxk7hBbThv1g_PLHMZTeoR7_bgD2gcIgGonercT8gpptlMm7V4p2UsWRQ12cPtIyufYgg/exec';
 
 /**
  * Build a telemetry payload with per-method stats
