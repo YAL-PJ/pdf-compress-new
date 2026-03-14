@@ -165,9 +165,11 @@ export const ResultsDisplay = memo(({
     };
   }, [blob]);
 
-  // Track Telemetry
+  // Track Telemetry — send once per compression (keyed by report timestamp)
+  const lastTrackedReport = useRef<number | null>(null);
   useEffect(() => {
-    if (report) {
+    if (report && report.timestamp !== lastTrackedReport.current) {
+      lastTrackedReport.current = report.timestamp;
       trackTelemetry(report, methodResults);
     }
   }, [report, methodResults]);
