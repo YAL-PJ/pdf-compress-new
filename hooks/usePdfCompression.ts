@@ -11,6 +11,7 @@ import {
   trackCompressionCompleted,
   trackCompressionError,
   trackErrorToSheet,
+  trackTelemetry,
 } from '@/lib/analytics';
 import {
   DEFAULT_COMPRESSION_OPTIONS,
@@ -126,6 +127,11 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
               pdfFeatures: s.pdfFeatures,
             }
           }));
+
+          // Send telemetry once per compression (fires only on worker success)
+          if (s.report) {
+            trackTelemetry(s.report, s.methodResults);
+          }
           break;
         }
 
