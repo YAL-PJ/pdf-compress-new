@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatBytes, calculateSavings, getOutputFilename } from '@/lib/utils';
-import { trackDownload, trackTelemetry } from '@/lib/analytics';
+import { trackDownload } from '@/lib/analytics';
 import { applyPageOperations, hasPageModifications } from '@/lib/page-operations';
 import { motion } from 'framer-motion';
 import { Download, RefreshCw, FileCheck, ArrowRight, X, Loader2 } from 'lucide-react';
@@ -164,15 +164,6 @@ export const ResultsDisplay = memo(({
       }
     };
   }, [blob]);
-
-  // Track Telemetry — send once per compression (keyed by report timestamp)
-  const lastTrackedReport = useRef<number | null>(null);
-  useEffect(() => {
-    if (report && report.timestamp !== lastTrackedReport.current) {
-      lastTrackedReport.current = report.timestamp;
-      trackTelemetry(report, methodResults);
-    }
-  }, [report, methodResults]);
 
   const [isApplyingPageOps, setIsApplyingPageOps] = useState(false);
 
