@@ -43,6 +43,16 @@ export function Footer() {
               </Link>
             </li>
             <li>
+              <a
+                href="https://freemergepdf.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Merge PDFs
+              </a>
+            </li>
+            <li>
               <XLogoLink className="text-slate-600 hover:text-slate-900 transition-colors" />
             </li>
           </ul>

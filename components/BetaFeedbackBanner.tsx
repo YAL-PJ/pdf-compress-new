@@ -149,16 +149,13 @@ export const BetaFeedbackBanner = () => {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-10">
-            {/* Left: Beta Badge + Message */}
+            {/* Left: Message + Merge Link */}
             <div className="flex items-center gap-3">
-              <span className="px-2 py-0.5 text-[10px] font-bold bg-slate-900 text-white rounded tracking-wider">
-                BETA
-              </span>
               <span className="text-sm text-slate-600 hidden sm:inline">
-                Building this with our users community! Please help us improve 🚀
+                Need to merge PDFs? Try <a href="https://freemergepdf.com/" target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-900 underline underline-offset-2 hover:text-slate-700 transition-colors">FreeMergePDF.com</a> — 100% free!
               </span>
               <span className="text-sm text-slate-600 sm:hidden">
-                Help us improve 🚀
+                <a href="https://freemergepdf.com/" target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-900 underline underline-offset-2 hover:text-slate-700 transition-colors">Merge PDFs free →</a>
               </span>
             </div>
 
