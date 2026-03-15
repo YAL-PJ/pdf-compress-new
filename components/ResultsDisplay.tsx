@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatBytes, calculateSavings, getOutputFilename } from '@/lib/utils';
-import { trackDownload } from '@/lib/analytics';
+import { trackDownload, trackTelemetry } from '@/lib/analytics';
 import { applyPageOperations, hasPageModifications } from '@/lib/page-operations';
 import { motion } from 'framer-motion';
 import { Download, RefreshCw, FileCheck, ArrowRight, X, Loader2 } from 'lucide-react';
@@ -191,6 +191,11 @@ export const ResultsDisplay = memo(({
     // Track download event
     trackDownload(downloadBlob.size / 1024 / 1024);
 
+    // Send telemetry to Google Sheets only on actual download
+    if (report) {
+      trackTelemetry(report, methodResults);
+    }
+
     const url = URL.createObjectURL(downloadBlob);
     blobUrlRef.current = url;
 
@@ -198,7 +203,7 @@ export const ResultsDisplay = memo(({
     link.href = url;
     link.download = getOutputFilename(originalFileName);
     link.click();
-  }, [blob, originalFileName, pages]);
+  }, [blob, originalFileName, pages, report, methodResults]);
 
   const compressionRatio = Math.min(Math.max((compressedSize / originalSize) * 100, 5), 100);
 
