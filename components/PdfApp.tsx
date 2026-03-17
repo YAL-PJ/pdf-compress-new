@@ -149,7 +149,7 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
         const url = URL.createObjectURL(currentResult.blob);
         const link = document.createElement('a');
         link.href = url;
-        link.download = getOutputFilename(state.fileName);
+        link.download = getOutputFilename('fileName' in state ? state.fileName : 'document.pdf');
         link.click();
         URL.revokeObjectURL(url);
     }, [currentResult, state, methodResults]);
