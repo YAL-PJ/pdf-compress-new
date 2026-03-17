@@ -642,7 +642,7 @@ export const embedRecompressedImages = async (
 ): Promise<Uint8Array> => {
   // Load or reuse document
   const pdfDoc = source instanceof ArrayBuffer
-    ? await PDFDocument.load(source)
+    ? await PDFDocument.load(source, { ignoreEncryption: true })
     : source;
 
   if (recompressedImages.length === 0) {

@@ -68,9 +68,24 @@ import { rasterizePages } from './page-rasterizer';
 export const loadPdf = async (
   arrayBuffer: ArrayBuffer
 ): Promise<{ pdfDoc: PDFDocument; info: PdfInfo }> => {
-  const pdfDoc = await PDFDocument.load(arrayBuffer, {
-    ignoreEncryption: false,
-  });
+  let pdfDoc: PDFDocument;
+  try {
+    pdfDoc = await PDFDocument.load(arrayBuffer, {
+      ignoreEncryption: false,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '';
+    if (message.includes('encrypt') || message.includes('password')) {
+      // Most encrypted PDFs only have an owner password (restricting print/copy)
+      // but no user password — they open fine in any PDF viewer.
+      // Retry with ignoreEncryption to handle these gracefully.
+      pdfDoc = await PDFDocument.load(arrayBuffer, {
+        ignoreEncryption: true,
+      });
+    } else {
+      throw error;
+    }
+  }
 
   const info: PdfInfo = {
     pageCount: pdfDoc.getPageCount(),
