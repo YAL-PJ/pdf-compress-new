@@ -267,14 +267,24 @@ export const ResultsDisplay = memo(({
       <div className="p-6 space-y-8">
         {/* Visual Comparison */}
         <div className={twMerge("space-y-4 transition-opacity duration-300", isUpdating && "opacity-50")}>
-          <div className="flex items-end justify-between text-sm">
+          <div className="flex items-center justify-between text-sm gap-3">
             <span className="font-semibold text-slate-600">Size Comparison</span>
-            <span className={twMerge(
-              "font-bold px-2 py-0.5 rounded text-xs",
-              isSmaller ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
-            )}>
-              {isSmaller ? `SAVED ${savedPercent.toFixed(1)}%` : 'NO SAVINGS'}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className={twMerge(
+                "font-bold px-2 py-0.5 rounded text-xs",
+                isSmaller ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"
+              )}>
+                {isSmaller ? `SAVED ${savedPercent.toFixed(1)}%` : 'NO SAVINGS'}
+              </span>
+              <button
+                onClick={handleDownload}
+                disabled={isApplyingPageOps}
+                className="px-3 py-1 rounded-md bg-slate-900 text-white font-semibold hover:bg-slate-800 transition-colors flex items-center gap-1.5 text-xs disabled:opacity-70 disabled:cursor-wait"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download
+              </button>
+            </div>
           </div>
 
           {/* Bars - Sharper */}

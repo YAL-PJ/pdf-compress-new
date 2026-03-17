@@ -24,7 +24,9 @@ import { usePageManager } from '@/hooks/usePageManager';
 import { usePdf, PdfProvider } from '@/context/PdfContext';
 
 import { PRESETS } from '@/lib/presets';
-import { calculateSavings, formatBytes } from '@/lib/utils';
+import { calculateSavings, formatBytes, getOutputFilename } from '@/lib/utils';
+import { trackDownload, trackTelemetry } from '@/lib/analytics';
+import { Download } from 'lucide-react';
 
 interface PdfAppProps {
     initialFile?: File;
@@ -138,6 +140,20 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
         ? calculateSavings(currentResult.originalSize, currentResult.compressedSize)
         : null;
 
+    const handleQuickDownload = useCallback(() => {
+        if (!currentResult) return;
+        trackDownload(currentResult.blob.size / 1024 / 1024);
+        if (state.status === 'done' && state.analysis?.report) {
+            trackTelemetry(state.analysis.report, methodResults);
+        }
+        const url = URL.createObjectURL(currentResult.blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = getOutputFilename(state.fileName);
+        link.click();
+        URL.revokeObjectURL(url);
+    }, [currentResult, state, methodResults]);
+
     return (
         <ErrorBoundary>
             <BetaFeedbackBanner />
@@ -229,11 +245,20 @@ const PdfAppContent = ({ onReset }: { onReset?: () => void }) => {
                             {state.status === 'done' && currentResult && (
                                 <div className="space-y-6">
                                     {simpleSavings && (
-                                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                                            <p className="text-sm text-emerald-700 font-semibold">Saved {formatBytes(simpleSavings.savedBytes)} ({simpleSavings.savedPercent.toFixed(1)}%)</p>
-                                            <p className="text-sm text-emerald-700/80 mt-1">
-                                                {formatBytes(currentResult.originalSize)} → {formatBytes(currentResult.compressedSize)}
-                                            </p>
+                                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4 flex items-center justify-between gap-4">
+                                            <div>
+                                                <p className="text-sm text-emerald-700 font-semibold">Saved {formatBytes(simpleSavings.savedBytes)} ({simpleSavings.savedPercent.toFixed(1)}%)</p>
+                                                <p className="text-sm text-emerald-700/80 mt-1">
+                                                    {formatBytes(currentResult.originalSize)} → {formatBytes(currentResult.compressedSize)}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={handleQuickDownload}
+                                                className="flex-shrink-0 px-4 py-2 rounded-md bg-emerald-700 text-white font-semibold hover:bg-emerald-800 transition-colors flex items-center gap-2 text-sm"
+                                            >
+                                                <Download className="w-4 h-4" />
+                                                Download
+                                            </button>
                                         </div>
                                     )}
                                     <ResultsDisplay
