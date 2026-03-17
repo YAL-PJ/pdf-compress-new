@@ -327,6 +327,66 @@ export const removeUnusedShadings = (
 // ============================================================================
 
 /**
+ * Replace decimal numbers with excessive precision, but only OUTSIDE of
+ * PDF string literals (...) and hex strings <...>.  Modifying numbers
+ * inside strings would corrupt text content or binary data.
+ */
+function replaceDecimalsOutsideStrings(
+  content: string,
+  pattern: RegExp,
+  maxDecimals: number,
+): string {
+  const len = content.length;
+  const parts: string[] = [];
+  let pos = 0;
+
+  while (pos < len) {
+    const ch = content[pos];
+
+    // Literal string — skip to matching close paren (handle nesting + escapes)
+    if (ch === '(') {
+      const start = pos;
+      pos++;
+      let depth = 1;
+      while (pos < len && depth > 0) {
+        if (content[pos] === '\\') { pos += 2; continue; }
+        if (content[pos] === '(') depth++;
+        else if (content[pos] === ')') depth--;
+        pos++;
+      }
+      parts.push(content.substring(start, pos)); // emit string verbatim
+      continue;
+    }
+
+    // Hex string — skip to '>'
+    if (ch === '<' && (pos + 1 >= len || content[pos + 1] !== '<')) {
+      const start = pos;
+      pos++;
+      while (pos < len && content[pos] !== '>') pos++;
+      if (pos < len) pos++; // skip '>'
+      parts.push(content.substring(start, pos)); // emit verbatim
+      continue;
+    }
+
+    // Regular content — collect until we hit a string start
+    const start = pos;
+    while (pos < len && content[pos] !== '(' && !(content[pos] === '<' && (pos + 1 >= len || content[pos + 1] !== '<'))) {
+      pos++;
+    }
+
+    // Apply decimal precision reduction only to this safe segment
+    const segment = content.substring(start, pos);
+    parts.push(segment.replace(pattern, (match) => {
+      const rounded = parseFloat(match).toFixed(maxDecimals);
+      const trimmed = rounded.replace(/\.?0+$/, '');
+      return trimmed;
+    }));
+  }
+
+  return parts.join('');
+}
+
+/**
  * Reduce excessive decimal precision in PDF content stream path operators.
  * InDesign exports coordinates with 6+ decimal places; 2-3 is sufficient for
  * print quality (300 DPI). This can significantly shrink large content streams.
@@ -384,19 +444,15 @@ export const reduceVectorPrecision = (
       let modified = false;
       let opsSimplified = 0;
 
-      // Replace excessive precision numbers throughout the stream.
-      // This is safe because PDF numbers with fewer decimals render identically
-      // at normal zoom levels (the difference is sub-pixel at 300 DPI).
-      const newContent = content.replace(decimalPattern, (match) => {
-        const rounded = parseFloat(match).toFixed(maxDecimals);
-        // Remove trailing zeros: "1.50" → "1.5", "2.00" → "2"
-        const trimmed = rounded.replace(/\.?0+$/, '');
-        if (trimmed !== match) {
-          modified = true;
-          opsSimplified++;
-        }
-        return trimmed;
-      });
+      // Replace excessive precision numbers in the stream, but skip content
+      // inside PDF string literals (...) and hex strings <...> to avoid
+      // corrupting text content or binary data.
+      const newContent = replaceDecimalsOutsideStrings(content, decimalPattern, maxDecimals);
+      if (newContent !== content) {
+        modified = true;
+        // Count changes (approximate)
+        opsSimplified += (content.length - newContent.length);
+      }
 
       if (!modified) continue;
 
