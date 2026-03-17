@@ -1167,21 +1167,51 @@ const extractAllTextBytes = (pdfDoc: PDFDocument): Map<string, number[]> => {
     if (bytes) mergeResults(scanContentForTextBytes(bytes));
   };
 
-  const scanContentRef = (ref: PDFRef | PDFArray) => {
+  /**
+   * Collect decompressed bytes from all streams in a Contents entry.
+   * Per the PDF spec, a page's Contents array is semantically a single
+   * concatenated stream — graphics state (including current font set by Tf)
+   * persists across streams.  We must concatenate before scanning so the
+   * text-byte scanner tracks font state correctly across stream boundaries.
+   */
+  const collectContentBytes = (ref: PDFRef | PDFArray): Uint8Array[] => {
+    const parts: Uint8Array[] = [];
     if (ref instanceof PDFRef) {
       const obj = pdfDoc.context.lookup(ref);
       if (obj instanceof PDFRawStream || obj instanceof PDFStream) {
-        scanStream(obj);
+        const bytes = getDecompressedStreamBytes(obj);
+        if (bytes) parts.push(bytes);
       } else if (obj instanceof PDFArray) {
-        // Contents ref resolved to an array of content stream refs
-        scanContentRef(obj);
+        parts.push(...collectContentBytes(obj));
       }
     } else if (ref instanceof PDFArray) {
       for (let i = 0; i < ref.size(); i++) {
         const item = ref.get(i);
-        if (item instanceof PDFRef) scanContentRef(item);
+        if (item instanceof PDFRef) parts.push(...collectContentBytes(item));
       }
     }
+    return parts;
+  };
+
+  /** Concatenate byte arrays, inserting a newline separator between them. */
+  const concatBytes = (parts: Uint8Array[]): Uint8Array | null => {
+    if (parts.length === 0) return null;
+    if (parts.length === 1) return parts[0];
+    const totalLen = parts.reduce((s, p) => s + p.length + 1, -1); // +1 for '\n' separators
+    const out = new Uint8Array(totalLen);
+    let offset = 0;
+    for (let i = 0; i < parts.length; i++) {
+      if (i > 0) { out[offset++] = 0x0A; } // newline separator
+      out.set(parts[i], offset);
+      offset += parts[i].length;
+    }
+    return out;
+  };
+
+  const scanContentRef = (ref: PDFRef | PDFArray) => {
+    const parts = collectContentBytes(ref);
+    const combined = concatBytes(parts);
+    if (combined) mergeResults(scanContentForTextBytes(combined));
   };
 
   const scanXObjects = (resources: PDFDict) => {
