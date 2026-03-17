@@ -810,6 +810,12 @@ interface FontEntry {
   fontDict: PDFDict;
   /** Whether this is a CID font (Type0) vs simple TrueType */
   isCID: boolean;
+  /**
+   * For CID fonts: true only when the CMap is Identity-H/V AND the
+   * CIDToGIDMap is /Identity (or absent).  When false the raw content-stream
+   * bytes cannot be treated as glyph IDs and subsetting must be skipped.
+   */
+  hasIdentityCIDMapping: boolean;
   /** Reference to the FontFile2 stream (TrueType font data) */
   fontFileRef: PDFRef | null;
   /** Reference to the FontDescriptor */
@@ -848,6 +854,7 @@ const collectFontEntries = (pdfDoc: PDFDocument): Map<string, FontEntry> => {
       const subtypeStr = subtype instanceof PDFName ? subtype.toString() : '';
 
       let isCID = false;
+      let hasIdentityCIDMapping = false;
       let targetFontDict = fontDictObj;
 
       // For Type0 (CID) fonts, the actual font info is in DescendantFonts
@@ -863,6 +870,20 @@ const collectFontEntries = (pdfDoc: PDFDocument): Map<string, FontEntry> => {
             targetFontDict = descObj;
           }
         }
+
+        // Check CMap: must be Identity-H or Identity-V for byte→CID=GID
+        const encoding = fontDictObj.get(PDFName.of('Encoding'));
+        const encodingStr = encoding instanceof PDFName ? encoding.toString() : '';
+        const isIdentityCMap = encodingStr === '/Identity-H' || encodingStr === '/Identity-V';
+
+        // Check CIDToGIDMap on the descendant CIDFont dict:
+        // Must be /Identity (or absent) for CID=GID to hold.
+        // A stream value means a custom remapping table is in use.
+        const cidToGidMap = targetFontDict.get(PDFName.of('CIDToGIDMap'));
+        const isIdentityGIDMap = !cidToGidMap
+          || (cidToGidMap instanceof PDFName && cidToGidMap.toString() === '/Identity');
+
+        hasIdentityCIDMapping = isIdentityCMap && isIdentityGIDMap;
       } else if (subtypeStr !== '/TrueType') {
         continue; // Skip non-TrueType fonts (Type1, etc.)
       }
@@ -885,6 +906,7 @@ const collectFontEntries = (pdfDoc: PDFDocument): Map<string, FontEntry> => {
         fontDictRef,
         fontDict: fontDictObj,
         isCID,
+        hasIdentityCIDMapping,
         fontFileRef,
         descriptorRef,
         descriptor,
@@ -1269,7 +1291,10 @@ const isWinAnsiEncoded = (fontDict: PDFDict): boolean => {
 /**
  * Convert raw text bytes to glyph IDs based on font type.
  *
- * For CID fonts (Identity-H): 2-byte big-endian pairs → glyph IDs.
+ * For CID fonts with Identity-H CMap and Identity CIDToGIDMap:
+ *   2-byte big-endian pairs → glyph IDs directly.
+ * For CID fonts with non-Identity CMap or CIDToGIDMap:
+ *   Bails out (sentinel -1) — we cannot reliably map bytes to GIDs.
  * For simple TrueType fonts: 1-byte codes → Unicode → GID via cmap.
  *
  * Only uses WinAnsi mapping when the font explicitly declares WinAnsiEncoding.
@@ -1281,12 +1306,20 @@ const mapBytesToGlyphIds = (
   isCID: boolean,
   fontData: Uint8Array | null,
   fontDict: PDFDict | null,
+  hasIdentityCIDMapping: boolean,
 ): Set<number> => {
   const glyphIds = new Set<number>();
   glyphIds.add(0); // Always keep .notdef
 
   if (isCID) {
-    // CID fonts with Identity-H: bytes are 2-byte big-endian glyph IDs
+    // Only safe to treat bytes as GIDs when both the CMap is Identity-H/V
+    // AND the CIDToGIDMap is Identity (or absent). Non-Identity mappings
+    // (common in Hebrew, Arabic, CJK fonts) would produce wrong GIDs,
+    // causing the subsetter to remove needed glyphs.
+    if (!hasIdentityCIDMapping) {
+      return new Set<number>([-1]); // Keep all glyphs
+    }
+    // Identity-H + Identity CIDToGIDMap: bytes are 2-byte big-endian glyph IDs
     for (let i = 0; i + 1 < bytes.length; i += 2) {
       const gid = (bytes[i] << 8) | bytes[i + 1];
       glyphIds.add(gid);
@@ -1401,7 +1434,7 @@ export const subsetEmbeddedFonts = (pdfDoc: PDFDocument): FontSubsetResult => {
     // Get text bytes for this font resource name
     const bytes = textBytesPerFont.get(entry.resourceName);
     if (bytes && bytes.length > 0) {
-      const glyphs = mapBytesToGlyphIds(bytes, entry.isCID, group.fontData, entry.fontDict);
+      const glyphs = mapBytesToGlyphIds(bytes, entry.isCID, group.fontData, entry.fontDict, entry.hasIdentityCIDMapping);
       // If mapping failed (returned sentinel -1), mark as "keep all"
       if (glyphs.has(-1)) {
         group.glyphIds.add(-1);
