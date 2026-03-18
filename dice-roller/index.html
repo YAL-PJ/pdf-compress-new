@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D&D Dice Roller</title>
+  <link href="https://fonts.googleapis.com/css2?family=MedievaSharp&family=Cinzel:wght@400;700;900&family=Cinzel+Decorative:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="torch torch-left"></div>
+  <div class="torch torch-right"></div>
+
+  <header>
+    <h1 class="title">⚔️ Dice of Destiny ⚔️</h1>
+    <p class="subtitle">Roll the bones, brave adventurer</p>
+  </header>
+
+  <main>
+    <!-- Results Area -->
+    <div id="results-area" class="results-area hidden">
+      <div class="results-header">
+        <span class="results-label">🎯 Results</span>
+        <span id="total" class="total"></span>
+      </div>
+      <div id="results-list" class="results-list"></div>
+    </div>
+
+    <!-- Dice Tray -->
+    <div id="dice-tray" class="dice-tray">
+      <div class="tray-label">🎲 Your Dice Tray</div>
+      <div id="tray-contents" class="tray-contents"></div>
+      <div class="tray-actions">
+        <button id="roll-all-btn" class="roll-all-btn" disabled>
+          <span class="btn-text">⚔️ ROLL ALL ⚔️</span>
+        </button>
+        <button id="clear-tray-btn" class="clear-tray-btn" disabled>Clear Tray</button>
+      </div>
+    </div>
+
+    <!-- Dice Selection -->
+    <div class="dice-selection">
+      <div class="section-label">⬇️ Tap a die to add to tray</div>
+      <div class="dice-grid">
+        <button class="dice-btn" data-sides="4" onclick="addDie(4)">
+          <div class="dice-shape d4-shape">
+            <span>d4</span>
+          </div>
+          <div class="dice-label">1-4</div>
+        </button>
+        <button class="dice-btn" data-sides="6" onclick="addDie(6)">
+          <div class="dice-shape d6-shape">
+            <span>d6</span>
+          </div>
+          <div class="dice-label">1-6</div>
+        </button>
+        <button class="dice-btn" data-sides="8" onclick="addDie(8)">
+          <div class="dice-shape d8-shape">
+            <span>d8</span>
+          </div>
+          <div class="dice-label">1-8</div>
+        </button>
+        <button class="dice-btn" data-sides="10" onclick="addDie(10)">
+          <div class="dice-shape d10-shape">
+            <span>d10</span>
+          </div>
+          <div class="dice-label">1-10</div>
+        </button>
+        <button class="dice-btn" data-sides="12" onclick="addDie(12)">
+          <div class="dice-shape d12-shape">
+            <span>d12</span>
+          </div>
+          <div class="dice-label">1-12</div>
+        </button>
+        <button class="dice-btn" data-sides="20" onclick="addDie(20)">
+          <div class="dice-shape d20-shape">
+            <span>d20</span>
+          </div>
+          <div class="dice-label">1-20</div>
+        </button>
+        <button class="dice-btn d100-btn" data-sides="100" onclick="addDie(100)">
+          <div class="dice-shape d100-shape">
+            <span>d100</span>
+          </div>
+          <div class="dice-label">1-100</div>
+        </button>
+      </div>
+    </div>
+
+    <!-- Roll History -->
+    <div id="history-section" class="history-section hidden">
+      <div class="section-label">📜 Roll History</div>
+      <div id="history-list" class="history-list"></div>
+    </div>
+  </main>
+
+  <footer>
+    <p>May the dice gods favor you 🐉</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
