@@ -179,21 +179,41 @@ export const convertInlineImagesToXObjects = async (
 
       if (imagesToConvert.length === 0) continue;
 
-      // Get or create Resources dict
-      let resources = pageDict.get(PDFName.of('Resources'));
-      if (!(resources instanceof PDFDict)) {
-        resources = context.obj({});
-        pageDict.set(PDFName.of('Resources'), resources);
+      // Get or create Resources dict (dereference if indirect PDFRef)
+      let resourcesRaw = pageDict.get(PDFName.of('Resources'));
+      let resourcesDict: PDFDict;
+      if (resourcesRaw instanceof PDFRef) {
+        const resolved = context.lookup(resourcesRaw);
+        if (resolved instanceof PDFDict) {
+          resourcesDict = resolved;
+        } else {
+          resourcesDict = context.obj({}) as unknown as PDFDict;
+          pageDict.set(PDFName.of('Resources'), resourcesDict);
+        }
+      } else if (resourcesRaw instanceof PDFDict) {
+        resourcesDict = resourcesRaw;
+      } else {
+        resourcesDict = context.obj({}) as unknown as PDFDict;
+        pageDict.set(PDFName.of('Resources'), resourcesDict);
       }
-      const resourcesDict = resources as PDFDict;
 
-      // Get or create XObject dict
-      let xobject = resourcesDict.get(PDFName.of('XObject'));
-      if (!(xobject instanceof PDFDict)) {
-        xobject = context.obj({});
-        resourcesDict.set(PDFName.of('XObject'), xobject);
+      // Get or create XObject dict (dereference if indirect PDFRef)
+      let xobjectRaw = resourcesDict.get(PDFName.of('XObject'));
+      let xobjectDict: PDFDict;
+      if (xobjectRaw instanceof PDFRef) {
+        const resolved = context.lookup(xobjectRaw);
+        if (resolved instanceof PDFDict) {
+          xobjectDict = resolved;
+        } else {
+          xobjectDict = context.obj({}) as unknown as PDFDict;
+          resourcesDict.set(PDFName.of('XObject'), xobjectDict);
+        }
+      } else if (xobjectRaw instanceof PDFDict) {
+        xobjectDict = xobjectRaw;
+      } else {
+        xobjectDict = context.obj({}) as unknown as PDFDict;
+        resourcesDict.set(PDFName.of('XObject'), xobjectDict);
       }
-      const xobjectDict = xobject as PDFDict;
 
       // Convert each inline image to XObject
       for (let i = imagesToConvert.length - 1; i >= 0; i--) {
