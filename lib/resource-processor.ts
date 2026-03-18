@@ -24,6 +24,24 @@ import {
   winAnsiToUnicode,
 } from './font-subsetter';
 
+/**
+ * Resolve a value that may be a PDFRef to a PDFDict.
+ * Many PDF generators store Resources, Font, and XObject dictionaries
+ * as indirect references. Failing to dereference these causes the code
+ * to skip pages entirely, missing fonts and other resources.
+ */
+const resolveDict = (
+  context: PDFDocument['context'],
+  value: ReturnType<PDFDict['get']>,
+): PDFDict | null => {
+  if (value instanceof PDFDict) return value;
+  if (value instanceof PDFRef) {
+    const resolved = context.lookup(value);
+    if (resolved instanceof PDFDict) return resolved;
+  }
+  return null;
+};
+
 export interface DuplicateRemovalResult {
   duplicatesFound: number;
   bytesEstimatedSaved: number;
@@ -376,14 +394,14 @@ export const removeDuplicateResources = (pdfDoc: PDFDocument): DuplicateRemovalR
   const pages = pdfDoc.getPages();
   for (const page of pages) {
     const pageDict = page.node;
-    const resources = pageDict.get(PDFName.of('Resources'));
+    const resources = resolveDict(pdfDoc.context, pageDict.get(PDFName.of('Resources')));
 
-    if (!(resources instanceof PDFDict)) {
+    if (!resources) {
       continue;
     }
 
-    const xobject = resources.get(PDFName.of('XObject'));
-    if (!(xobject instanceof PDFDict)) {
+    const xobject = resolveDict(pdfDoc.context, resources.get(PDFName.of('XObject')));
+    if (!xobject) {
       continue;
     }
 
@@ -539,8 +557,8 @@ const extractFontsFromXObjects = (
     }
 
     // Recursively scan nested Form XObject resources
-    const formResources = dict.get(PDFName.of('Resources'));
-    if (formResources instanceof PDFDict) {
+    const formResources = resolveDict(pdfDoc.context, dict.get(PDFName.of('Resources')));
+    if (formResources) {
       extractFontsFromXObjects(pdfDoc, formResources, usedFonts, visited);
     }
   }
@@ -612,8 +630,9 @@ export const removeUnusedFonts = (pdfDoc: PDFDocument): UnusedFontResult => {
     }
 
     // Scan Form XObjects (which have their own content streams)
-    const resources = pageDict.get(PDFName.of('Resources'));
-    if (resources instanceof PDFDict) {
+    // Dereference indirect Resources refs so we don't miss XObject-hosted fonts
+    const resources = resolveDict(pdfDoc.context, pageDict.get(PDFName.of('Resources')));
+    if (resources) {
       extractFontsFromXObjects(pdfDoc, resources, allUsedFonts, visitedXObjects);
     }
 
@@ -630,14 +649,14 @@ export const removeUnusedFonts = (pdfDoc: PDFDocument): UnusedFontResult => {
   // Now check each page's font resources
   for (const page of pages) {
     const pageDict = page.node;
-    const resources = pageDict.get(PDFName.of('Resources'));
+    const resources = resolveDict(pdfDoc.context, pageDict.get(PDFName.of('Resources')));
 
-    if (!(resources instanceof PDFDict)) {
+    if (!resources) {
       continue;
     }
 
-    const fonts = resources.get(PDFName.of('Font'));
-    if (!(fonts instanceof PDFDict)) {
+    const fonts = resolveDict(pdfDoc.context, resources.get(PDFName.of('Font')));
+    if (!fonts) {
       continue;
     }
 
@@ -834,11 +853,11 @@ const collectFontEntries = (pdfDoc: PDFDocument): Map<string, FontEntry> => {
   const pages = pdfDoc.getPages();
 
   for (const page of pages) {
-    const resources = page.node.get(PDFName.of('Resources'));
-    if (!(resources instanceof PDFDict)) continue;
+    const resources = resolveDict(context, page.node.get(PDFName.of('Resources')));
+    if (!resources) continue;
 
-    const fonts = resources.get(PDFName.of('Font'));
-    if (!(fonts instanceof PDFDict)) continue;
+    const fonts = resolveDict(context, resources.get(PDFName.of('Font')));
+    if (!fonts) continue;
 
     for (const [fontKey, fontValue] of fonts.entries()) {
       const resourceName = fontKey.toString().replace('/', '');
@@ -1233,8 +1252,8 @@ const extractAllTextBytes = (pdfDoc: PDFDocument): Map<string, number[]> => {
       if (!(subtype instanceof PDFName) || subtype.toString() !== '/Form') continue;
 
       scanStream(obj);
-      const formRes = dict.get(PDFName.of('Resources'));
-      if (formRes instanceof PDFDict) scanXObjects(formRes);
+      const formRes = resolveDict(pdfDoc.context, dict.get(PDFName.of('Resources')));
+      if (formRes) scanXObjects(formRes);
     }
   };
 
@@ -1248,9 +1267,9 @@ const extractAllTextBytes = (pdfDoc: PDFDocument): Map<string, number[]> => {
       scanContentRef(contents);
     }
 
-    // Form XObjects
-    const resources = pageDict.get(PDFName.of('Resources'));
-    if (resources instanceof PDFDict) {
+    // Form XObjects (dereference indirect Resources refs)
+    const resources = resolveDict(pdfDoc.context, pageDict.get(PDFName.of('Resources')));
+    if (resources) {
       scanXObjects(resources);
     }
 
