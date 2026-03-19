@@ -1134,6 +1134,42 @@ const scanContentForTextBytes = (contentBytes: Uint8Array): Map<string, number[]
     while (pos < len && !isWS(content[pos]) && !isDelim(content[pos])) pos++;
     const op = content.substring(start, pos);
 
+    // Skip inline images: BI <dict> ID <binary data> EI
+    // The binary data after ID can contain ANY byte sequence, including ones that
+    // look like PDF operators (Tf, Tj, TJ). If we parse this as operators, the
+    // font tracking state gets corrupted, causing wrong glyph IDs to be collected
+    // and the subsetter to remove actually-needed glyphs.
+    if (op === 'BI') {
+      // Skip past dict to 'ID' keyword, then skip binary data to 'EI'
+      // Find ID: scan for whitespace + "ID" + whitespace/EOL
+      let foundID = false;
+      while (pos < len - 2) {
+        if (isWS(content[pos]) && content[pos + 1] === 'I' && content[pos + 2] === 'D'
+            && (pos + 3 >= len || isWS(content[pos + 3]) || isDelim(content[pos + 3]))) {
+          pos += 3; // skip past "ID"
+          // Skip the single whitespace byte after ID (per PDF spec)
+          if (pos < len && (content[pos] === ' ' || content[pos] === '\n' || content[pos] === '\r')) {
+            pos++;
+          }
+          foundID = true;
+          break;
+        }
+        pos++;
+      }
+      if (!foundID) break; // malformed, stop parsing
+
+      // Now skip binary data until we find EI preceded by whitespace
+      while (pos < len - 2) {
+        if (isWS(content[pos]) && content[pos + 1] === 'E' && content[pos + 2] === 'I'
+            && (pos + 3 >= len || isWS(content[pos + 3]) || isDelim(content[pos + 3]))) {
+          pos += 3; // skip past "EI"
+          break;
+        }
+        pos++;
+      }
+      continue;
+    }
+
     if (op === 'Tf') {
       // /FontName size Tf
       if (stack.length >= 2) {
