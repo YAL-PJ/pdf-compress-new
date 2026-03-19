@@ -1511,6 +1511,17 @@ export const subsetEmbeddedFonts = (pdfDoc: PDFDocument): FontSubsetResult => {
     const group = fontFileToGlyphs.get(refKey)!;
     group.entries.push(entry);
 
+    // CID fonts (Type0) must never be subsetted — mark the entire group
+    // as "keep all" so that shared FontFile2 streams aren't modified.
+    // This must happen UNCONDITIONALLY, not just when text bytes are found,
+    // because a CID font and a WinAnsi font can share the same FontFile2.
+    // Without this, the WinAnsi entry subsets the shared file (removing
+    // Hebrew/Arabic/CJK glyphs it doesn't use), breaking the CID version.
+    if (entry.isCID) {
+      group.glyphIds.add(-1);
+      continue;
+    }
+
     // Get text bytes for this font resource name
     const bytes = textBytesPerFont.get(entry.resourceName);
     if (bytes && bytes.length > 0) {
