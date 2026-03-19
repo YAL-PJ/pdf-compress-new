@@ -1397,18 +1397,13 @@ const mapBytesToGlyphIds = (
   glyphIds.add(0); // Always keep .notdef
 
   if (isCID) {
-    // Only safe to treat bytes as GIDs when both the CMap is Identity-H/V
-    // AND the CIDToGIDMap is Identity (or absent). Non-Identity mappings
-    // (common in Hebrew, Arabic, CJK fonts) would produce wrong GIDs,
-    // causing the subsetter to remove needed glyphs.
-    if (!hasIdentityCIDMapping) {
-      return new Set<number>([-1]); // Keep all glyphs
-    }
-    // Identity-H + Identity CIDToGIDMap: bytes are 2-byte big-endian glyph IDs
-    for (let i = 0; i + 1 < bytes.length; i += 2) {
-      const gid = (bytes[i] << 8) | bytes[i + 1];
-      glyphIds.add(gid);
-    }
+    // CID fonts (Type0) are used for complex scripts (Hebrew, Arabic, CJK).
+    // Subsetting requires 100% accurate glyph ID collection from ALL content
+    // streams, XObjects, and annotations. Any missed text — from failed
+    // decompression, inline images, unusual operators, or nested structures —
+    // causes needed glyphs to be removed and characters to vanish.
+    // Skip subsetting entirely for CID fonts to guarantee text fidelity.
+    return new Set<number>([-1]); // Keep all glyphs
   } else {
     // Simple TrueType font: bytes are character codes
     // Map character code → Unicode → GID via cmap
