@@ -861,10 +861,17 @@ const collectFontEntries = (pdfDoc: PDFDocument): Map<string, FontEntry> => {
 
     for (const [fontKey, fontValue] of fonts.entries()) {
       const resourceName = fontKey.toString().replace('/', '');
-      if (entries.has(resourceName)) continue;
 
       const fontDictRef = fontValue instanceof PDFRef ? fontValue : null;
       if (!fontDictRef) continue;
+
+      // Deduplicate by font dictionary object reference, NOT resource name.
+      // Different pages may reuse the same resource name (e.g. /F1) for
+      // completely different fonts (one CID, one WinAnsi).  Deduplicating
+      // by resource name would silently drop one of them, potentially
+      // hiding a CID font that shares a FontFile2 with a WinAnsi font.
+      const dictRefKey = `${fontDictRef.objectNumber}-${fontDictRef.generationNumber}`;
+      if (entries.has(dictRefKey)) continue;
 
       const fontDictObj = context.lookup(fontDictRef);
       if (!(fontDictObj instanceof PDFDict)) continue;
@@ -920,7 +927,7 @@ const collectFontEntries = (pdfDoc: PDFDocument): Map<string, FontEntry> => {
       const fontFileVal = descriptor.get(PDFName.of('FontFile2'));
       const fontFileRef = fontFileVal instanceof PDFRef ? fontFileVal : null;
 
-      entries.set(resourceName, {
+      entries.set(dictRefKey, {
         resourceName,
         fontDictRef,
         fontDict: fontDictObj,
