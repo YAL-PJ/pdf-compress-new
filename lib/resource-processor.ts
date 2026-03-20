@@ -886,7 +886,9 @@ const collectFontEntries = (pdfDoc: PDFDocument): Map<string, FontEntry> => {
       // For Type0 (CID) fonts, the actual font info is in DescendantFonts
       if (subtypeStr === '/Type0') {
         isCID = true;
-        const descendants = fontDictObj.get(PDFName.of('DescendantFonts'));
+        let descendants: any = fontDictObj.get(PDFName.of('DescendantFonts'));
+        // Dereference if stored as indirect reference
+        if (descendants instanceof PDFRef) descendants = context.lookup(descendants);
         if (descendants instanceof PDFArray && descendants.size() > 0) {
           const descRef = descendants.get(0);
           const descObj = descRef instanceof PDFRef
@@ -1491,7 +1493,40 @@ export const subsetEmbeddedFonts = (pdfDoc: PDFDocument): FontSubsetResult => {
   // Step 2: Scan content streams for text bytes per font
   const textBytesPerFont = extractAllTextBytes(pdfDoc);
 
-  // Step 3: Group fonts by their FontFile2 reference
+  // Step 3: Build a set of FontFile2 refs used by ANY CID (Type0) font
+  // anywhere in the document.  This is a document-wide scan that catches
+  // CID fonts in Form XObjects, nested resources, etc. — not just page-level
+  // resources.  Any FontFile2 touched by a CID font must never be subsetted,
+  // because subsetting would remove glyphs needed for Hebrew/Arabic/CJK text.
+  const cidProtectedFontFiles = new Set<string>();
+  for (const [, obj] of context.enumerateIndirectObjects()) {
+    if (!(obj instanceof PDFDict)) continue;
+    const subtype = obj.get(PDFName.of('Subtype'));
+    if (!(subtype instanceof PDFName) || subtype.toString() !== '/Type0') continue;
+
+    // Walk Type0 → DescendantFonts → CIDFont → FontDescriptor → FontFile2
+    let descendants = obj.get(PDFName.of('DescendantFonts'));
+    // Dereference if indirect
+    if (descendants instanceof PDFRef) {
+      descendants = context.lookup(descendants);
+    }
+    if (!(descendants instanceof PDFArray) || descendants.size() === 0) continue;
+
+    let descObj: any = descendants.get(0);
+    if (descObj instanceof PDFRef) descObj = context.lookup(descObj);
+    if (!(descObj instanceof PDFDict)) continue;
+
+    let descriptorVal = descObj.get(PDFName.of('FontDescriptor'));
+    if (descriptorVal instanceof PDFRef) descriptorVal = context.lookup(descriptorVal);
+    if (!(descriptorVal instanceof PDFDict)) continue;
+
+    const fontFile2 = descriptorVal.get(PDFName.of('FontFile2'));
+    if (fontFile2 instanceof PDFRef) {
+      cidProtectedFontFiles.add(`${fontFile2.objectNumber}-${fontFile2.generationNumber}`);
+    }
+  }
+
+  // Step 4: Group fonts by their FontFile2 reference
   // Multiple font entries may share the same font file (deduplication)
   const fontFileToGlyphs = new Map<string, {
     fontFileRef: PDFRef;
@@ -1520,11 +1555,7 @@ export const subsetEmbeddedFonts = (pdfDoc: PDFDocument): FontSubsetResult => {
 
     // CID fonts (Type0) must never be subsetted — mark the entire group
     // as "keep all" so that shared FontFile2 streams aren't modified.
-    // This must happen UNCONDITIONALLY, not just when text bytes are found,
-    // because a CID font and a WinAnsi font can share the same FontFile2.
-    // Without this, the WinAnsi entry subsets the shared file (removing
-    // Hebrew/Arabic/CJK glyphs it doesn't use), breaking the CID version.
-    if (entry.isCID) {
+    if (entry.isCID || cidProtectedFontFiles.has(refKey)) {
       group.glyphIds.add(-1);
       continue;
     }
@@ -1542,7 +1573,7 @@ export const subsetEmbeddedFonts = (pdfDoc: PDFDocument): FontSubsetResult => {
     }
   }
 
-  // Step 4: Subset each font file
+  // Step 5: Subset each font file
   for (const [, group] of fontFileToGlyphs) {
     const { fontFileRef, glyphIds, entries, fontData } = group;
 
