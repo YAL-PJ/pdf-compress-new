@@ -10,7 +10,7 @@ import { XLogoLink } from '@/components/XLogoLink';
    CONFIGURATION
 ========================= */
 // Paste the deployed Apps Script /exec URL here. See google-apps-script/feedback-backend.gs
-const FEEDBACK_ENDPOINT = '';
+const FEEDBACK_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzgIwblyMQv4O8GypUMT7xfj8Xkv6W2oyCFxZVcUExwpWhHr_7WWXQlvi2tfzjXisu4Ww/exec';
 const APP_ID = 'compresspdf';
 const OWNER_NAME = 'Yanis (creator)';
 
