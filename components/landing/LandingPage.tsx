@@ -17,6 +17,7 @@ import { UploadZone } from '@/components/UploadZone';
 import { BetaFeedbackBanner } from '@/components/BetaFeedbackBanner';
 import { Footer } from '@/components/landing/Footer';
 import { FAQSection } from '@/components/landing/FAQSection';
+import { AuthorBio } from '@/components/landing/AuthorBio';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // This is a Server Component. It renders static HTML.
@@ -228,6 +229,8 @@ export const LandingPage = () => {
                 </section>
 
                 <FAQSection />
+
+                <AuthorBio />
 
                 <Footer />
             </main>
