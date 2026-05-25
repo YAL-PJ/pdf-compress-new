@@ -127,8 +127,9 @@ export function trackCompressionError(errorCode: string): void {
 }
 
 /**
- * Send error details to Google Sheets "Errors" tab via Apps Script
- * Uses a separate { error: payload } key so the script can route to the Errors tab
+ * Send error details to the shared "Errors" tab in the master sheet (via Apps Script).
+ * App id ("compresspdf") tags this app in the shared Errors tab so all 4 sites' errors
+ * sit side by side filterable by app.
  */
 export function trackErrorToSheet(opts: {
   errorCode: string;
@@ -142,25 +143,25 @@ export function trackErrorToSheet(opts: {
   const sendError = () => {
     try {
       const payload = {
+        type: 'error',
+        app: APP_ID,
         sessionId: typeof window !== 'undefined' ? getCurrentSessionId() : undefined,
         userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-        timestamp: new Date().toISOString(),
-        errorCode: opts.errorCode,
-        errorMessage: opts.errorMessage,
-        userMessage: opts.userMessage ?? '',
+        url: typeof window !== 'undefined' ? window.location.pathname + window.location.search : '',
+        feature: opts.context ?? '',
+        code: opts.errorCode,
+        message: opts.userMessage ? `${opts.errorMessage} | ${opts.userMessage}` : opts.errorMessage,
         stack: opts.stack ?? '',
         fileName: opts.fileName ?? '',
         fileSize: opts.fileSize ?? 0,
-        context: opts.context ?? '',
       };
 
-      log.info('Sending error to sheet', { errorCode: opts.errorCode });
+      log.info('Sending error to shared sheet', { errorCode: opts.errorCode, app: APP_ID });
 
-      fetch(TELEMETRY_SHEET_URL, {
+      fetch(SHARED_ERROR_URL, {
         method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ error: payload }),
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload),
         keepalive: true,
       }).catch(() => {
         // Silently ignore — telemetry is non-critical
@@ -171,13 +172,17 @@ export function trackErrorToSheet(opts: {
   };
 
   if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-    window.requestIdleCallback(sendError, { timeout: 5000 });
+    (window as Window & { requestIdleCallback: (cb: () => void, opts?: { timeout: number }) => void }).requestIdleCallback(sendError, { timeout: 5000 });
   } else {
     setTimeout(sendError, 1000);
   }
 }
 
 const TELEMETRY_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxk7hBbThv1g_PLHMZTeoR7_bgD2gcIgGonercT8gpptlMm7V4p2UsWRQ12cPtIyufYgg/exec';
+// Shared backend for errors (separate from compression telemetry).
+// Same URL as feedback.js's FEEDBACK_ENDPOINT — both go to the shared sheet.
+const SHARED_ERROR_URL = 'https://script.google.com/macros/s/AKfycbzgIwblyMQv4O8GypUMT7xfj8Xkv6W2oyCFxZVcUExwpWhHr_7WWXQlvi2tfzjXisu4Ww/exec';
+const APP_ID = 'compresspdf';
 
 /**
  * Build a telemetry payload with per-method stats
