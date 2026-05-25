@@ -1,143 +1,113 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  MessageSquare,
-  Lightbulb,
-  Send,
-  Check,
-  ChevronUp,
-  Loader2
-} from 'lucide-react';
+import { MessageSquare, Send, Check, ChevronUp, Loader2, Lock } from 'lucide-react';
 import { twMerge } from 'tailwind-merge';
 import { XLogoLink } from '@/components/XLogoLink';
 
 /* =========================
    CONFIGURATION
 ========================= */
-const GOOGLE_FORM_URL = 'https://docs.google.com/forms/d/e/1FAIpQLSfKz7APwz8S1jNcqApZIr-XgV7AjxbYNfi36eUD8RTgUmcctg/formResponse';
-const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRYkc_ORMeBD68CZErjqvblL73Ph4wuwGlDyP9kyidZpTEUyTGMhJkWehM4S-W3lNtht7nClqozYt1x/pub?gid=1952833366&single=true&output=csv';
+// Paste the deployed Apps Script /exec URL here. See google-apps-script/feedback-backend.gs
+const FEEDBACK_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzgIwblyMQv4O8GypUMT7xfj8Xkv6W2oyCFxZVcUExwpWhHr_7WWXQlvi2tfzjXisu4Ww/exec';
+const APP_ID = 'compresspdf';
+const OWNER_NAME = 'Yanis (creator)';
 
-// Google Form field entry IDs
-const FORM_FIELDS = {
-  contact: 'entry.1428967819',
-  feedback: 'entry.590651661',
-  feature: 'entry.1118737533',
-};
+const SISTER_APPS = [
+  { label: 'Merge PDFs', host: 'FreeMergePDF', url: 'https://freemergepdf.com/' },
+  { label: 'Convert to PDF', host: 'ConvertToPDFFree', url: 'https://converttopdffree.com/' },
+  { label: 'Split PDFs', host: 'SplitPDFFree', url: 'https://splitpdffree.com/' },
+];
 
 /* =========================
    TYPES
 ========================= */
-type FeedbackType = 'feedback' | 'feature';
+type FeedbackEntry = {
+  id: string;
+  timestamp: string;
+  app: string;
+  name: string;
+  message: string;
+  isPrivate: boolean;
+  ownerReply: string;
+  ownerReplyDate: string;
+};
 
 /* =========================
    COMPONENT
 ========================= */
 export const BetaFeedbackBanner = () => {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [activeTab, setActiveTab] = useState<FeedbackType>('feedback');
   const [message, setMessage] = useState('');
-  const [contact, setContact] = useState('');
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [website, setWebsite] = useState(''); // honeypot
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [recentFeedback, setRecentFeedback] = useState<Array<{ text: string, type: FeedbackType, date: string }>>([]);
-  const [showAllFeedback, setShowAllFeedback] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [entries, setEntries] = useState<FeedbackEntry[]>([]);
+  const [showAll, setShowAll] = useState(false);
+
+  const fetchEntries = useCallback(async () => {
+    if (!FEEDBACK_ENDPOINT) return;
+    try {
+      const res = await fetch(`${FEEDBACK_ENDPOINT}?app=${encodeURIComponent(APP_ID)}`, { cache: 'no-store' });
+      const json = await res.json();
+      const list = Array.isArray(json) ? json : [];
+      list.sort((a: FeedbackEntry, b: FeedbackEntry) => {
+        const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return tb - ta;
+      });
+      setEntries(list.filter((it: FeedbackEntry) => it.message));
+    } catch (err) {
+      console.warn('feedback load failed', err);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchFeedback = async () => {
-      try {
-        const response = await fetch(GOOGLE_SHEET_CSV_URL);
-        const csvText = await response.text();
-
-        // Simple CSV parser that handles quotes
-        const parseCSV = (text: string) => {
-          const lines = text.split('\n');
-          return lines.slice(1).map(line => {
-            const matches = [];
-            let inQuote = false;
-            let current = '';
-
-            for (let i = 0; i < line.length; i++) {
-              const char = line[i];
-              if (char === '"') {
-                inQuote = !inQuote;
-              } else if (char === ',' && !inQuote) {
-                matches.push(current.trim());
-                current = '';
-              } else {
-                current += char;
-              }
-            }
-            matches.push(current.trim());
-            return matches;
-          });
-        };
-
-        const rows = parseCSV(csvText);
-        const validFeeedback = rows
-          .map(row => {
-            // Row format: Timestamp, Name, Feedback, Feature
-            const feedback = row[2]?.replace(/^"|"$/g, '').replace(/""/g, '"');
-            const feature = row[3]?.replace(/^"|"$/g, '').replace(/""/g, '"');
-            const date = row[0]?.split(' ')[0]; // Just the date part
-
-            if (feedback) return { text: feedback, type: 'feedback' as FeedbackType, date };
-            if (feature) return { text: feature, type: 'feature' as FeedbackType, date };
-            return null;
-          })
-          .filter((item): item is { text: string, type: FeedbackType, date: string } =>
-            item !== null && item.text.length > 0 && item.text.length < 150 // Filter out very long ones
-          )
-          .reverse(); // Show newest first
-
-        setRecentFeedback(validFeeedback);
-      } catch (error) {
-        console.error('Failed to fetch feedback:', error);
-      }
-    };
-
-    if (isExpanded) {
-      fetchFeedback();
-    }
-  }, [isExpanded]);
+    if (isExpanded) fetchEntries();
+  }, [isExpanded, fetchEntries]);
 
   const handleSubmit = async () => {
-    if (!message.trim() || isSubmitting) return;
+    if (website) return; // honeypot
+    if (isSubmitting) return;
+
+    setError(null);
+    const trimmed = message.trim();
+    const emailTrim = email.trim();
+    if (trimmed.length < 5) { setError('Tell us a bit more — at least a few words.'); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) { setError('Please enter a valid email so we can reply.'); return; }
+    if (!FEEDBACK_ENDPOINT) { setError('Feedback endpoint not configured yet.'); return; }
 
     setIsSubmitting(true);
-
     try {
-      const formData = new FormData();
-      formData.append(FORM_FIELDS.contact, contact);
-
-      if (activeTab === 'feedback') {
-        formData.append(FORM_FIELDS.feedback, message);
-      } else {
-        formData.append(FORM_FIELDS.feature, message);
-      }
-
-      await fetch(GOOGLE_FORM_URL, {
+      const res = await fetch(FEEDBACK_ENDPOINT, {
         method: 'POST',
-        mode: 'no-cors',
-        body: formData,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ app: APP_ID, name: name.trim(), email: emailTrim, message: trimmed, isPrivate }),
       });
+      const json = await res.json().catch(() => ({}));
+      if (json && json.ok === false) throw new Error(json.error || 'submit failed');
 
       setIsSubmitted(true);
       setMessage('');
-      setContact('');
-
-      // Reset after 3 seconds and collapse
-      setTimeout(() => {
-        setIsSubmitted(false);
-        setIsExpanded(false);
-      }, 2500);
-    } catch (error) {
-      console.error('Failed to submit:', error);
+      setEmail('');
+      setName('');
+      setIsPrivate(false);
+      setTimeout(() => { setIsSubmitted(false); setIsExpanded(false); }, 2500);
+      setTimeout(fetchEntries, 1500);
+    } catch (err) {
+      console.error('feedback submit failed', err);
+      setError('Could not send. Please try again in a moment.');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  const visibleEntries = showAll ? entries : entries.slice(0, 2);
 
   return (
     <div className="fixed top-0 left-0 right-0 z-50">
@@ -149,14 +119,20 @@ export const BetaFeedbackBanner = () => {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-10">
-            {/* Left: Message + Merge Link */}
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-slate-600 hidden sm:inline">
-                Need to merge PDFs? Try <a href="https://freemergepdf.com/" target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-900 underline underline-offset-2 hover:text-slate-700 transition-colors">FreeMergePDF.com</a> — 100% free!
-              </span>
-              <span className="text-sm text-slate-600 sm:hidden">
-                <a href="https://freemergepdf.com/" target="_blank" rel="noopener noreferrer" className="font-semibold text-slate-900 underline underline-offset-2 hover:text-slate-700 transition-colors">Merge PDFs free →</a>
-              </span>
+            {/* Left: Sister apps */}
+            <div className="flex items-center gap-3 text-sm text-slate-600 overflow-x-auto whitespace-nowrap">
+              <span className="hidden sm:inline">More tools by Yanis:</span>
+              {SISTER_APPS.map((app) => (
+                <a
+                  key={app.url}
+                  href={app.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-slate-900 underline underline-offset-2 hover:text-slate-700 transition-colors"
+                >
+                  {app.label}
+                </a>
+              ))}
             </div>
 
             {/* Right: Actions */}
@@ -177,7 +153,6 @@ export const BetaFeedbackBanner = () => {
                   </>
                 )}
               </button>
-
               <XLogoLink className="hidden sm:inline text-slate-600 hover:text-slate-900 transition-colors" />
             </div>
           </div>
@@ -195,7 +170,6 @@ export const BetaFeedbackBanner = () => {
             className="bg-white/30 backdrop-blur-sm border-b border-slate-300 overflow-hidden relative z-10"
           >
             <div className="max-w-2xl mx-auto px-4 py-4">
-              {/* Success State */}
               <AnimatePresence mode="wait">
                 {isSubmitted ? (
                   <motion.div
@@ -209,7 +183,7 @@ export const BetaFeedbackBanner = () => {
                     </div>
                     <div className="text-center">
                       <h4 className="text-slate-900 font-medium">Thanks for your input!</h4>
-                      <p className="text-slate-500 text-sm">We're listening and improving.</p>
+                      <p className="text-slate-500 text-sm">We&apos;re listening and improving.</p>
                     </div>
                   </motion.div>
                 ) : (
@@ -217,114 +191,106 @@ export const BetaFeedbackBanner = () => {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="space-y-6"
+                    className="space-y-4"
                   >
-                    {/* Input Area */}
-                    <div>
-                      {/* Tab Switch */}
-                      <div className="flex gap-2 mb-3">
-                        <button
-                          onClick={() => setActiveTab('feedback')}
-                          className={twMerge(
-                            'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
-                            activeTab === 'feedback'
-                              ? 'bg-slate-900 text-white'
-                              : 'bg-white/90 border border-slate-300 text-slate-600 hover:border-slate-500'
-                          )}
-                        >
-                          <MessageSquare className="w-3 h-3" />
-                          Feedback
-                        </button>
-                        <button
-                          onClick={() => setActiveTab('feature')}
-                          className={twMerge(
-                            'flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-all',
-                            activeTab === 'feature'
-                              ? 'bg-slate-900 text-white'
-                              : 'bg-white/90 border border-slate-300 text-slate-600 hover:border-slate-500'
-                          )}
-                        >
-                          <Lightbulb className="w-3 h-3" />
-                          Feature Request
-                        </button>
-                      </div>
-
-                      {/* Compact Form */}
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input
-                          type="text"
-                          value={contact}
-                          onChange={(e) => setContact(e.target.value)}
-                          placeholder="Name/Email (optional)"
-                          className="sm:w-40 px-3 py-2 text-sm rounded border border-slate-300 bg-white/90 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
-                        />
-                        <input
-                          type="text"
-                          value={message}
-                          onChange={(e) => setMessage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && message.trim()) {
-                              handleSubmit();
-                            }
-                          }}
-                          placeholder={
-                            activeTab === 'feature'
-                              ? 'I wish this app could...'
-                              : 'Something is not working...'
-                          }
-                          className="flex-1 px-3 py-2 text-sm rounded border border-slate-300 bg-white/90 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
-                        />
-                        <button
-                          onClick={handleSubmit}
-                          disabled={!message.trim() || isSubmitting}
-                          className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-                        >
-                          {isSubmitting ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <>
-                              <Send className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Send</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
+                    {/* Honeypot */}
+                    <div className="absolute -left-[10000px] w-px h-px overflow-hidden" aria-hidden="true">
+                      <label htmlFor="bfb-website">Website</label>
+                      <input id="bfb-website" type="text" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
                     </div>
 
-                    {/* Community Feedback Ticker */}
-                    {recentFeedback.length > 0 && (
+                    {/* Inputs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="your@email.com"
+                        className="px-3 py-2 text-sm rounded border border-slate-300 bg-white/90 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
+                      />
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="Name (optional)"
+                        className="px-3 py-2 text-sm rounded border border-slate-300 bg-white/90 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500"
+                      />
+                    </div>
+
+                    <textarea
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSubmit(); }}
+                      placeholder="What's working? What's broken? What's missing?"
+                      rows={3}
+                      className="w-full px-3 py-2 text-sm rounded border border-slate-300 bg-white/90 text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-500 resize-y"
+                    />
+
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <label className="flex items-center gap-2 text-xs text-slate-600 cursor-pointer">
+                        <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} className="w-3.5 h-3.5" />
+                        <Lock className="w-3 h-3" />
+                        Keep this private
+                      </label>
+
+                      {error && <span className="text-xs text-red-600">{error}</span>}
+
+                      <button
+                        onClick={handleSubmit}
+                        disabled={!message.trim() || isSubmitting}
+                        className="px-4 py-2 rounded bg-slate-900 text-white text-sm font-medium hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                      >
+                        {isSubmitting ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <Send className="w-3.5 h-3.5" />
+                            <span>Send</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Recent Community Input */}
+                    {entries.length > 0 && (
                       <div className="pt-4 border-t border-slate-300">
                         <div className="flex items-center justify-between mb-3">
                           <h4 className="text-xs font-semibold text-slate-600 uppercase tracking-wider bg-white/90 px-2 py-1 rounded">
                             Recent Community Input
                           </h4>
-                          {recentFeedback.length > 2 && (
+                          {entries.length > 2 && (
                             <button
-                              onClick={() => setShowAllFeedback(!showAllFeedback)}
+                              onClick={() => setShowAll(!showAll)}
                               className="text-[10px] font-medium text-slate-600 hover:text-slate-800 transition-colors bg-white/90 px-2 py-1 rounded"
                             >
-                              {showAllFeedback ? 'Show Less' : `See All (${recentFeedback.length})`}
+                              {showAll ? 'Show Less' : `See All (${entries.length})`}
                             </button>
                           )}
                         </div>
-                        <div className={`grid gap-2 ${showAllFeedback ? 'sm:grid-cols-2' : 'sm:grid-cols-2'}`}>
-                          {recentFeedback
-                            .slice(0, showAllFeedback ? undefined : 2)
-                            .map((item, i) => (
-                              <div key={i} className="bg-white/90 p-3 rounded border border-slate-300 text-xs">
-                                <div className="flex items-center gap-1.5 mb-1.5 text-slate-400">
-                                  {item.type === 'feature' ? (
-                                    <Lightbulb className="w-3 h-3 text-amber-500" />
-                                  ) : (
-                                    <MessageSquare className="w-3 h-3 text-blue-500" />
-                                  )}
-                                  <span className="capitalize">{item.type}</span>
-                                  <span>•</span>
-                                  <span>{item.date}</span>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {visibleEntries.map((entry) => {
+                            const when = entry.timestamp ? new Date(entry.timestamp) : null;
+                            const dateText = when && !isNaN(when.getTime()) ? when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+                            const displayName = entry.name && entry.name.trim() ? entry.name : 'Anonymous';
+                            return (
+                              <div key={entry.id} className="bg-white/90 p-3 rounded border border-slate-300 text-xs space-y-2">
+                                <div className="flex items-center gap-1.5 text-slate-400">
+                                  <MessageSquare className="w-3 h-3 text-blue-500" />
+                                  <span>{displayName}</span>
+                                  {dateText && <><span>·</span><span>{dateText}</span></>}
                                 </div>
-                                <p className="text-slate-700">"{item.text}"</p>
+                                <p className="text-slate-700 whitespace-pre-wrap">&ldquo;{entry.message}&rdquo;</p>
+                                {entry.ownerReply && (
+                                  <div className="mt-2 p-2 rounded bg-slate-50 border-l-2 border-slate-900">
+                                    <div className="text-[10px] font-semibold text-slate-900 uppercase tracking-wider mb-1">
+                                      Reply from {OWNER_NAME}
+                                    </div>
+                                    <p className="text-slate-700 whitespace-pre-wrap">{entry.ownerReply}</p>
+                                  </div>
+                                )}
                               </div>
-                            ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
