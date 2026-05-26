@@ -69,9 +69,9 @@ export const metadata: Metadata = {
     "offline pdf compressor",
   ],
 
-  authors: [{ name: "PDF Compress" }],
-  creator: "PDF Compress",
-  publisher: "PDF Compress",
+  authors: [{ name: "Yanis L." }],
+  creator: "Yanis L.",
+  publisher: "Yanis L.",
 
   formatDetection: {
     email: false,
@@ -134,6 +134,17 @@ const jsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
+      "@type": "Person",
+      "@id": "https://freemergepdf.com/#founder",
+      name: "Yanis L.",
+      url: `${siteUrl}/about`,
+      image: "https://freemergepdf.com/yanis-avatar.jpg",
+      sameAs: [
+        "https://www.quora.com/profile/Yanis-L-3",
+        "https://x.com/compress__pdf",
+      ],
+    },
+    {
       "@type": "WebSite",
       name: "PDF Compress",
       url: siteUrl,
@@ -181,6 +192,7 @@ const jsonLd = {
       url: siteUrl,
       logo: `${siteUrl}/favicon.ico`,
       sameAs: [siteUrl],
+      founder: { "@id": "https://freemergepdf.com/#founder" },
     },
   ],
 };

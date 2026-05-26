@@ -13,11 +13,19 @@ export function Footer() {
           <span className="text-lg" aria-hidden="true">🗜️</span>
           <span className="font-semibold text-slate-800">PDF Compress</span>
           <span className="text-slate-400">|</span>
-          <span className="text-sm">100% Free & Private</span>
+          <span className="text-sm">100% Free &amp; Private</span>
         </div>
 
         <nav aria-label="Footer navigation">
           <ul className="flex items-center gap-6 text-sm">
+            <li>
+              <Link
+                href="/about"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                About
+              </Link>
+            </li>
             <li>
               <Link
                 href="/privacy"
@@ -67,7 +75,10 @@ export function Footer() {
         </nav>
 
         <p className="text-sm text-slate-500">
-          © {currentYear} PDF Compress. All rights reserved.
+          &copy; {currentYear} PDF Compress. Built by{' '}
+          <a href="/about" rel="author" className="text-slate-500 hover:text-slate-700 transition-colors">
+            Yanis L.
+          </a>
         </p>
       </div>
     </footer>
