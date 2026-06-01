@@ -9,6 +9,10 @@ import { formatBytes } from './utils';
 
 const log = createLogger('analytics');
 
+const SHARED_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzgIwblyMQv4O8GypUMT7xfj8Xkv6W2oyCFxZVcUExwpWhHr_7WWXQlvi2tfzjXisu4Ww/exec';
+const APP_ID = 'compresspdf';
+const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION || '0.1.0';
+
 type EventName =
   | 'file_upload'
   | 'compression_started'
@@ -27,6 +31,28 @@ interface EventProps {
   [key: string]: string | number | boolean;
 }
 
+interface ErrorReporterOptions {
+  feature?: string;
+  userNote?: string;
+  stack?: string;
+  url?: string;
+}
+
+interface ErrorReportResult {
+  ok: boolean;
+  target: 'apps-script';
+  ignored?: boolean;
+  error?: string;
+}
+
+type CustomReportError = (error: unknown, options?: ErrorReporterOptions) => Promise<ErrorReportResult>;
+
+type ErrorReporterWindow = Window & typeof globalThis & {
+  __pdfCompressErrorReporterInstalled?: boolean;
+  __pdfCompressNativeReportError?: (error: unknown) => void;
+  reportError?: CustomReportError;
+};
+
 declare global {
   interface Window {
     gtag?: (
@@ -35,6 +61,8 @@ declare global {
       config?: Record<string, unknown>
     ) => void;
     dataLayer?: unknown[];
+    __pdfCompressErrorReporterInstalled?: boolean;
+    __pdfCompressNativeReportError?: (error: unknown) => void;
   }
 }
 
@@ -126,9 +154,145 @@ export function trackCompressionError(errorCode: string): void {
   trackEvent('compression_error', { error_code: errorCode });
 }
 
+const THIRD_PARTY_ERROR_PATTERNS = [
+  'chrome-extension://',
+  'moz-extension://',
+  'safari-extension://',
+  'extensions/',
+  'googletagmanager.com',
+  'google-analytics.com',
+  'analytics.google.com',
+  'doubleclick.net',
+  'googlesyndication.com',
+  'googleadservices.com',
+  'adsbygoogle',
+  'gstatic.com/recaptcha',
+  'user-sync',
+  'syncframe',
+  'taboola',
+  'outbrain',
+  'hotjar',
+  'clarity.ms',
+];
+
+const normalizeError = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      message: error.message || error.name || 'Unknown error',
+      stack: error.stack || '',
+    };
+  }
+
+  if (typeof error === 'string') {
+    return { message: error, stack: '' };
+  }
+
+  try {
+    return { message: JSON.stringify(error), stack: '' };
+  } catch {
+    return { message: String(error), stack: '' };
+  }
+};
+
+const shouldIgnoreErrorReport = (message: string, stack: string, url: string): boolean => {
+  const combined = `${message}\n${stack}\n${url}`.toLowerCase();
+
+  if (message === 'Script error.' && !stack) return true;
+
+  return THIRD_PARTY_ERROR_PATTERNS.some(pattern => combined.includes(pattern));
+};
+
 /**
- * Send error details to Google Sheets "Errors" tab via Apps Script
- * Uses a separate { error: payload } key so the script can route to the Errors tab
+ * Send structured JavaScript errors to the shared Apps Script backend.
+ * The `action: "error_report"` field routes the payload to the Errors tab.
+ */
+export async function reportError(
+  error: unknown,
+  options: ErrorReporterOptions = {}
+): Promise<ErrorReportResult> {
+  if (typeof window === 'undefined') {
+    return { ok: false, target: 'apps-script', error: 'window unavailable' };
+  }
+
+  const normalized = normalizeError(error);
+  const url = options.url || window.location.href;
+  const stack = options.stack || normalized.stack;
+
+  if (shouldIgnoreErrorReport(normalized.message, stack, url)) {
+    return { ok: true, target: 'apps-script', ignored: true };
+  }
+
+  const payload = {
+    action: 'error_report',
+    app: APP_ID,
+    message: normalized.message,
+    stack,
+    url,
+    feature: options.feature || 'unknown',
+    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+    appVersion: APP_VERSION,
+    userNote: options.userNote || '',
+  };
+
+  try {
+    const response = await fetch(SHARED_APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+
+    const json = await response.json().catch(() => ({}));
+    if (json && json.ok === false) {
+      return { ok: false, target: 'apps-script', error: json.error || 'error report rejected' };
+    }
+
+    return { ok: true, target: 'apps-script' };
+  } catch (err) {
+    return {
+      ok: false,
+      target: 'apps-script',
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Install the console-friendly window.reportError helper and automatic browser
+ * error listeners. This deliberately uses the shared feedback Apps Script rather
+ * than the legacy telemetry deployment.
+ */
+export function installErrorReporter(): void {
+  if (typeof window === 'undefined') return;
+
+  const target = window as ErrorReporterWindow;
+  if (target.__pdfCompressErrorReporterInstalled) return;
+
+  if (typeof target.reportError === 'function' && !target.__pdfCompressNativeReportError) {
+    target.__pdfCompressNativeReportError = target.reportError as unknown as (error: unknown) => void;
+  }
+
+  target.reportError = reportError;
+
+  target.addEventListener('error', (event) => {
+    void reportError(event.error || event.message, {
+      feature: 'window-error',
+      stack: event.error?.stack,
+      url: event.filename || window.location.href,
+    });
+  });
+
+  target.addEventListener('unhandledrejection', (event) => {
+    void reportError(event.reason, {
+      feature: 'unhandledrejection',
+    });
+  });
+
+  target.__pdfCompressErrorReporterInstalled = true;
+}
+
+/**
+ * Send error details to Google Sheets "Errors" tab via the shared Apps Script.
  */
 export function trackErrorToSheet(opts: {
   errorCode: string;
@@ -140,34 +304,18 @@ export function trackErrorToSheet(opts: {
   context?: string;
 }): void {
   const sendError = () => {
-    try {
-      const payload = {
-        sessionId: typeof window !== 'undefined' ? getCurrentSessionId() : undefined,
-        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
-        timestamp: new Date().toISOString(),
-        errorCode: opts.errorCode,
-        errorMessage: opts.errorMessage,
-        userMessage: opts.userMessage ?? '',
-        stack: opts.stack ?? '',
-        fileName: opts.fileName ?? '',
-        fileSize: opts.fileSize ?? 0,
-        context: opts.context ?? '',
-      };
-
-      log.info('Sending error to sheet', { errorCode: opts.errorCode });
-
-      fetch(TELEMETRY_SHEET_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ error: payload }),
-        keepalive: true,
-      }).catch(() => {
-        // Silently ignore — telemetry is non-critical
-      });
-    } catch {
-      // Fail silently
-    }
+    void reportError(new Error(opts.errorMessage), {
+      feature: opts.context || opts.errorCode,
+      stack: opts.stack,
+      userNote: [
+        opts.userMessage ? `userMessage: ${opts.userMessage}` : '',
+        opts.fileName ? `fileName: ${opts.fileName}` : '',
+        opts.fileSize ? `fileSize: ${opts.fileSize}` : '',
+        `errorCode: ${opts.errorCode}`,
+      ].filter(Boolean).join('\n'),
+    }).catch(() => {
+      // Silently ignore — telemetry is non-critical
+    });
   };
 
   if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {

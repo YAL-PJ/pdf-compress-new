@@ -48,7 +48,9 @@
  */
 
 const SHEET_NAME = 'Feedback';
+const ERROR_SHEET_NAME = 'Errors';
 const HEADERS = ['id', 'timestamp', 'app', 'name', 'email', 'message', 'isPrivate', 'ownerReply', 'ownerReplyDate'];
+const ERROR_HEADERS = ['timestamp', 'app', 'message', 'stack', 'url', 'feature', 'userAgent', 'appVersion', 'userNote'];
 const KNOWN_APPS = ['freemergepdf', 'splitpdf', 'converttopdf', 'compresspdf'];
 
 const MAX_MESSAGE = 2000;
@@ -58,6 +60,14 @@ const MAX_EMAIL = 120;
 function doGet(e) {
   try {
     const params = (e && e.parameter) || {};
+    if (params.action === 'health') {
+      return json_({
+        ok: true,
+        feedbackSheet: Boolean(getSheet_()),
+        errorSheet: Boolean(getErrorSheet_())
+      });
+    }
+
     const wantedApp = params.app ? String(params.app).toLowerCase() : null;
 
     const sheet = getSheet_();
@@ -98,6 +108,10 @@ function doPost(e) {
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
 
+    if (body.action === 'error_report') {
+      return handleErrorReport_(body);
+    }
+
     // Honeypot — silently accept and drop obvious bots
     if (body.website) return json_({ ok: true });
 
@@ -125,12 +139,48 @@ function doPost(e) {
   }
 }
 
+
+function handleErrorReport_(body) {
+  const app = String(body.app || '').toLowerCase().trim();
+  if (KNOWN_APPS.indexOf(app) === -1) {
+    return json_({ ok: false, error: 'invalid app' });
+  }
+
+  const message = String(body.message || '').slice(0, MAX_MESSAGE).trim();
+  if (!message) return json_({ ok: false, error: 'message required' });
+
+  const sheet = getErrorSheet_();
+  sheet.appendRow([
+    new Date(),
+    app,
+    message,
+    String(body.stack || '').slice(0, 50000),
+    String(body.url || '').slice(0, 1000),
+    String(body.feature || '').slice(0, 120),
+    String(body.userAgent || '').slice(0, 500),
+    String(body.appVersion || '').slice(0, 80),
+    String(body.userNote || '').slice(0, 2000)
+  ]);
+
+  return json_({ ok: true, target: 'apps-script' });
+}
+
 function getSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
     sheet.appendRow(HEADERS);
+  }
+  return sheet;
+}
+
+function getErrorSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(ERROR_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(ERROR_SHEET_NAME);
+    sheet.appendRow(ERROR_HEADERS);
   }
   return sheet;
 }

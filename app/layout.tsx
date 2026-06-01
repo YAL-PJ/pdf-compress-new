@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AnalyticsScript } from "@/components";
+import { AnalyticsScript, ErrorReporter } from "@/components";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -227,7 +227,8 @@ export default function RootLayout({
 
         {children}
 
-        {/* Analytics event tracking */}
+        {/* Error and analytics event tracking */}
+        <ErrorReporter />
         <AnalyticsScript />
 
         {/* Google Analytics */}
