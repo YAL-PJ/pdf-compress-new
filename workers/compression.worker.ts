@@ -1,3 +1,5 @@
+import '../lib/promise-try-polyfill';
+
 /**
  * PDF Compression Web Worker
  *
@@ -250,7 +252,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       code = 'ENCRYPTED_PDF';
     } else if (
       message.includes('Invalid') ||
-      message.includes('corrupt')
+      message.includes('corrupt') ||
+      message.includes('Expected instance')
     ) {
       code = 'CORRUPTED_PDF';
     }

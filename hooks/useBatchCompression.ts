@@ -246,11 +246,12 @@ export const useBatchCompression = () => {
                     },
                     [arrayBuffer]
                 );
-            }).catch((err) => {
+            }).catch((err: unknown) => {
+                const message = err instanceof Error ? err.message : 'The selected file could not be read.';
                 clearTimeout(timeout);
                 trackErrorToSheet({
                     errorCode: 'PROCESSING_FAILED',
-                    errorMessage: `Failed to read file: ${err.message}`,
+                    errorMessage: `Failed to read file: ${message}`,
                     fileName: item.originalFile.name,
                     fileSize: item.originalFile.size,
                     context: 'batch_file_read',
@@ -260,7 +261,7 @@ export const useBatchCompression = () => {
                         ...i,
                         status: 'error' as const,
                         progress: 0,
-                        error: createPdfError('PROCESSING_FAILED', `Failed to read file: ${err.message}`),
+                        error: createPdfError('PROCESSING_FAILED', 'The selected file could not be read. Please choose it again and retry.'),
                     } : i
                 ));
                 resolve();

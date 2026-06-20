@@ -15,3 +15,4 @@ export { AnalyticsScript } from './AnalyticsScript';
 export { ErrorReporter } from './ErrorReporter';
 export { BetaFeedbackBanner } from './BetaFeedbackBanner';
 export { CompressionStats } from './CompressionStats';
+export { BrowserPolyfills } from './BrowserPolyfills';
