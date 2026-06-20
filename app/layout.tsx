@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import Script from "next/script";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AnalyticsScript, ErrorReporter } from "@/components";
+import { AnalyticsScript, BrowserPolyfills, ErrorReporter } from "@/components";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -220,6 +220,8 @@ export default function RootLayout({
       </head>
 
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <BrowserPolyfills />
+
         {/* Skip link for accessibility */}
         <a href="#main-content" className="skip-link">
           Skip to main content

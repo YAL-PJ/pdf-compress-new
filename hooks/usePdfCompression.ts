@@ -294,6 +294,19 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
         },
         [arrayBuffer]
       );
+    }).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : 'The selected file could not be read.';
+      trackErrorToSheet({
+        errorCode: 'PROCESSING_FAILED',
+        errorMessage: `Failed to read file: ${message}`,
+        fileName,
+        fileSize: file.size,
+        context: 'file_read',
+      });
+      setState({
+        status: 'error',
+        error: createPdfError('PROCESSING_FAILED', 'The selected file could not be read. Please choose it again and retry.'),
+      });
     });
   }, []);
 
