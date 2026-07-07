@@ -16,7 +16,7 @@ const getPdfjs = async () => {
   pdfjsLib = await import('pdfjs-dist');
 
   // Configure worker
-  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+  pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker-wrapper.mjs';
 
   return pdfjsLib;
 };
