@@ -69,6 +69,36 @@ export function Footer() {
               </a>
             </li>
             <li>
+              <a
+                href="https://splitpdffree.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Split PDFs
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://converttopdffree.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                Convert to PDF
+              </a>
+            </li>
+            <li>
+              <a
+                href="https://toppdfedittools.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-slate-600 hover:text-slate-900 transition-colors"
+              >
+                All PDF Tools
+              </a>
+            </li>
+            <li>
               <XLogoLink className="text-slate-600 hover:text-slate-900 transition-colors" />
             </li>
           </ul>

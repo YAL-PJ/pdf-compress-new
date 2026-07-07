@@ -75,6 +75,16 @@ PDF Compress (freecompresspdf.com) is a free, browser-based PDF compression tool
 - Sitemap: https://www.freecompresspdf.com/sitemap.xml
 - Full AI documentation: https://www.freecompresspdf.com/llms-full.txt
 
+## Related free PDF tools (same maker)
+
+PDF Compress is part of a suite of free, privacy-first, browser-based PDF tools built by Yanis L. All process files locally in the browser with no uploads:
+
+- Compress PDF (this site): https://www.freecompresspdf.com/
+- Merge PDF: https://freemergepdf.com/
+- Split PDF (split by range, extract pages): https://splitpdffree.com/
+- Convert to PDF (images, DOCX, XLSX, TXT and more): https://converttopdffree.com/
+- Browse and compare all PDF tools: https://toppdfedittools.com/
+
 ## FAQ
 
 Q: Is my PDF really processed locally?

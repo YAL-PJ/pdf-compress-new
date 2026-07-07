@@ -151,6 +151,12 @@ const jsonLd = {
       description:
         "Free PDF compressor online to reduce PDF size quickly and privately in your browser.",
       inLanguage: "en-US",
+      relatedLink: [
+        "https://toppdfedittools.com/",
+        "https://freemergepdf.com/",
+        "https://splitpdffree.com/",
+        "https://converttopdffree.com/",
+      ],
       potentialAction: {
         "@type": "SearchAction",
         target: `${siteUrl}/?q={search_term_string}`,
