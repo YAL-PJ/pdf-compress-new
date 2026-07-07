@@ -23,6 +23,7 @@ export type PdfErrorCode =
   | 'ENCRYPTED_PDF'
   | 'CORRUPTED_PDF'
   | 'PROCESSING_FAILED'
+  | 'FILE_UNAVAILABLE'
   | 'WORKER_ERROR'
   | 'STALE_WORKER';
 
@@ -47,6 +48,10 @@ export const createPdfError = (code: PdfErrorCode, details?: string): PdfError =
     PROCESSING_FAILED: {
       message: `Processing failed${details ? `: ${details}` : ''}`,
       userMessage: 'Failed to process the PDF. Please try a different file.',
+    },
+    FILE_UNAVAILABLE: {
+      message: `File unavailable${details ? `: ${details}` : ''}`,
+      userMessage: 'Your browser could not access the selected file anymore. Please choose the PDF again and keep the file available until compression finishes.',
     },
     WORKER_ERROR: {
       message: `Worker error${details ? `: ${details}` : ''}`,

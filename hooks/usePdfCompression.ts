@@ -297,7 +297,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
     }).catch((err: unknown) => {
       const message = err instanceof Error ? err.message : 'The selected file could not be read.';
       trackErrorToSheet({
-        errorCode: 'PROCESSING_FAILED',
+        errorCode: 'FILE_UNAVAILABLE',
         errorMessage: `Failed to read file: ${message}`,
         fileName,
         fileSize: file.size,
@@ -305,7 +305,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
       });
       setState({
         status: 'error',
-        error: createPdfError('PROCESSING_FAILED', 'The selected file could not be read. Please choose it again and retry.'),
+        error: createPdfError('FILE_UNAVAILABLE', message),
       });
     });
   }, []);
