@@ -6,10 +6,15 @@
  *   converttopdffree.com     -> APP_ID "converttopdf"
  *   www.freecompresspdf.com  -> APP_ID "compresspdf"
  *
+ * The personal site's contact form also posts here, with
+ * action "contact" and source "personal-website".
+ *
  * ============================================================================
  * ONE-TIME SETUP
  * ============================================================================
  *  1. Create a new Google Sheet. Rename the first tab to "Feedback".
+ *     Error reports are stored automatically in an "Errors" tab when the
+ *     first error arrives, and contact messages in a "Contact" tab.
  *  2. In row 1 of that tab, paste exactly these 9 column headers (one per cell,
  *     in this order):
  *
@@ -20,25 +25,29 @@
  *       Execute as:      Me
  *       Who has access:  Anyone
  *  5. Copy the Web app URL (ends with /exec).
- *  6. Paste the URL into the FEEDBACK_ENDPOINT constant inside each app:
- *        - freemergepdf/feedback.js
- *        - splitpdf/index.html               (search for FEEDBACK_ENDPOINT)
- *        - convert-to-pdf/feedback.js
- *        - pdf-compress-new/components/BetaFeedbackBanner.tsx
- *        - personal-website/index.html       (search for CONTACT_ENDPOINT)
+ *  6. Paste the URL into the endpoint constant inside each app:
+ *        - freemergepdf/feedback.js          (FEEDBACK_ENDPOINT)
+ *        - splitpdf/index.html               (FEEDBACK_ENDPOINT)
+ *        - convert-to-pdf/feedback.js        (FEEDBACK_ENDPOINT)
+ *        - pdf-compress-new/components/BetaFeedbackBanner.tsx (FEEDBACK_ENDPOINT)
+ *        - personal-website/index.html       (CONTACT_ENDPOINT)
  *
  *  When you edit this file, redeploy via Manage deployments -> Edit -> New version.
+ *  Error reporting in error-reporting.js depends on the redeployed Web app URL.
+ *
+ *  Optional check: after redeploying, open the Web app URL with ?action=health.
+ *  It should return JSON with ok=true and confirm the Feedback/Errors/Contact
+ *  sheets. You can also run setupSheets() once inside Apps Script to pre-create
+ *  all three tabs.
  *
  * ============================================================================
  * TABS WRITTEN BY THIS SCRIPT
  * ============================================================================
  *  "Feedback" — public product feedback from the PDF tools (readable via GET)
  *  "Errors"   — client-side error reports from the PDF tools
- *  "Contact"  — contact-form messages from the personal site (never readable
- *               via GET; these are private messages, not community input)
- *
- *  All three tabs are created automatically on first write, so no manual
- *  setup is needed for "Contact".
+ *  "Contact"  — contact-form messages from the personal site. Never readable
+ *               via GET: these are private one-to-one messages, not community
+ *               input, so there is no listing endpoint for them.
  *
  * ============================================================================
  * REPLYING AS THE OWNER
@@ -47,6 +56,9 @@
  *  "ownerReply" column. The frontend will render it beneath the user's
  *  message labeled "Reply from Yanis (creator)". Leave ownerReplyDate
  *  blank to auto-stamp it, or fill it in manually.
+ *
+ *  This applies to the "Feedback" tab only. Contact messages are not shown
+ *  on any site, so reply to those by email instead.
  *
  * ============================================================================
  * PRIVATE FEEDBACK
@@ -60,10 +72,10 @@
  */
 
 const SHEET_NAME = 'Feedback';
-const ERROR_SHEET_NAME = 'Errors';
-const CONTACT_SHEET_NAME = 'Contact';
 const HEADERS = ['id', 'timestamp', 'app', 'name', 'email', 'message', 'isPrivate', 'ownerReply', 'ownerReplyDate'];
-const ERROR_HEADERS = ['timestamp', 'app', 'message', 'stack', 'url', 'feature', 'userAgent', 'appVersion', 'userNote'];
+const ERROR_SHEET_NAME = 'Errors';
+const ERROR_HEADERS = ['id', 'timestamp', 'app', 'message', 'stack', 'url', 'feature', 'userAgent', 'appVersion', 'userNote'];
+const CONTACT_SHEET_NAME = 'Contact';
 const CONTACT_HEADERS = ['id', 'timestamp', 'source', 'name', 'email', 'message', 'userAgent'];
 const KNOWN_APPS = ['freemergepdf', 'splitpdf', 'converttopdf', 'compresspdf'];
 const KNOWN_CONTACT_SOURCES = ['personal-website'];
@@ -71,18 +83,15 @@ const KNOWN_CONTACT_SOURCES = ['personal-website'];
 const MAX_MESSAGE = 2000;
 const MAX_NAME = 80;
 const MAX_EMAIL = 120;
+const MAX_ERROR_MESSAGE = 500;
+const MAX_ERROR_STACK = 1800;
+const MAX_ERROR_FIELD = 500;
+const MAX_USER_AGENT = 500;
 
 function doGet(e) {
   try {
     const params = (e && e.parameter) || {};
-    if (params.action === 'health') {
-      return json_({
-        ok: true,
-        feedbackSheet: Boolean(getSheet_()),
-        errorSheet: Boolean(getErrorSheet_()),
-        contactSheet: Boolean(getContactSheet_())
-      });
-    }
+    if (String(params.action || '').toLowerCase() === 'health') return healthCheck_();
 
     const wantedApp = params.app ? String(params.app).toLowerCase() : null;
 
@@ -120,20 +129,39 @@ function doGet(e) {
   }
 }
 
+
+function setupSheets() {
+  getSheet_();
+  getErrorSheet_();
+  getContactSheet_();
+  return healthCheck_();
+}
+
+function healthCheck_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const feedbackSheet = ss.getSheetByName(SHEET_NAME);
+  const errorSheet = ss.getSheetByName(ERROR_SHEET_NAME);
+  const contactSheet = ss.getSheetByName(CONTACT_SHEET_NAME);
+  return json_({
+    ok: true,
+    feedbackSheet: !!feedbackSheet,
+    errorSheet: !!errorSheet,
+    contactSheet: !!contactSheet,
+    errorHeaders: ERROR_HEADERS,
+    timestamp: new Date().toISOString()
+  });
+}
+
 function doPost(e) {
   try {
     const body = JSON.parse((e && e.postData && e.postData.contents) || '{}');
 
-    if (body.action === 'error_report') {
-      return handleErrorReport_(body);
-    }
+    if (body.action === 'error_report') return saveErrorReport_(body);
 
     // Honeypot — silently accept and drop obvious bots
     if (body.website) return json_({ ok: true });
 
-    if (body.action === 'contact') {
-      return handleContact_(body);
-    }
+    if (body.action === 'contact') return saveContactMessage_(body);
 
     const app = String(body.app || '').toLowerCase().trim();
     if (KNOWN_APPS.indexOf(app) === -1) {
@@ -160,37 +188,38 @@ function doPost(e) {
 }
 
 
-function handleErrorReport_(body) {
+function saveErrorReport_(body) {
   const app = String(body.app || '').toLowerCase().trim();
   if (KNOWN_APPS.indexOf(app) === -1) {
     return json_({ ok: false, error: 'invalid app' });
   }
 
-  const message = String(body.message || '').slice(0, MAX_MESSAGE).trim();
+  const message = String(body.message || '').slice(0, MAX_ERROR_MESSAGE).trim();
   if (!message) return json_({ ok: false, error: 'message required' });
 
   const sheet = getErrorSheet_();
+  const id = Utilities.getUuid().slice(0, 8);
   sheet.appendRow([
+    id,
     new Date(),
     app,
     message,
-    String(body.stack || '').slice(0, 50000),
-    String(body.url || '').slice(0, 1000),
-    String(body.feature || '').slice(0, 120),
-    String(body.userAgent || '').slice(0, 500),
-    String(body.appVersion || '').slice(0, 80),
-    String(body.userNote || '').slice(0, 2000)
+    String(body.stack || '').slice(0, MAX_ERROR_STACK),
+    String(body.url || '').slice(0, MAX_ERROR_FIELD),
+    String(body.feature || '').slice(0, MAX_ERROR_FIELD),
+    String(body.userAgent || '').slice(0, MAX_ERROR_FIELD),
+    String(body.appVersion || '').slice(0, MAX_ERROR_FIELD),
+    String(body.userNote || '').slice(0, MAX_ERROR_FIELD)
   ]);
-
-  return json_({ ok: true, target: 'apps-script' });
+  return json_({ ok: true, id: id });
 }
+
 
 /**
  * Contact-form messages from the personal site. These land in their own
- * "Contact" tab and are never exposed by doGet — unlike product feedback,
- * they are private one-to-one messages, not community input.
+ * "Contact" tab and are never exposed by doGet.
  */
-function handleContact_(body) {
+function saveContactMessage_(body) {
   const source = String(body.source || '').toLowerCase().trim();
   if (KNOWN_CONTACT_SOURCES.indexOf(source) === -1) {
     return json_({ ok: false, error: 'invalid source' });
@@ -215,20 +244,9 @@ function handleContact_(body) {
     name,
     email,
     message,
-    String(body.userAgent || '').slice(0, 500)
+    String(body.userAgent || '').slice(0, MAX_USER_AGENT)
   ]);
-
   return json_({ ok: true, id: id });
-}
-
-function getSheet_() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  let sheet = ss.getSheetByName(SHEET_NAME);
-  if (!sheet) {
-    sheet = ss.insertSheet(SHEET_NAME);
-    sheet.appendRow(HEADERS);
-  }
-  return sheet;
 }
 
 function getErrorSheet_() {
@@ -247,6 +265,16 @@ function getContactSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(CONTACT_SHEET_NAME);
     sheet.appendRow(CONTACT_HEADERS);
+  }
+  return sheet;
+}
+
+function getSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.appendRow(HEADERS);
   }
   return sheet;
 }
