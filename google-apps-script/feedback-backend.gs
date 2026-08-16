@@ -25,8 +25,20 @@
  *        - splitpdf/index.html               (search for FEEDBACK_ENDPOINT)
  *        - convert-to-pdf/feedback.js
  *        - pdf-compress-new/components/BetaFeedbackBanner.tsx
+ *        - personal-website/index.html       (search for CONTACT_ENDPOINT)
  *
  *  When you edit this file, redeploy via Manage deployments -> Edit -> New version.
+ *
+ * ============================================================================
+ * TABS WRITTEN BY THIS SCRIPT
+ * ============================================================================
+ *  "Feedback" — public product feedback from the PDF tools (readable via GET)
+ *  "Errors"   — client-side error reports from the PDF tools
+ *  "Contact"  — contact-form messages from the personal site (never readable
+ *               via GET; these are private messages, not community input)
+ *
+ *  All three tabs are created automatically on first write, so no manual
+ *  setup is needed for "Contact".
  *
  * ============================================================================
  * REPLYING AS THE OWNER
@@ -49,9 +61,12 @@
 
 const SHEET_NAME = 'Feedback';
 const ERROR_SHEET_NAME = 'Errors';
+const CONTACT_SHEET_NAME = 'Contact';
 const HEADERS = ['id', 'timestamp', 'app', 'name', 'email', 'message', 'isPrivate', 'ownerReply', 'ownerReplyDate'];
 const ERROR_HEADERS = ['timestamp', 'app', 'message', 'stack', 'url', 'feature', 'userAgent', 'appVersion', 'userNote'];
+const CONTACT_HEADERS = ['id', 'timestamp', 'source', 'name', 'email', 'message', 'userAgent'];
 const KNOWN_APPS = ['freemergepdf', 'splitpdf', 'converttopdf', 'compresspdf'];
+const KNOWN_CONTACT_SOURCES = ['personal-website'];
 
 const MAX_MESSAGE = 2000;
 const MAX_NAME = 80;
@@ -64,7 +79,8 @@ function doGet(e) {
       return json_({
         ok: true,
         feedbackSheet: Boolean(getSheet_()),
-        errorSheet: Boolean(getErrorSheet_())
+        errorSheet: Boolean(getErrorSheet_()),
+        contactSheet: Boolean(getContactSheet_())
       });
     }
 
@@ -114,6 +130,10 @@ function doPost(e) {
 
     // Honeypot — silently accept and drop obvious bots
     if (body.website) return json_({ ok: true });
+
+    if (body.action === 'contact') {
+      return handleContact_(body);
+    }
 
     const app = String(body.app || '').toLowerCase().trim();
     if (KNOWN_APPS.indexOf(app) === -1) {
@@ -165,6 +185,42 @@ function handleErrorReport_(body) {
   return json_({ ok: true, target: 'apps-script' });
 }
 
+/**
+ * Contact-form messages from the personal site. These land in their own
+ * "Contact" tab and are never exposed by doGet — unlike product feedback,
+ * they are private one-to-one messages, not community input.
+ */
+function handleContact_(body) {
+  const source = String(body.source || '').toLowerCase().trim();
+  if (KNOWN_CONTACT_SOURCES.indexOf(source) === -1) {
+    return json_({ ok: false, error: 'invalid source' });
+  }
+
+  const name = String(body.name || '').slice(0, MAX_NAME).trim();
+  const email = String(body.email || '').slice(0, MAX_EMAIL).trim();
+  const message = String(body.message || '').slice(0, MAX_MESSAGE).trim();
+
+  if (!name) return json_({ ok: false, error: 'name required' });
+  if (!message) return json_({ ok: false, error: 'message required' });
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return json_({ ok: false, error: 'valid email required' });
+  }
+
+  const sheet = getContactSheet_();
+  const id = Utilities.getUuid().slice(0, 8);
+  sheet.appendRow([
+    id,
+    new Date(),
+    source,
+    name,
+    email,
+    message,
+    String(body.userAgent || '').slice(0, 500)
+  ]);
+
+  return json_({ ok: true, id: id });
+}
+
 function getSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -181,6 +237,16 @@ function getErrorSheet_() {
   if (!sheet) {
     sheet = ss.insertSheet(ERROR_SHEET_NAME);
     sheet.appendRow(ERROR_HEADERS);
+  }
+  return sheet;
+}
+
+function getContactSheet_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(CONTACT_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(CONTACT_SHEET_NAME);
+    sheet.appendRow(CONTACT_HEADERS);
   }
   return sheet;
 }
