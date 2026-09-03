@@ -325,8 +325,6 @@ export function trackErrorToSheet(opts: {
   }
 }
 
-const TELEMETRY_SHEET_URL = 'https://script.google.com/macros/s/AKfycbxk7hBbThv1g_PLHMZTeoR7_bgD2gcIgGonercT8gpptlMm7V4p2UsWRQ12cPtIyufYgg/exec';
-
 /**
  * Build a telemetry payload with per-method stats
  */
@@ -365,7 +363,10 @@ function buildTelemetryPayload(report: CompressionReport, methodResults?: Method
 }
 
 /**
- * Send telemetry report to Google Sheets via Apps Script (fire and forget)
+ * Send telemetry report to the shared Apps Script backend's "Telemetry" tab
+ * (fire and forget). Previously posted to a separate, dedicated telemetry
+ * deployment/spreadsheet; consolidated onto the shared backend so all
+ * freecompresspdf.com data lands in one place alongside feedback and errors.
  */
 export function trackTelemetry(report: CompressionReport, methodResults?: MethodResult[]): void {
   const sendTelemetry = () => {
@@ -378,11 +379,11 @@ export function trackTelemetry(report: CompressionReport, methodResults?: Method
         savingsPercent: payload.savingsPercent,
       });
 
-      fetch(TELEMETRY_SHEET_URL, {
+      fetch(SHARED_APPS_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
         headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ report: payload }),
+        body: JSON.stringify({ action: 'telemetry', app: APP_ID, ...payload }),
         keepalive: true,
       }).catch(() => {
         // Silently ignore — telemetry is non-critical
