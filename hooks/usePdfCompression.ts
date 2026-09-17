@@ -47,6 +47,10 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
   const workerRef = useRef<Worker | null>(null);
   const isBackgroundRef = useRef<boolean>(false);
   const currentJobIdRef = useRef<string | null>(null);
+  // Kept so worker crashes can report SAFE structural metadata about the PDF
+  // that triggered them (see lib/pdf-diagnostics.ts). The file itself never
+  // leaves the browser.
+  const currentFileRef = useRef<File | null>(null);
 
   // Initialize worker immediately on mount
   useEffect(() => {
@@ -163,6 +167,9 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
             errorCode: e.code,
             errorMessage: e.message,
             context: 'worker_compression',
+            fileName: currentFileRef.current?.name,
+            fileSize: currentFileRef.current?.size,
+            file: currentFileRef.current ?? undefined,
           });
 
           setState({
@@ -194,6 +201,9 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
         errorCode,
         errorMessage: msg,
         context: 'worker_onerror',
+        fileName: currentFileRef.current?.name,
+        fileSize: currentFileRef.current?.size,
+        file: currentFileRef.current ?? undefined,
       });
       setState({
         status: 'error',
@@ -211,6 +221,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
     // Just reset job ID so we ignore any trailing messages
     currentJobIdRef.current = null;
     isBackgroundRef.current = false;
+    currentFileRef.current = null;
     setState({ status: 'idle' });
   }, []);
 
@@ -227,6 +238,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
     const jobId = generateJobId();
     currentJobIdRef.current = jobId;
     isBackgroundRef.current = isBackground;
+    currentFileRef.current = file;
 
     // Initialize state
     if (isBackground) {
@@ -246,6 +258,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
           fileName: file.name,
           fileSize: file.size,
           context: 'file_validation',
+          file,
         });
         setState({
           status: 'error',
@@ -279,6 +292,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
           fileName,
           fileSize: arrayBuffer.byteLength,
           context: 'pdf_signature_validation',
+          file,
         });
         setState({
           status: 'error',
@@ -302,6 +316,7 @@ export const usePdfCompression = (): UsePdfCompressionReturn => {
         fileName,
         fileSize: file.size,
         context: 'file_read',
+        file,
       });
       setState({
         status: 'error',
