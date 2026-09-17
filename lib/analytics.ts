@@ -36,6 +36,12 @@ interface ErrorReporterOptions {
   userNote?: string;
   stack?: string;
   url?: string;
+  /**
+   * Compact `key=value;` breadcrumb of SAFE structural PDF metadata
+   * (see lib/pdf-diagnostics.ts). Never contains file bytes, page text or the
+   * Title/Author/Subject/Keywords fields.
+   */
+  pdfMeta?: string;
 }
 
 interface ErrorReportResult {
@@ -232,6 +238,7 @@ export async function reportError(
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
     appVersion: APP_VERSION,
     userNote: options.userNote || '',
+    pdfMeta: options.pdfMeta || '',
   };
 
   try {
@@ -302,20 +309,49 @@ export function trackErrorToSheet(opts: {
   fileName?: string;
   fileSize?: number;
   context?: string;
+  /**
+   * The PDF the error happened on, if one is on hand. Only SAFE structural
+   * metadata is extracted from it (version, size, page count, encryption,
+   * linearization, object count, AcroForm presence, producer/creator software)
+   * so a reproducer can be built synthetically. The bytes never leave the
+   * browser and no document content or Title/Author metadata is read.
+   * Pass the File/Blob rather than an ArrayBuffer where possible — buffers
+   * handed to a worker are detached and can no longer be inspected.
+   */
+  file?: Blob | ArrayBuffer | Uint8Array;
 }): void {
   const sendError = () => {
-    void reportError(new Error(opts.errorMessage), {
-      feature: opts.context || opts.errorCode,
-      stack: opts.stack,
-      userNote: [
-        opts.userMessage ? `userMessage: ${opts.userMessage}` : '',
-        opts.fileName ? `fileName: ${opts.fileName}` : '',
-        opts.fileSize ? `fileSize: ${opts.fileSize}` : '',
-        `errorCode: ${opts.errorCode}`,
-      ].filter(Boolean).join('\n'),
-    }).catch(() => {
-      // Silently ignore — telemetry is non-critical
-    });
+    const send = (pdfMeta: string) => {
+      void reportError(new Error(opts.errorMessage), {
+        feature: opts.context || opts.errorCode,
+        stack: opts.stack,
+        pdfMeta,
+        userNote: [
+          opts.userMessage ? `userMessage: ${opts.userMessage}` : '',
+          opts.fileName ? `fileName: ${opts.fileName}` : '',
+          opts.fileSize ? `fileSize: ${opts.fileSize}` : '',
+          `errorCode: ${opts.errorCode}`,
+        ].filter(Boolean).join('\n'),
+      }).catch(() => {
+        // Silently ignore — telemetry is non-critical
+      });
+    };
+
+    // Diagnostics are best-effort: any failure here must still send the report.
+    if (!opts.file) {
+      send('');
+      return;
+    }
+
+    try {
+      import('./pdf-diagnostics')
+        .then(({ describePdfForErrorReport }) => describePdfForErrorReport(opts.file))
+        .catch(() => '')
+        .then(send)
+        .catch(() => send(''));
+    } catch {
+      send('');
+    }
   };
 
   if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {

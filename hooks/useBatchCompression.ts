@@ -106,6 +106,7 @@ export const useBatchCompression = () => {
                     fileName: item.originalFile.name,
                     fileSize: item.originalFile.size,
                     context: 'batch_timeout',
+                    file: item.originalFile,
                 });
                 setQueue(prev => prev.map(i =>
                     i.id === item.id ? {
@@ -174,6 +175,7 @@ export const useBatchCompression = () => {
                             fileName: item.originalFile.name,
                             fileSize: item.originalFile.size,
                             context: 'batch_worker_compression',
+                    file: item.originalFile,
                         });
                         setQueue(prev => prev.map(i =>
                             i.id === item.id ? {
@@ -200,6 +202,7 @@ export const useBatchCompression = () => {
                     fileName: item.originalFile.name,
                     fileSize: item.originalFile.size,
                     context: 'batch_worker_onerror',
+                    file: item.originalFile,
                 });
                 // Terminate broken worker so next file gets a fresh one
                 workerRef.current?.terminate();
@@ -226,6 +229,7 @@ export const useBatchCompression = () => {
                         fileName: item.originalFile.name,
                         fileSize: item.originalFile.size,
                         context: 'batch_pdf_signature_validation',
+                    file: item.originalFile,
                     });
                     setQueue(prev => prev.map(i =>
                         i.id === item.id ? {
@@ -255,6 +259,7 @@ export const useBatchCompression = () => {
                     fileName: item.originalFile.name,
                     fileSize: item.originalFile.size,
                     context: 'batch_file_read',
+                    file: item.originalFile,
                 });
                 setQueue(prev => prev.map(i =>
                     i.id === item.id ? {
