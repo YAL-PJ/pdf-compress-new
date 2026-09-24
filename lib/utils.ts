@@ -52,6 +52,7 @@ export interface ValidationResult {
  * PDF magic bytes - all PDFs start with "%PDF"
  */
 const PDF_MAGIC_BYTES = [0x25, 0x50, 0x44, 0x46]; // %PDF
+const PDF_HEADER_SEARCH_BYTES = 1024;
 
 /**
  * Basic file validation (size and extension)
@@ -87,10 +88,16 @@ export const validateFile = (file: File): ValidationResult => {
  * This catches renamed non-PDF files (like ODF documents renamed to .pdf)
  */
 export const validatePdfSignature = (arrayBuffer: ArrayBuffer): ValidationResult => {
-  const bytes = new Uint8Array(arrayBuffer, 0, Math.min(4, arrayBuffer.byteLength));
+  // The header does not have to be at byte 0: the PDF spec (and Acrobat,
+  // pdf.js and pdf-lib) accept one that starts anywhere in the first 1024
+  // bytes, e.g. after a BOM or a prefix some document systems add.
+  const bytes = new Uint8Array(arrayBuffer, 0, Math.min(PDF_HEADER_SEARCH_BYTES, arrayBuffer.byteLength));
+  const last = bytes.length - PDF_MAGIC_BYTES.length;
 
-  // Check for PDF magic bytes
-  const isPdf = PDF_MAGIC_BYTES.every((byte, index) => bytes[index] === byte);
+  let isPdf = false;
+  for (let start = 0; start <= last && !isPdf; start++) {
+    isPdf = PDF_MAGIC_BYTES.every((byte, index) => bytes[start + index] === byte);
+  }
 
   if (!isPdf) {
     return {

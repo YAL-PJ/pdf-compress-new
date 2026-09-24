@@ -64,13 +64,14 @@ import {
   detectVectorFeatures,
 } from './vector-processor';
 import { rasterizePages } from './page-rasterizer';
+import { loadPdfDocumentWithRepair } from './pdf-repair';
 
 export const loadPdf = async (
   arrayBuffer: ArrayBuffer
 ): Promise<{ pdfDoc: PDFDocument; info: PdfInfo }> => {
   let pdfDoc: PDFDocument;
   try {
-    pdfDoc = await PDFDocument.load(arrayBuffer, {
+    pdfDoc = await loadPdfDocumentWithRepair(arrayBuffer, {
       ignoreEncryption: false,
     });
   } catch (error) {
@@ -79,7 +80,7 @@ export const loadPdf = async (
       // Most encrypted PDFs only have an owner password (restricting print/copy)
       // but no user password — they open fine in any PDF viewer.
       // Retry with ignoreEncryption to handle these gracefully.
-      pdfDoc = await PDFDocument.load(arrayBuffer, {
+      pdfDoc = await loadPdfDocumentWithRepair(arrayBuffer, {
         ignoreEncryption: true,
       });
     } else {

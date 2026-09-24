@@ -100,6 +100,29 @@ describe('validatePdfSignature', () => {
     expect(result.valid).toBe(false);
     expect(result.error).toContain('not a valid PDF');
   });
+
+  // Real report (Aug 2026): a 53-page hospital record rejected as "not a valid
+  // PDF". The PDF spec, Acrobat, pdf.js and pdf-lib all accept a header that
+  // is preceded by a few bytes (a BOM, whitespace, a document-system prefix),
+  // as long as it starts within the first 1024 bytes.
+  const withPrefix = (prefix: number[]) =>
+    new Uint8Array([...prefix, 0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]).buffer;
+
+  it('accepts a header preceded by a UTF-8 BOM and a newline', () => {
+    expect(validatePdfSignature(withPrefix([0xef, 0xbb, 0xbf, 0x0d, 0x0a])).valid).toBe(true);
+  });
+
+  it('accepts a header that starts inside the first 1024 bytes', () => {
+    expect(validatePdfSignature(withPrefix(new Array(1000).fill(0x20))).valid).toBe(true);
+  });
+
+  it('rejects a header that starts after the first 1024 bytes', () => {
+    expect(validatePdfSignature(withPrefix(new Array(1100).fill(0x20))).valid).toBe(false);
+  });
+
+  it('rejects an empty file', () => {
+    expect(validatePdfSignature(new ArrayBuffer(0)).valid).toBe(false);
+  });
 });
 
 describe('getOutputFilename', () => {

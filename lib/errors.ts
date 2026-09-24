@@ -25,7 +25,8 @@ export type PdfErrorCode =
   | 'PROCESSING_FAILED'
   | 'FILE_UNAVAILABLE'
   | 'WORKER_ERROR'
-  | 'STALE_WORKER';
+  | 'STALE_WORKER'
+  | 'OUT_OF_MEMORY';
 
 export const createPdfError = (code: PdfErrorCode, details?: string): PdfError => {
   const errors: Record<PdfErrorCode, { message: string; userMessage: string }> = {
@@ -61,9 +62,15 @@ export const createPdfError = (code: PdfErrorCode, details?: string): PdfError =
       message: `Stale worker script${details ? `: ${details}` : ''}`,
       userMessage: 'The app was updated. Please refresh the page.',
     },
+    OUT_OF_MEMORY: {
+      message: `Out of memory${details ? `: ${details}` : ''}`,
+      userMessage: 'Your browser ran out of memory while compressing this PDF. Close other tabs and try again, or try on a computer with more memory.',
+    },
   };
 
-  const { message, userMessage } = errors[code];
+  // Codes arrive from the worker as plain strings; an unknown one must still
+  // produce a readable error rather than a crash while building it.
+  const { message, userMessage } = errors[code] ?? errors.PROCESSING_FAILED;
   return new PdfError(message, code, userMessage);
 };
 
@@ -72,4 +79,32 @@ export const createPdfError = (code: PdfErrorCode, details?: string): PdfError =
  */
 export const isPdfError = (error: unknown): error is PdfError => {
   return error instanceof PdfError;
+};
+
+/**
+ * Map an error thrown while processing a PDF to the code the user sees.
+ * Order matters: memory errors are checked before the generic "Invalid"
+ * match, since V8 reports some of them as "Invalid array length".
+ */
+export const classifyProcessingError = (error: unknown): PdfErrorCode => {
+  if (isPdfError(error)) return error.code;
+
+  const message = error instanceof Error ? error.message : String(error ?? '');
+
+  if (/array buffer allocation failed|out of memory|invalid array length|invalid typed array length/i.test(message)) {
+    return 'OUT_OF_MEMORY';
+  }
+  if (message.includes('encrypt') || message.includes('password')) {
+    return 'ENCRYPTED_PDF';
+  }
+  if (
+    message.includes('Invalid') ||
+    message.includes('corrupt') ||
+    message.includes('Expected instance') ||
+    // pdf-lib found no page tree at all, even after lib/pdf-repair.ts tried.
+    message.includes("reading 'Pages'")
+  ) {
+    return 'CORRUPTED_PDF';
+  }
+  return 'PROCESSING_FAILED';
 };

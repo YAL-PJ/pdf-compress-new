@@ -26,7 +26,7 @@ import {
 } from '../lib/pdf-processor';
 
 import { getEscalationTier, MAX_ESCALATION_TIERS } from '../lib/target-size';
-import { isPdfError } from '@/lib/errors';
+import { classifyProcessingError } from '@/lib/errors';
 import {
   DEFAULT_COMPRESSION_OPTIONS,
   DEFAULT_IMAGE_SETTINGS,
@@ -241,22 +241,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         ? error.message
         : 'Unknown error';
 
-    let code = 'PROCESSING_FAILED';
-
-    if (isPdfError(error)) {
-      code = error.code;
-    } else if (
-      message.includes('encrypt') ||
-      message.includes('password')
-    ) {
-      code = 'ENCRYPTED_PDF';
-    } else if (
-      message.includes('Invalid') ||
-      message.includes('corrupt') ||
-      message.includes('Expected instance')
-    ) {
-      code = 'CORRUPTED_PDF';
-    }
+    const code = classifyProcessingError(error);
 
     postResponse({
       type: 'error',
